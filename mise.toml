@@ -1,0 +1,12 @@
+[tools]
+rust = "1.99.1"
+python = "3.15.1"
+uv = "0.13.5"
+
+[env]
+CEA_CARGO_HOME = "/Volumes/T7 Shield/keplr-work/cache/cargo"
+CARGO_TARGET_DIR = "/Volumes/T7 Shield/keplr-work/build/cea-rs"
+UV_CACHE_DIR = "/Volumes/T7 Shield/keplr-work/cache/uv"
+UV_LINK_MODE = "copy"
+TMPDIR = "/Volumes/T7 Shield/keplr-work/tmp"
+PYTHONDONTWRITEBYTECODE = "1"
