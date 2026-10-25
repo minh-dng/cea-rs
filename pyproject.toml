@@ -1,0 +1,23 @@
+[build-system]
+requires = ["maturin>=1.10,<2"]
+build-backend = "maturin"
+
+[project]
+name = "cea-keplr-rs"
+version = "0.1.0a1"
+requires-python = ">=3.12"
+description = "Experimental Rust CEA thermochemistry; not a drop-in NASA CEA replacement"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE", "vendor/*LICENSE*", "vendor/thermo-species/LICENSE*"]
+classifiers = ["Development Status :: 3 - Alpha", "Topic :: Scientific/Engineering :: Chemistry", "Programming Language :: Rust"]
+
+[project.urls]
+Repository = "https://gitlab.com/keplr-space/cea-rs"
+
+[tool.maturin]
+features = ["python"]
+module-name = "cea_rs._cea_rs"
+python-source = "python"
+include = ["NOTICE", "docs/**", "tests/**", "scripts/**"]
+exclude = ["**/._*", "**/.DS_Store", "**/__pycache__/**"]

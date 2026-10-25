@@ -1,0 +1,19 @@
+[package]
+name = "cea-keplr-rs"
+version = "0.1.0-alpha.1"
+edition = "2024"
+license = "Apache-2.0"
+description = "Experimental Rust chemical equilibrium and rocket performance with Python bindings"
+repository = "https://gitlab.com/keplr-space/cea-rs"
+
+[lib]
+name = "cea_rs"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+nalgebra = "0.35"
+thermo-species = { path = "vendor/thermo-species" }
+pyo3 = { version = "0.29", optional = true, features = ["abi3-py312"] }
+
+[features]
+python = ["dep:pyo3", "pyo3/extension-module"]

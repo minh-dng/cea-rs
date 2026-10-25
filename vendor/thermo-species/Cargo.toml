@@ -1,0 +1,12 @@
+[package]
+name = "thermo-species"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "A lightweight type-safe wrapper for NASA's 9 Coefficient Polynomials"
+repository = "https://github.com/bit-mango/thermo-species"
+readme = "README.md"
+keywords = ["thermodynamics", "nasa", "cea", "propulsion", "combustion"]
+categories = ["science", "aerospace"]
+
+[dependencies]
