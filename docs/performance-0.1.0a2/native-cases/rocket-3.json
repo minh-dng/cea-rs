@@ -1,0 +1,902 @@
+{
+  "native_version": "3.3.4",
+  "native_library_version": "3.3.4",
+  "rust_version": "0.1.0a2",
+  "python": "3.15.0",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "rust_module": "/Volumes/T7 Shield/keplr-work/performance-site/cea_rs/__init__.py",
+  "rust_data_sha256": "fa7746572952d74e249e818a82a35c113829742fb421a308e167185528884363",
+  "native_loaded_extension": "/Users/minh/.t3/worktrees/hybrid/feat-liquid-design-point/.venv/lib/python3.15/site-packages/cea/lib/libcea.cpython-315-darwin.so",
+  "native_files_sha256": {
+    "libcea.cpython-315-darwin.so": "c07b12c271cf00ca27b14c075194d71c543df8e7bb6dd9f1607688b1db65a9d8",
+    "trans.lib": "c203d9330746405e1b57008cd697354745ab991694b4ca11ed556b18cb834111",
+    "thermo.lib": "dab359a56d3001c6d2c320aaf5eee9c2dc4069cb74ad0c7e36ecd1f61d905e7d"
+  },
+  "scale_definition": "abs(rust-native)/max(abs(native), 1 SI unit)",
+  "cases": [
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:1000000.0:3.68:equilibrium:0",
+      "native": {
+        "temperature_k": 3319.219718288575,
+        "pressure_pa": 1000000.0,
+        "density_kg_m3": 0.9548569310107768,
+        "enthalpy_j_kg": 1872254.41206631,
+        "energy_j_kg": 824977.1001223769,
+        "entropy_j_kg_k": 10175.481297070395,
+        "cp_equilibrium_j_kg_k": 4652.320287275355,
+        "cp_frozen_j_kg_k": 1545.2204069988113,
+        "gamma_s": 1.1455046788134,
+        "molecular_weight_kg_kmol": 26.351841317636616,
+        "velocity_m_s": 0.0
+      },
+      "rust": {
+        "temperature_k": 3319.219718288575,
+        "pressure_pa": 1000000.0,
+        "density_kg_m3": 0.9548569310107791,
+        "enthalpy_j_kg": 1872254.4119129323,
+        "energy_j_kg": 824977.0999690015,
+        "entropy_j_kg_k": 10175.481296778182,
+        "cp_equilibrium_j_kg_k": 4652.320287338246,
+        "cp_frozen_j_kg_k": 1545.2204069543654,
+        "gamma_s": 1.1455046788914394,
+        "molecular_weight_kg_kmol": 26.351841317636673,
+        "velocity_m_s": 0.0
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 8.192137306756243e-11,
+        "cp_frozen_j_kg_k": 2.8763449541538432e-11,
+        "entropy_j_kg_k": 2.871740050332148e-11,
+        "energy_j_kg": 1.8591478509452872e-10,
+        "density_kg_m3": 2.220446049250313e-15,
+        "temperature_k": 0.0,
+        "gamma_s": 6.812661196511279e-11,
+        "cp_equilibrium_j_kg_k": 1.351812541903221e-11,
+        "velocity_m_s": 0.0,
+        "molecular_weight_kg_kmol": 2.157094761448953e-15,
+        "pressure_pa": 0.0
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:1000000.0:3.68:equilibrium:1",
+      "native": {
+        "temperature_k": 3138.7331985311075,
+        "pressure_pa": 576002.933043308,
+        "density_kg_m3": 0.5894846282224864,
+        "enthalpy_j_kg": 1314166.6842050278,
+        "energy_j_kg": 337036.99249420356,
+        "entropy_j_kg_k": 10175.481479119868,
+        "cp_equilibrium_j_kg_k": 4480.334681078641,
+        "cp_frozen_j_kg_k": 1540.7062530944083,
+        "gamma_s": 1.1423036505399922,
+        "molecular_weight_kg_kmol": 26.707845220450167,
+        "velocity_m_s": 1056.4920371861122
+      },
+      "rust": {
+        "temperature_k": 3138.732690957002,
+        "pressure_pa": 576002.0108537478,
+        "density_kg_m3": 0.5894838020200769,
+        "enthalpy_j_kg": 1314165.1190695062,
+        "energy_j_kg": 337035.6222455541,
+        "entropy_j_kg_k": 10175.481478257649,
+        "cp_equilibrium_j_kg_k": 4480.334003967537,
+        "cp_frozen_j_kg_k": 1540.7062395681073,
+        "gamma_s": 1.1423036450928443,
+        "molecular_weight_kg_kmol": 26.70784622827814,
+        "velocity_m_s": 1056.493533196892
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 1.1909718458037048e-06,
+        "cp_frozen_j_kg_k": 8.77928611683898e-09,
+        "entropy_j_kg_k": 8.473497484556862e-11,
+        "energy_j_kg": 4.065573453239057e-06,
+        "density_kg_m3": 8.262024094873865e-07,
+        "temperature_k": 1.6171304581677634e-07,
+        "gamma_s": 4.768563806410461e-09,
+        "cp_equilibrium_j_kg_k": 1.5112958117356446e-07,
+        "velocity_m_s": 1.4160170897821262e-06,
+        "molecular_weight_kg_kmol": 3.773527830004166e-08,
+        "pressure_pa": 1.601015389391118e-06
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:1000000.0:3.68:equilibrium:2",
+      "native": {
+        "temperature_k": 2395.734643541751,
+        "pressure_pa": 53400.81935978645,
+        "density_kg_m3": 0.07472008010347862,
+        "enthalpy_j_kg": -692625.6035619408,
+        "energy_j_kg": -1407303.8973463227,
+        "entropy_j_kg_k": 10175.481598300916,
+        "cp_equilibrium_j_kg_k": 2171.772830881968,
+        "cp_frozen_j_kg_k": 1510.9078434880228,
+        "gamma_s": 1.186336037440399,
+        "molecular_weight_kg_kmol": 27.871784863643818,
+        "velocity_m_s": 2264.8973487051453
+      },
+      "rust": {
+        "temperature_k": 2395.7405093170614,
+        "pressure_pa": 53401.70133069095,
+        "density_kg_m3": 0.0747211203483193,
+        "enthalpy_j_kg": -692613.8000406035,
+        "energy_j_kg": -1407293.9477920565,
+        "entropy_j_kg_k": 10175.481598272674,
+        "cp_equilibrium_j_kg_k": 2171.790437979588,
+        "cp_frozen_j_kg_k": 1510.908204316911,
+        "gamma_s": 1.186335061776285,
+        "molecular_weight_kg_kmol": 27.87178080263291,
+        "velocity_m_s": 2264.892143989879
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 1.704170518189815e-05,
+        "cp_frozen_j_kg_k": 2.3881594750365747e-07,
+        "entropy_j_kg_k": 2.775458754126066e-12,
+        "energy_j_kg": 7.069940106708007e-06,
+        "density_kg_m3": 1.0402448406832132e-06,
+        "temperature_k": 2.4484244638800122e-06,
+        "gamma_s": 8.224180024673116e-07,
+        "cp_equilibrium_j_kg_k": 8.107246471646053e-06,
+        "velocity_m_s": 2.2979916812657736e-06,
+        "molecular_weight_kg_kmol": 1.4570329559990865e-07,
+        "pressure_pa": 1.65160556536792e-05
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket-performance:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:1000000.0:3.68:equilibrium",
+      "native": {
+        "cstar_m_s": 1605.688441786135,
+        "vacuum_velocity_m_s": 2580.4429108782147
+      },
+      "rust": {
+        "cstar_m_s": 1605.6884409463373,
+        "vacuum_velocity_m_s": 2580.4392439469766
+      },
+      "scaled_differences": {
+        "vacuum_velocity_m_s": 1.4210472251099653e-06,
+        "cstar_m_s": 5.230140541657416e-10
+      },
+      "tolerance": 0.0001,
+      "passed": true,
+      "timing_single_call_seconds": {
+        "native": 0.0011179579887539148,
+        "rust": 0.009602542035281658
+      }
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:1000000.0:3.68:frozen_at_chamber:0",
+      "native": {
+        "temperature_k": 3319.219718288575,
+        "pressure_pa": 1000000.0,
+        "density_kg_m3": 0.9548569310107768,
+        "enthalpy_j_kg": 1872254.41206631,
+        "energy_j_kg": 824977.1001223769,
+        "entropy_j_kg_k": 10175.481297070395,
+        "cp_frozen_j_kg_k": 1545.2204069988113,
+        "gamma_s": 1.2565819306584998,
+        "molecular_weight_kg_kmol": 26.351841317636616,
+        "velocity_m_s": 0.0
+      },
+      "rust": {
+        "temperature_k": 3319.219718288575,
+        "pressure_pa": 1000000.0,
+        "density_kg_m3": 0.9548569302614667,
+        "enthalpy_j_kg": 1872254.4120663167,
+        "energy_j_kg": 824977.0993005479,
+        "entropy_j_kg_k": 10175.48129731804,
+        "cp_frozen_j_kg_k": 1545.220406998819,
+        "gamma_s": 1.2565819309115098,
+        "molecular_weight_kg_kmol": 26.351841296957385,
+        "velocity_m_s": 0.0
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 3.6063948480753156e-15,
+        "cp_frozen_j_kg_k": 5.002978817814588e-15,
+        "entropy_j_kg_k": 2.43373739409895e-11,
+        "energy_j_kg": 9.961841060458766e-10,
+        "density_kg_m3": 7.493101694677762e-10,
+        "temperature_k": 0.0,
+        "gamma_s": 2.0134783986338955e-10,
+        "velocity_m_s": 0.0,
+        "molecular_weight_kg_kmol": 7.847357049149538e-10,
+        "pressure_pa": 0.0
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:1000000.0:3.68:frozen_at_chamber:1",
+      "native": {
+        "temperature_k": 2939.5173370400735,
+        "pressure_pa": 553077.7088029371,
+        "density_kg_m3": 0.5963269482885616,
+        "enthalpy_j_kg": 1288137.9303945315,
+        "energy_j_kg": 360663.9827719203,
+        "entropy_j_kg_k": 10175.481297070395,
+        "cp_frozen_j_kg_k": 1530.9677731573772,
+        "gamma_s": 1.259590670125436,
+        "molecular_weight_kg_kmol": 26.351841317636616,
+        "velocity_m_s": 1080.8482466371745
+      },
+      "rust": {
+        "temperature_k": 2939.5160133043505,
+        "pressure_pa": 553076.5023045345,
+        "density_kg_m3": 0.5963259155171382,
+        "enthalpy_j_kg": 1288135.903797841,
+        "energy_j_kg": 360662.37311134953,
+        "entropy_j_kg_k": 10175.48129679637,
+        "cp_frozen_j_kg_k": 1530.9677176104715,
+        "gamma_s": 1.2595906822455143,
+        "molecular_weight_kg_kmol": 26.351841296957385,
+        "velocity_m_s": 1080.850136021156
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 1.5732761552230575e-06,
+        "cp_frozen_j_kg_k": 3.628221750688104e-08,
+        "entropy_j_kg_k": 2.6929959249678616e-11,
+        "energy_j_kg": 4.463047733159685e-06,
+        "density_kg_m3": 1.03277142338154e-06,
+        "temperature_k": 4.503241761096957e-07,
+        "gamma_s": 9.622235668932698e-09,
+        "velocity_m_s": 1.7480566651098412e-06,
+        "molecular_weight_kg_kmol": 7.847357049149538e-10,
+        "pressure_pa": 2.181426557818408e-06
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:1000000.0:3.68:frozen_at_chamber:2",
+      "native": {
+        "temperature_k": 1712.4244362499333,
+        "pressure_pa": 43026.42292012455,
+        "density_kg_m3": 0.0796339268405183,
+        "enthalpy_j_kg": -546414.4974346928,
+        "energy_j_kg": -1086717.1627332778,
+        "entropy_j_kg_k": 10175.481297070395,
+        "cp_frozen_j_kg_k": 1444.1933196945088,
+        "gamma_s": 1.2795484566104096,
+        "molecular_weight_kg_kmol": 26.351841317636616,
+        "velocity_m_s": 2199.394868575696
+      },
+      "rust": {
+        "temperature_k": 1712.4244423941489,
+        "pressure_pa": 43026.423762419094,
+        "density_kg_m3": 0.07963392805122942,
+        "enthalpy_j_kg": -546414.488561262,
+        "energy_j_kg": -1086717.1562224592,
+        "entropy_j_kg_k": 10175.481297098724,
+        "cp_frozen_j_kg_k": 1444.1933204186578,
+        "gamma_s": 1.2795484567117503,
+        "molecular_weight_kg_kmol": 26.351841296957385,
+        "velocity_m_s": 2199.3948716079058
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 1.6239376555458837e-08,
+        "cp_frozen_j_kg_k": 5.014211006220956e-10,
+        "entropy_j_kg_k": 2.7840394123646324e-12,
+        "energy_j_kg": 5.991272460988852e-09,
+        "density_kg_m3": 1.2107111146963945e-09,
+        "temperature_k": 3.5880214471297365e-09,
+        "gamma_s": 7.92003718773037e-11,
+        "velocity_m_s": 1.3786564224092604e-09,
+        "molecular_weight_kg_kmol": 7.847357049149538e-10,
+        "pressure_pa": 1.957621594908217e-08
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket-performance:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:1000000.0:3.68:frozen_at_chamber",
+      "native": {
+        "cstar_m_s": 1551.4966282048615,
+        "vacuum_velocity_m_s": 2445.0545665338564
+      },
+      "rust": {
+        "cstar_m_s": 1551.49662376525,
+        "vacuum_velocity_m_s": 2445.0545640242226
+      },
+      "scaled_differences": {
+        "vacuum_velocity_m_s": 1.0264121683921802e-09,
+        "cstar_m_s": 2.861502531976059e-09
+      },
+      "tolerance": 0.0001,
+      "passed": true,
+      "timing_single_call_seconds": {
+        "native": 0.0003459580475464463,
+        "rust": 0.002158542047254741
+      }
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:1000000.0:3.68:frozen_at_throat:0",
+      "native": {
+        "temperature_k": 3319.219718288575,
+        "pressure_pa": 1000000.0,
+        "density_kg_m3": 0.9548569310107768,
+        "enthalpy_j_kg": 1872254.41206631,
+        "energy_j_kg": 824977.1001223769,
+        "entropy_j_kg_k": 10175.481297070395,
+        "cp_frozen_j_kg_k": 1545.2204069988113,
+        "gamma_s": 1.1455046788134,
+        "molecular_weight_kg_kmol": 26.351841317636616,
+        "velocity_m_s": 0.0
+      },
+      "rust": {
+        "temperature_k": 3319.219718288575,
+        "pressure_pa": 1000000.0,
+        "density_kg_m3": 0.9548569310107791,
+        "enthalpy_j_kg": 1872254.4119129323,
+        "energy_j_kg": 824977.0999690015,
+        "entropy_j_kg_k": 10175.481296778182,
+        "cp_frozen_j_kg_k": 1545.2204069543654,
+        "gamma_s": 1.1455046788914394,
+        "molecular_weight_kg_kmol": 26.351841317636673,
+        "velocity_m_s": 0.0
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 8.192137306756243e-11,
+        "cp_frozen_j_kg_k": 2.8763449541538432e-11,
+        "entropy_j_kg_k": 2.871740050332148e-11,
+        "energy_j_kg": 1.8591478509452872e-10,
+        "density_kg_m3": 2.220446049250313e-15,
+        "temperature_k": 0.0,
+        "gamma_s": 6.812661196511279e-11,
+        "velocity_m_s": 0.0,
+        "molecular_weight_kg_kmol": 2.157094761448953e-15,
+        "pressure_pa": 0.0
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:1000000.0:3.68:frozen_at_throat:1",
+      "native": {
+        "temperature_k": 3138.7331985311075,
+        "pressure_pa": 576002.933043308,
+        "density_kg_m3": 0.5894846282224864,
+        "enthalpy_j_kg": 1314166.6842050278,
+        "energy_j_kg": 337036.99249420356,
+        "entropy_j_kg_k": 10175.481479119868,
+        "cp_frozen_j_kg_k": 1540.7062530944083,
+        "gamma_s": 1.1423036505399922,
+        "molecular_weight_kg_kmol": 26.707845220450167,
+        "velocity_m_s": 1056.4920371861122
+      },
+      "rust": {
+        "temperature_k": 3138.732690957002,
+        "pressure_pa": 576002.0108537478,
+        "density_kg_m3": 0.5894838020200769,
+        "enthalpy_j_kg": 1314165.1190695062,
+        "energy_j_kg": 337035.6222455541,
+        "entropy_j_kg_k": 10175.481478257649,
+        "cp_frozen_j_kg_k": 1540.7062395681073,
+        "gamma_s": 1.1423036450928443,
+        "molecular_weight_kg_kmol": 26.70784622827814,
+        "velocity_m_s": 1056.493533196892
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 1.1909718458037048e-06,
+        "cp_frozen_j_kg_k": 8.77928611683898e-09,
+        "entropy_j_kg_k": 8.473497484556862e-11,
+        "energy_j_kg": 4.065573453239057e-06,
+        "density_kg_m3": 8.262024094873865e-07,
+        "temperature_k": 1.6171304581677634e-07,
+        "gamma_s": 4.768563806410461e-09,
+        "velocity_m_s": 1.4160170897821262e-06,
+        "molecular_weight_kg_kmol": 3.773527830004166e-08,
+        "pressure_pa": 1.601015389391118e-06
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:1000000.0:3.68:frozen_at_throat:2",
+      "native": {
+        "temperature_k": 1833.7180180061775,
+        "pressure_pa": 42996.27003486704,
+        "density_kg_m3": 0.07531828458162111,
+        "enthalpy_j_kg": -652103.4892344809,
+        "energy_j_kg": -1222964.4730407798,
+        "entropy_j_kg_k": 10175.481479119868,
+        "cp_frozen_j_kg_k": 1458.4235450985807,
+        "gamma_s": 1.271389278930734,
+        "molecular_weight_kg_kmol": 26.707845220450167,
+        "velocity_m_s": 2246.9347501689226
+      },
+      "rust": {
+        "temperature_k": 1833.7184535111317,
+        "pressure_pa": 42996.27953395528,
+        "density_kg_m3": 0.07531828541288915,
+        "enthalpy_j_kg": -652103.6423882773,
+        "energy_j_kg": -1222964.7460134188,
+        "entropy_j_kg_k": 10175.481478188904,
+        "cp_frozen_j_kg_k": 1458.4235938843942,
+        "gamma_s": 1.271389257863223,
+        "molecular_weight_kg_kmol": 26.70784595776998,
+        "velocity_m_s": 2246.9348251790525
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 2.3486118227527305e-07,
+        "cp_frozen_j_kg_k": 3.345106001402441e-08,
+        "entropy_j_kg_k": 9.149092704982291e-11,
+        "energy_j_kg": 2.2320569809595132e-07,
+        "density_kg_m3": 8.312680405131445e-10,
+        "temperature_k": 2.3749832298934928e-07,
+        "gamma_s": 1.657046444868546e-08,
+        "velocity_m_s": 3.3383314700473254e-08,
+        "molecular_weight_kg_kmol": 2.760686256155206e-08,
+        "pressure_pa": 2.2092819295461472e-07
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket-performance:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:1000000.0:3.68:frozen_at_throat",
+      "native": {
+        "cstar_m_s": 1605.688441786135,
+        "vacuum_velocity_m_s": 2500.996866368977
+      },
+      "rust": {
+        "cstar_m_s": 1605.6884409463373,
+        "vacuum_velocity_m_s": 2500.9969800880926
+      },
+      "scaled_differences": {
+        "vacuum_velocity_m_s": 4.5469515463121237e-08,
+        "cstar_m_s": 5.230140541657416e-10
+      },
+      "tolerance": 0.0001,
+      "passed": true,
+      "timing_single_call_seconds": {
+        "native": 0.0007067919941619039,
+        "rust": 0.006098499987274408
+      }
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:5000000.0:20.0:equilibrium:0",
+      "native": {
+        "temperature_k": 3499.2821265822267,
+        "pressure_pa": 5000000.0,
+        "density_kg_m3": 4.59446241922084,
+        "enthalpy_j_kg": 1872254.46840398,
+        "energy_j_kg": 783987.8674883643,
+        "entropy_j_kg_k": 9671.34745021076,
+        "cp_equilibrium_j_kg_k": 3823.557093002239,
+        "cp_frozen_j_kg_k": 1551.9946631895275,
+        "gamma_s": 1.1563115023583896,
+        "molecular_weight_kg_kmol": 26.73500795651562,
+        "velocity_m_s": 0.0
+      },
+      "rust": {
+        "temperature_k": 3499.2821265980215,
+        "pressure_pa": 5000000.0,
+        "density_kg_m3": 4.594462419202508,
+        "enthalpy_j_kg": 1872254.4680948304,
+        "energy_j_kg": 783987.8671748727,
+        "entropy_j_kg_k": 9671.347449781702,
+        "cp_equilibrium_j_kg_k": 3823.5570933174504,
+        "cp_frozen_j_kg_k": 1551.9946631314438,
+        "gamma_s": 1.1563115027275361,
+        "molecular_weight_kg_kmol": 26.735007956529618,
+        "velocity_m_s": 0.0
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 1.6512151903623328e-10,
+        "cp_frozen_j_kg_k": 3.7425220355450244e-11,
+        "entropy_j_kg_k": 4.4363804087178757e-11,
+        "energy_j_kg": 3.9986802083862115e-10,
+        "density_kg_m3": 3.9900212277107814e-12,
+        "temperature_k": 4.513708574211589e-12,
+        "gamma_s": 3.192448491601975e-10,
+        "cp_equilibrium_j_kg_k": 8.24392841093701e-11,
+        "velocity_m_s": 0.0,
+        "molecular_weight_kg_kmol": 5.235716375039485e-13,
+        "pressure_pa": 0.0
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:5000000.0:20.0:equilibrium:1",
+      "native": {
+        "temperature_k": 3287.1728796671396,
+        "pressure_pa": 2867777.333466067,
+        "density_kg_m3": 2.8393363336904907,
+        "enthalpy_j_kg": 1289348.9850069878,
+        "energy_j_kg": 279332.2076924775,
+        "entropy_j_kg_k": 9671.347653657143,
+        "cp_equilibrium_j_kg_k": 3633.603893941307,
+        "cp_frozen_j_kg_k": 1547.143897935746,
+        "gamma_s": 1.1542491429446184,
+        "molecular_weight_kg_kmol": 27.060176022413266,
+        "velocity_m_s": 1079.7271984319657
+      },
+      "rust": {
+        "temperature_k": 3287.1728739203354,
+        "pressure_pa": 2867777.2873832877,
+        "density_kg_m3": 2.8393362939194375,
+        "enthalpy_j_kg": 1289348.9692358698,
+        "energy_j_kg": 279332.19400401105,
+        "entropy_j_kg_k": 9671.347653319199,
+        "cp_equilibrium_j_kg_k": 3633.6038876752673,
+        "cp_frozen_j_kg_k": 1547.143897699406,
+        "gamma_s": 1.1542491437640352,
+        "molecular_weight_kg_kmol": 27.060176030903275,
+        "velocity_m_s": 1079.7272793247012
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 1.2231845819938092e-08,
+        "cp_frozen_j_kg_k": 1.5275900105327584e-10,
+        "entropy_j_kg_k": 3.494286385091151e-11,
+        "energy_j_kg": 4.900425399039206e-08,
+        "density_kg_m3": 1.4007165211661743e-08,
+        "temperature_k": 1.7482512704932897e-09,
+        "gamma_s": 7.09913246787901e-10,
+        "cp_equilibrium_j_kg_k": 1.724469665259942e-09,
+        "velocity_m_s": 7.491960523526031e-08,
+        "molecular_weight_kg_kmol": 3.1374550886289377e-10,
+        "pressure_pa": 1.6069162260854823e-08
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:5000000.0:20.0:equilibrium:2",
+      "native": {
+        "temperature_k": 1500.4107681170972,
+        "pressure_pa": 24144.94512767251,
+        "density_kg_m3": 0.0542165176168587,
+        "enthalpy_j_kg": -2124496.52127872,
+        "energy_j_kg": -2569839.494029234,
+        "entropy_j_kg_k": 9671.347612281248,
+        "cp_equilibrium_j_kg_k": 1460.608091652266,
+        "cp_frozen_j_kg_k": 1422.8109594134457,
+        "gamma_s": 1.2550839314954338,
+        "molecular_weight_kg_kmol": 28.01252315393781,
+        "velocity_m_s": 2827.2781673555146
+      },
+      "rust": {
+        "temperature_k": 1500.4114788552008,
+        "pressure_pa": 24145.001387275468,
+        "density_kg_m3": 0.05421661826175994,
+        "enthalpy_j_kg": -2124495.48324526,
+        "energy_j_kg": -2569838.6669662083,
+        "entropy_j_kg_k": 9671.347612428684,
+        "cp_equilibrium_j_kg_k": 1460.6081417154937,
+        "cp_frozen_j_kg_k": 1422.8110631363086,
+        "gamma_s": 1.2550839208378104,
+        "molecular_weight_kg_kmol": 28.01252315309558,
+        "velocity_m_s": 2827.277825520545
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 4.886020990876661e-07,
+        "cp_frozen_j_kg_k": 7.289996056451561e-08,
+        "entropy_j_kg_k": 1.524465596994802e-11,
+        "energy_j_kg": 3.218345067185248e-07,
+        "density_kg_m3": 1.0064490123945502e-07,
+        "temperature_k": 4.7369568303404667e-07,
+        "gamma_s": 8.49156234334771e-09,
+        "cp_equilibrium_j_kg_k": 3.42756061699092e-08,
+        "velocity_m_s": 1.2090602674975375e-07,
+        "molecular_weight_kg_kmol": 3.0066237484708806e-11,
+        "pressure_pa": 2.330077896718532e-06
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket-performance:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:5000000.0:20.0:equilibrium",
+      "native": {
+        "cstar_m_s": 1630.9441757558602,
+        "vacuum_velocity_m_s": 2984.79469536044
+      },
+      "rust": {
+        "cstar_m_s": 1630.9441769698078,
+        "vacuum_velocity_m_s": 2984.794423182564
+      },
+      "scaled_differences": {
+        "vacuum_velocity_m_s": 9.118813981959122e-08,
+        "cstar_m_s": 7.443219801692242e-10
+      },
+      "tolerance": 0.0001,
+      "passed": true,
+      "timing_single_call_seconds": {
+        "native": 0.0010070420103147626,
+        "rust": 0.010033041005954146
+      }
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:5000000.0:20.0:frozen_at_chamber:0",
+      "native": {
+        "temperature_k": 3499.2821265822267,
+        "pressure_pa": 5000000.0,
+        "density_kg_m3": 4.59446241922084,
+        "enthalpy_j_kg": 1872254.46840398,
+        "energy_j_kg": 783987.8674883643,
+        "entropy_j_kg_k": 9671.34745021076,
+        "cp_frozen_j_kg_k": 1551.9946631895275,
+        "gamma_s": 1.2506025087343535,
+        "molecular_weight_kg_kmol": 26.73500795651562,
+        "velocity_m_s": 0.0
+      },
+      "rust": {
+        "temperature_k": 3499.2821265980215,
+        "pressure_pa": 5000000.0,
+        "density_kg_m3": 4.594462399518094,
+        "enthalpy_j_kg": 1872254.4684536702,
+        "energy_j_kg": 783987.8628711668,
+        "entropy_j_kg_k": 9671.34745177592,
+        "cp_frozen_j_kg_k": 1551.9946632316314,
+        "gamma_s": 1.2506025100684288,
+        "molecular_weight_kg_kmol": 26.73500784198674,
+        "velocity_m_s": 0.0
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 2.654032939746724e-11,
+        "cp_frozen_j_kg_k": 2.7128907945902405e-11,
+        "entropy_j_kg_k": 1.6183477579262702e-10,
+        "energy_j_kg": 5.889373735185213e-09,
+        "density_kg_m3": 4.288368105673504e-09,
+        "temperature_k": 4.513708574211589e-12,
+        "gamma_s": 1.0667460566899118e-09,
+        "velocity_m_s": 0.0,
+        "molecular_weight_kg_kmol": 4.283854367567947e-09,
+        "pressure_pa": 0.0
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:5000000.0:20.0:frozen_at_chamber:1",
+      "native": {
+        "temperature_k": 3107.417942699162,
+        "pressure_pa": 2771227.298572683,
+        "density_kg_m3": 2.8675839244367727,
+        "enthalpy_j_kg": 1266636.1550051887,
+        "energy_j_kg": 300238.17970722634,
+        "entropy_j_kg_k": 9671.34745021076,
+        "cp_frozen_j_kg_k": 1538.508479973405,
+        "gamma_s": 1.2533557796271737,
+        "molecular_weight_kg_kmol": 26.73500795651562,
+        "velocity_m_s": 1100.561894232823
+      },
+      "rust": {
+        "temperature_k": 3107.416824918533,
+        "pressure_pa": 2771222.37684765,
+        "density_kg_m3": 2.867579850804796,
+        "enthalpy_j_kg": 1266634.4352992354,
+        "energy_j_kg": 300236.8034879026,
+        "entropy_j_kg_k": 9671.347451331238,
+        "cp_frozen_j_kg_k": 1538.508437297107,
+        "gamma_s": 1.253355789795789,
+        "molecular_weight_kg_kmol": 26.73500784198674,
+        "velocity_m_s": 1100.5635221598386
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 1.3576952990542905e-06,
+        "cp_frozen_j_kg_k": 2.7738747258123335e-08,
+        "entropy_j_kg_k": 1.1585536239589767e-10,
+        "energy_j_kg": 4.583758551500197e-06,
+        "density_kg_m3": 1.4205798623421736e-06,
+        "temperature_k": 3.59713643049877e-07,
+        "gamma_s": 8.1131115748791e-09,
+        "velocity_m_s": 1.479178067189493e-06,
+        "molecular_weight_kg_kmol": 4.283854367567947e-09,
+        "pressure_pa": 1.776009147783016e-06
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:5000000.0:20.0:frozen_at_chamber:2",
+      "native": {
+        "temperature_k": 1075.1878801266307,
+        "pressure_pa": 19699.022626303857,
+        "density_kg_m3": 0.05891202844325625,
+        "enthalpy_j_kg": -1714858.6906221488,
+        "energy_j_kg": -2049239.0055908964,
+        "entropy_j_kg_k": 9671.34745021076,
+        "cp_frozen_j_kg_k": 1333.8285775276142,
+        "gamma_s": 1.3040550761444227,
+        "molecular_weight_kg_kmol": 26.73500795651562,
+        "velocity_m_s": 2678.4745984033552
+      },
+      "rust": {
+        "temperature_k": 1075.1951844229945,
+        "pressure_pa": 19699.597226844548,
+        "density_kg_m3": 0.05891334636685796,
+        "enthalpy_j_kg": -1714848.9480040371,
+        "energy_j_kg": -2049231.5360202335,
+        "entropy_j_kg_k": 9671.347442792874,
+        "cp_frozen_j_kg_k": 1333.8303107040404,
+        "gamma_s": 1.3040545626259548,
+        "molecular_weight_kg_kmol": 26.73500784198674,
+        "velocity_m_s": 2678.4709878801027
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 5.681295004036801e-06,
+        "cp_frozen_j_kg_k": 1.2993996794752937e-06,
+        "entropy_j_kg_k": 7.669961315703576e-10,
+        "energy_j_kg": 3.6450461085540656e-06,
+        "density_kg_m3": 1.3179236017096807e-06,
+        "temperature_k": 6.793506975698952e-06,
+        "gamma_s": 3.937858740512814e-07,
+        "velocity_m_s": 1.3479774102285687e-06,
+        "molecular_weight_kg_kmol": 4.283854367567947e-09,
+        "pressure_pa": 2.9168987294000256e-05
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket-performance:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:5000000.0:20.0:frozen_at_chamber",
+      "native": {
+        "cstar_m_s": 1584.3071045188005,
+        "vacuum_velocity_m_s": 2803.3144545281675
+      },
+      "rust": {
+        "cstar_m_s": 1584.307105704354,
+        "vacuum_velocity_m_s": 2803.3118353441173
+      },
+      "scaled_differences": {
+        "vacuum_velocity_m_s": 9.343168926294153e-07,
+        "cstar_m_s": 7.483103483200476e-10
+      },
+      "tolerance": 0.0001,
+      "passed": true,
+      "timing_single_call_seconds": {
+        "native": 0.0003477080026641488,
+        "rust": 0.002962999977171421
+      }
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:5000000.0:20.0:frozen_at_throat:0",
+      "native": {
+        "temperature_k": 3499.2821265822267,
+        "pressure_pa": 5000000.0,
+        "density_kg_m3": 4.59446241922084,
+        "enthalpy_j_kg": 1872254.46840398,
+        "energy_j_kg": 783987.8674883643,
+        "entropy_j_kg_k": 9671.34745021076,
+        "cp_frozen_j_kg_k": 1551.9946631895275,
+        "gamma_s": 1.1563115023583896,
+        "molecular_weight_kg_kmol": 26.73500795651562,
+        "velocity_m_s": 0.0
+      },
+      "rust": {
+        "temperature_k": 3499.2821265980215,
+        "pressure_pa": 5000000.0,
+        "density_kg_m3": 4.594462419202508,
+        "enthalpy_j_kg": 1872254.4680948304,
+        "energy_j_kg": 783987.8671748727,
+        "entropy_j_kg_k": 9671.347449781702,
+        "cp_frozen_j_kg_k": 1551.9946631314438,
+        "gamma_s": 1.1563115027275361,
+        "molecular_weight_kg_kmol": 26.735007956529618,
+        "velocity_m_s": 0.0
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 1.6512151903623328e-10,
+        "cp_frozen_j_kg_k": 3.7425220355450244e-11,
+        "entropy_j_kg_k": 4.4363804087178757e-11,
+        "energy_j_kg": 3.9986802083862115e-10,
+        "density_kg_m3": 3.9900212277107814e-12,
+        "temperature_k": 4.513708574211589e-12,
+        "gamma_s": 3.192448491601975e-10,
+        "velocity_m_s": 0.0,
+        "molecular_weight_kg_kmol": 5.235716375039485e-13,
+        "pressure_pa": 0.0
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:5000000.0:20.0:frozen_at_throat:1",
+      "native": {
+        "temperature_k": 3287.1728796671396,
+        "pressure_pa": 2867777.333466067,
+        "density_kg_m3": 2.8393363336904907,
+        "enthalpy_j_kg": 1289348.9850069878,
+        "energy_j_kg": 279332.2076924775,
+        "entropy_j_kg_k": 9671.347653657143,
+        "cp_frozen_j_kg_k": 1547.143897935746,
+        "gamma_s": 1.1542491429446184,
+        "molecular_weight_kg_kmol": 27.060176022413266,
+        "velocity_m_s": 1079.7271984319657
+      },
+      "rust": {
+        "temperature_k": 3287.1728739203354,
+        "pressure_pa": 2867777.2873832877,
+        "density_kg_m3": 2.8393362939194375,
+        "enthalpy_j_kg": 1289348.9692358698,
+        "energy_j_kg": 279332.19400401105,
+        "entropy_j_kg_k": 9671.347653319199,
+        "cp_frozen_j_kg_k": 1547.143897699406,
+        "gamma_s": 1.1542491437640352,
+        "molecular_weight_kg_kmol": 27.060176030903275,
+        "velocity_m_s": 1079.7272793247012
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 1.2231845819938092e-08,
+        "cp_frozen_j_kg_k": 1.5275900105327584e-10,
+        "entropy_j_kg_k": 3.494286385091151e-11,
+        "energy_j_kg": 4.900425399039206e-08,
+        "density_kg_m3": 1.4007165211661743e-08,
+        "temperature_k": 1.7482512704932897e-09,
+        "gamma_s": 7.09913246787901e-10,
+        "velocity_m_s": 7.491960523526031e-08,
+        "molecular_weight_kg_kmol": 3.1374550886289377e-10,
+        "pressure_pa": 1.6069162260854823e-08
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:5000000.0:20.0:frozen_at_throat:2",
+      "native": {
+        "temperature_k": 1158.310735943878,
+        "pressure_pa": 19966.33338644603,
+        "density_kg_m3": 0.05610055969484542,
+        "enthalpy_j_kg": -1860568.5181161002,
+        "energy_j_kg": -2216471.088340913,
+        "entropy_j_kg_k": 9671.347653657143,
+        "cp_frozen_j_kg_k": 1352.4110955830463,
+        "gamma_s": 1.293986215369579,
+        "molecular_weight_kg_kmol": 27.060176022413266,
+        "velocity_m_s": 2732.3334037558297
+      },
+      "rust": {
+        "temperature_k": 1158.310749159218,
+        "pressure_pa": 19966.334884777527,
+        "density_kg_m3": 0.05610056267314135,
+        "enthalpy_j_kg": -1860568.5069013112,
+        "energy_j_kg": -2216471.0849397415,
+        "entropy_j_kg_k": 9671.347647504903,
+        "cp_frozen_j_kg_k": 1352.41109850107,
+        "gamma_s": 1.2939862185603315,
+        "molecular_weight_kg_kmol": 27.060175737057698,
+        "velocity_m_s": 2732.333425845441
+      },
+      "scaled_differences": {
+        "enthalpy_j_kg": 6.027614083510988e-09,
+        "cp_frozen_j_kg_k": 2.157645497137065e-09,
+        "entropy_j_kg_k": 6.361306356336473e-10,
+        "energy_j_kg": 1.5344984348927835e-09,
+        "density_kg_m3": 2.9782959293234157e-09,
+        "temperature_k": 1.1409149198437281e-08,
+        "gamma_s": 2.4658319487213005e-09,
+        "velocity_m_s": 8.08452266117618e-09,
+        "molecular_weight_kg_kmol": 1.0545222184493041e-08,
+        "pressure_pa": 7.504289689620821e-08
+      },
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "case": "rocket-performance:['N2O', {'name': 'Acrylonitrile', 'formula': {'C': 3, 'H': 3, 'N': 1}, 'molecular_weight': 53.0626, 'enthalpy_j_mol': 140000.0}, {'name': 'Butadiene', 'formula': {'C': 4, 'H': 6}, 'molecular_weight': 54.0904, 'enthalpy_j_mol': 90500.0}, {'name': 'Styrene', 'formula': {'C': 8, 'H': 8}, 'molecular_weight': 104.1491, 'enthalpy_j_mol': 103400.0}]:5000000.0:20.0:frozen_at_throat",
+      "native": {
+        "cstar_m_s": 1630.9441757558602,
+        "vacuum_velocity_m_s": 2862.5893374530287
+      },
+      "rust": {
+        "cstar_m_s": 1630.9441769698078,
+        "vacuum_velocity_m_s": 2862.5893363084692
+      },
+      "scaled_differences": {
+        "vacuum_velocity_m_s": 3.998336415869095e-10,
+        "cstar_m_s": 7.443219801692242e-10
+      },
+      "tolerance": 0.0001,
+      "passed": true,
+      "timing_single_call_seconds": {
+        "native": 0.0006548329256474972,
+        "rust": 0.005421624984592199
+      }
+    }
+  ],
+  "all_passed": true,
+  "scope": "Finite cases only; not full CEA parity, flight qualification, or a performance benchmark."
+}

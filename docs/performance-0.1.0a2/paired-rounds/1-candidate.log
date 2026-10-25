@@ -1,0 +1,12 @@
+['H2', 'O2'] TP rust/native 3.544604651162791
+['H2', 'O2'] equilibrium rust/native 26.449769828330297
+['H2', 'O2'] frozen_at_chamber rust/native 9.091872791519434
+['H2', 'O2'] frozen_at_throat rust/native 13.475621342512909
+['O2(L)', 'RP-1'] TP rust/native 1.6620260535069404
+['O2(L)', 'RP-1'] equilibrium rust/native 10.53150338902729
+['O2(L)', 'RP-1'] frozen_at_chamber rust/native 6.8791544838718615
+['O2(L)', 'RP-1'] frozen_at_throat rust/native 8.577021018414362
+['N2O4(L)', 'N2H4(L)', 'C2H8N2(L),UDMH'] TP rust/native 1.7101278360966932
+['N2O4(L)', 'N2H4(L)', 'C2H8N2(L),UDMH'] equilibrium rust/native 10.22659492357701
+['N2O4(L)', 'N2H4(L)', 'C2H8N2(L),UDMH'] frozen_at_chamber rust/native 7.0585516247617655
+['N2O4(L)', 'N2H4(L)', 'C2H8N2(L),UDMH'] frozen_at_throat rust/native 7.992286606744439

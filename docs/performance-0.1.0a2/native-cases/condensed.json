@@ -1,0 +1,90 @@
+{
+  "native_version": "3.3.4",
+  "native_library_version": "3.3.4",
+  "rust_version": "0.1.0a2",
+  "python": "3.15.0",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "rust_module": "/Volumes/T7 Shield/keplr-work/performance-site/cea_rs/__init__.py",
+  "rust_data_sha256": "fa7746572952d74e249e818a82a35c113829742fb421a308e167185528884363",
+  "native_loaded_extension": "/Users/minh/.t3/worktrees/hybrid/feat-liquid-design-point/.venv/lib/python3.15/site-packages/cea/lib/libcea.cpython-315-darwin.so",
+  "native_files_sha256": {
+    "libcea.cpython-315-darwin.so": "c07b12c271cf00ca27b14c075194d71c543df8e7bb6dd9f1607688b1db65a9d8",
+    "trans.lib": "c203d9330746405e1b57008cd697354745ab991694b4ca11ed556b18cb834111",
+    "thermo.lib": "dab359a56d3001c6d2c320aaf5eee9c2dc4069cb74ad0c7e36ecd1f61d905e7d"
+  },
+  "scale_definition": "abs(rust-native)/max(abs(native), 1 SI unit)",
+  "cases": [
+    {
+      "case": "special:['CO']:False",
+      "native": {
+        "temperature_k": 800.0,
+        "pressure_pa": 100000.0,
+        "density_kg_m3": 0.801901246930329,
+        "enthalpy_j_kg": -6326329.637849708,
+        "energy_j_kg": -6451033.272346848,
+        "entropy_j_kg_k": 5158.437750711835,
+        "cp_equilibrium_j_kg_k": 3763.0081424711657,
+        "cp_frozen_j_kg_k": 1265.3476113278555,
+        "gamma_s": 1.0924574066049615,
+        "molecular_weight_kg_kmol": 53.33932749291752
+      },
+      "rust": {
+        "temperature_k": 800.0,
+        "pressure_pa": 100000.0,
+        "density_kg_m3": 0.8019012469303373,
+        "enthalpy_j_kg": -6326329.637849682,
+        "energy_j_kg": -6451033.27234682,
+        "entropy_j_kg_k": 5158.437750711817,
+        "cp_equilibrium_j_kg_k": 3763.0081424709883,
+        "cp_frozen_j_kg_k": 1265.347611327855,
+        "gamma_s": 1.0924574066049668,
+        "molecular_weight_kg_kmol": 53.339327492918066
+      },
+      "scaled_differences": {
+        "pressure_pa": 0.0,
+        "entropy_j_kg_k": 3.526240872626303e-15,
+        "density_kg_m3": 8.215650382226158e-15,
+        "cp_equilibrium_j_kg_k": 4.7130237334340284e-14,
+        "gamma_s": 4.87805793249363e-15,
+        "temperature_k": 0.0,
+        "cp_frozen_j_kg_k": 3.5938531579417326e-16,
+        "molecular_weight_kg_kmol": 1.0257307923650224e-14,
+        "enthalpy_j_kg": 4.121984402016849e-15,
+        "energy_j_kg": 4.331039084580642e-15
+      },
+      "tolerance": 0.0003,
+      "passed": true
+    },
+    {
+      "case": "special-composition:['CO']:False",
+      "native": {
+        "CO": 0.05026071068177781,
+        "CO2": 0.4748696446591114,
+        "C": 0.0,
+        "O": 4.863157452243439e-27,
+        "O2": 7.064265017082172e-27,
+        "C(gr)": 0.47486964465911063
+      },
+      "rust": {
+        "C": 0.0,
+        "C(gr)": 0.4748696446591142,
+        "CO": 0.05026071068177708,
+        "CO2": 0.47486964465910886,
+        "O": 4.863157452243395e-27,
+        "O2": 7.064265017082059e-27
+      },
+      "scaled_differences": {
+        "C": 0.0,
+        "CO": 7.28583859910259e-16,
+        "C(gr)": 3.552713678800501e-15,
+        "O": 4.3765353637792687e-41,
+        "O2": 1.133594405700204e-40,
+        "CO2": 2.55351295663786e-15
+      },
+      "tolerance": 3e-05,
+      "passed": true
+    }
+  ],
+  "all_passed": true,
+  "scope": "Finite cases only; not full CEA parity, flight qualification, or a performance benchmark."
+}

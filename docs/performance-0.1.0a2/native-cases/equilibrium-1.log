@@ -1,0 +1,11 @@
+TP:['CH4', 'O2', 'N2']:1000.0:100000.0 PASS max=1.57661e-11
+composition:['CH4', 'O2', 'N2']:1000.0:100000.0 PASS max=2.1233e-15
+TP:['CH4', 'O2', 'N2']:2500.0:1000000.0 PASS max=6.18737e-10
+HP:['CH4', 'O2', 'N2'] PASS max=6.18739e-10
+SP:['CH4', 'O2', 'N2'] PASS max=1.83135e-09
+TV:['CH4', 'O2', 'N2'] PASS max=3.16537e-09
+UV:['CH4', 'O2', 'N2'] PASS max=6.18738e-10
+SV:['CH4', 'O2', 'N2'] PASS max=6.18746e-10
+composition:['CH4', 'O2', 'N2']:2500.0:1000000.0 PASS max=1.9984e-15
+TP:['CH4', 'O2', 'N2']:3500.0:5000000.0 PASS max=3.0415e-10
+composition:['CH4', 'O2', 'N2']:3500.0:5000000.0 PASS max=4.85723e-16
