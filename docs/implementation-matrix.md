@@ -1,6 +1,6 @@
 # Implemented scope and remaining work
 
-Version 0.1.0a1 is an experimental, separately named distribution. Full NASA CEA
+Version 0.1.0a2 is an experimental, separately named distribution. Full NASA CEA
 parity, Python API compatibility and consumer replacement are not established.
 
 | Capability | Rust status | Evidence or remaining gate |
