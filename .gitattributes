@@ -1,1 +1,2 @@
-vendor/thermo-species/data/thermo.inp -text
+# Preserve the upstream fixed-width data, including CRLF and padding.
+vendor/thermo-species/data/thermo.inp -text -whitespace
