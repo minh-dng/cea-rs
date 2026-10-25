@@ -23,9 +23,16 @@ processes for three rounds, using the same interpreter and inputs, five
 warmups and 50 timed warm solves per case, plus fresh-process samples. It
 retains all raw results. Across the nine rocket cases, median paired speedup
 is 3.16–12.57 times relative to alpha1. The unchanged TP path gives approximately
-1.01–1.05 times, consistent with timing noise. Candidate rocket solves remain
-7.06–22.37 times slower than native CEA in these measurements. This is an
+1.01–1.05 times, consistent with timing noise. Candidate rocket solves remain a median of
+7.06–22.37 times slower than native CEA across the three rounds. This is an
 improvement to the Rust port; a speed advantage over native CEA is unproven.
 OS cache and CPU thermal/scheduling state are not controlled.
 
-Independent free-model review is pending before merge/publication.
+Independent free Poolside review completed with scoped approval and no
+blockers, against exported commit `4734f3d673d9ccabaf9329099762b4818b849fb7`
+without Git metadata. The only clarity note was to label the native timing
+ratio as a per-case median. No numerical source changed after that snapshot.
+An earlier review was cancelled because it checked out alpha1's rocket file
+into the shared worktree; that patch was preserved, the committed candidate
+restored, and its rebuilt extension proved byte-identical to the tested wheel.
+The cancelled review is not counted as approval.
