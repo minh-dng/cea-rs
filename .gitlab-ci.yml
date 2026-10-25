@@ -1,0 +1,49 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api"'
+
+stages: [test]
+
+variables:
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target"
+  CARGO_INCREMENTAL: "0"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  key:
+    files: [Cargo.lock]
+  paths:
+    - .cargo/registry/
+    - .cargo/git/
+
+rust-checks:
+  stage: test
+  image: rust:1.99.1-slim-bookworm@sha256:86234e857a413004348b471d11a4ebe1aa92d2eae2b6b143cac68fd1ac3c48be
+  variables:
+    PYO3_NO_PYTHON: "1"
+  script:
+    - rustup component add clippy
+    - cargo test --locked
+    - cargo clippy --locked --all-targets --features python -- -D warnings
+
+python-wheel:
+  stage: test
+  image: python:3.15.1-slim-bookworm@sha256:575f8bc12ec26542e0678bc6b60e385218248019d433157ec327264a78c3a853
+  before_script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends build-essential curl ca-certificates
+    - python -m pip install maturin==1.15.0
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup-init.sh
+    - sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain 1.99.1 --no-modify-path
+    - export PATH="$CARGO_HOME/bin:$PATH"
+  script:
+    - maturin build --locked --release --out dist
+    - python -m pip install --no-deps --target /tmp/cea-wheel-site dist/*.whl
+    - cd /tmp
+    - python -I "$CI_PROJECT_DIR/tests/test_wheel.py" --installed /tmp/cea-wheel-site
+  artifacts:
+    paths: [dist/]
+    expire_in: 1 week
