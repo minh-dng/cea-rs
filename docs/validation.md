@@ -1,7 +1,7 @@
 # Validation evidence for 0.1.0a1
 
 Scientific comparisons use independently installed native NASA `cea==3.3.4`,
-matching the existing Hybrid seam. `docs/native-comparison.json` records the
+matching the existing Hybrid seam, under its Python 3.15.0 interpreter. `docs/native-comparison.json` records the
 loaded oracle shared-object/data hashes, Rust data hash, environment, every
 native/Rust result and difference. Each of nine fixture groups runs in a
 separate subprocess; native aborts/crashes/timeouts fail that group and the
