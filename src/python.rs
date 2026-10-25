@@ -124,6 +124,7 @@ impl PySolver {
         Ok(self.inner.reactant_enthalpy(&weights, &temperatures_k)?)
     }
     #[pyo3(signature=(weights,temperatures_k,chamber_pressure_pa,expansion_ratio, *, flow="equilibrium",iac=true,transport=false))]
+    #[allow(clippy::too_many_arguments)]
     fn rocket(
         &self,
         py: Python<'_>,

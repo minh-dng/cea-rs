@@ -175,12 +175,12 @@ impl Solver {
                 "Product pool has no compatible gas species".into(),
             ));
         }
-        if let Some(requested) = &self.only {
-            if requested.iter().any(|sp| !pool.contains(sp)) {
-                return Err(Error::Input(
-                    "Product formula contains an absent reactant element".into(),
-                ));
-            }
+        if let Some(requested) = &self.only
+            && requested.iter().any(|sp| !pool.contains(sp))
+        {
+            return Err(Error::Input(
+                "Product formula contains an absent reactant element".into(),
+            ));
         }
         if self.insert.iter().any(|sp| !pool.contains(sp)) {
             return Err(Error::Input(

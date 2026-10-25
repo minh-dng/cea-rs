@@ -1,5 +1,9 @@
 // Adapted from bit-mango/cea-rs 914ffd48 (Apache-2.0); see NOTICE.
 // Modified for validated reactants, fail-closed derivatives, and SI results.
+#![cfg_attr(
+    test,
+    allow(clippy::excessive_precision, clippy::doc_lazy_continuation)
+)]
 use nalgebra::{DMatrix, DVector};
 use std::collections::HashSet;
 use thermo_species::{Constituent, Species};
