@@ -20,3 +20,4 @@ features = ["python"]
 module-name = "cea_rs._cea_rs"
 python-source = "python"
 include = ["NOTICE", "docs/**", "tests/**", "scripts/**"]
+exclude = ["**/._*", "**/.DS_Store", "**/__pycache__/**"]

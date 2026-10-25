@@ -59,3 +59,9 @@ is not flushed; this is process-cold, not disk-cold. Validation stays enabled in
 median/min/max and warm ratios. This implementation is slower than native:
 repeated independent equilibrium solves in bracketed nozzle roots dominate.
 No production throughput or full simulation benchmark was run.
+
+Artifact inspection verifies wheel/sdist license notices and rejects AppleDouble
+`._*` entries. Maturin exclusions remove those filesystem sidecars, including
+matches from license-file globs. The rebuilt extension's dynamic dependencies
+are macOS system libraries; no libgfortran or CEA library is linked. Sdist builds
+and fresh installs use separate external directories, not an editable install.

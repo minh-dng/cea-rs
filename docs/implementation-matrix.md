@@ -68,3 +68,13 @@ current Rust implementation is slower, especially the bracketed nozzle's
 many independent equilibrium solves. Optimization requires measured profiles,
 reused immutable species/model data and better root algorithms, with the same
 native and residual tests retained. Language alone does not establish speed.
+
+## Tracked continuation work
+
+- [Measure and improve Rust solve speed before consumer adoption](https://gitlab.com/keplr-space/cea-rs/-/work_items/1)
+- [Implement finite-area chamber and additional nozzle station controls](https://gitlab.com/keplr-space/cea-rs/-/work_items/2)
+- [Implement incident and reflected shock solvers](https://gitlab.com/keplr-space/cea-rs/-/work_items/3)
+- [Implement Chapman-Jouguet detonation solver](https://gitlab.com/keplr-space/cea-rs/-/work_items/4)
+- [Implement NASA transport properties and mixing rules](https://gitlab.com/keplr-space/cea-rs/-/work_items/5)
+- [Plan explicit NASA API and input-deck compatibility](https://gitlab.com/keplr-space/cea-rs/-/work_items/6)
+- [Broaden condensed-phase and ion numerical acceptance](https://gitlab.com/keplr-space/cea-rs/-/work_items/7)
