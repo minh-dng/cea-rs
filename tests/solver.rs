@@ -119,3 +119,24 @@ fn impossible_product_pool_fails_without_panicking() {
     .unwrap();
     assert!(s.solve(Mode::TP(3000.0, 1e5), &[1.0, 1.0]).is_err());
 }
+
+#[test]
+fn nozzle_search_keeps_closure_near_throat_and_at_large_area() {
+    let s = hydrogen();
+    for flow in [
+        FlowMode::Equilibrium,
+        FlowMode::FrozenAtChamber,
+        FlowMode::FrozenAtThroat,
+    ] {
+        for area in [1.0, 1.001, 100.0] {
+            let r = s
+                .rocket(&[1.0, 6.0], &[298.15, 298.15], 3e6, area, flow)
+                .unwrap();
+            let throat_flux = r.throat.state.density_kg_m3 * r.throat.velocity_m_s;
+            let exit_flux = r.exit.state.density_kg_m3 * r.exit.velocity_m_s * area;
+            assert!((throat_flux / exit_flux - 1.0).abs() < 2e-6);
+            assert!(r.exit.state.pressure_pa <= r.throat.state.pressure_pa * (1.0 + 1e-8));
+            assert!(r.exit.velocity_m_s.is_finite());
+        }
+    }
+}

@@ -29,9 +29,18 @@ pub struct RocketResult {
     pub vacuum_velocity_m_s: f64,
 }
 
-fn bisect(mut lo: f64, mut hi: f64, mut value: impl FnMut(f64) -> Result<f64>) -> Result<f64> {
+fn bracketed_root(
+    mut lo: f64,
+    mut hi: f64,
+    mut value: impl FnMut(f64) -> Result<f64>,
+) -> Result<f64> {
     let mut flo = value(lo)?;
-    let fhi = value(hi)?;
+    let mut fhi = value(hi)?;
+    if !flo.is_finite() || !fhi.is_finite() {
+        return Err(Error::Convergence(
+            "Nonfinite scalar bracket residual".into(),
+        ));
+    }
     if flo == 0.0 {
         return Ok(lo);
     }
@@ -41,8 +50,14 @@ fn bisect(mut lo: f64, mut hi: f64, mut value: impl FnMut(f64) -> Result<f64>) -
     if flo.signum() == fhi.signum() {
         return Err(Error::Convergence("Scalar root is not bracketed".into()));
     }
+    let mut previous_side = 0;
     for _ in 0..80 {
-        let mid = (lo + hi) / 2.0;
+        let candidate = lo - flo / (fhi - flo) * (hi - lo);
+        let mid = if candidate.is_finite() && candidate > lo && candidate < hi {
+            candidate
+        } else {
+            lo + (hi - lo) / 2.0
+        };
         let fm = value(mid)?;
         if !fm.is_finite() {
             return Err(Error::Convergence("Nonfinite scalar residual".into()));
@@ -53,8 +68,18 @@ fn bisect(mut lo: f64, mut hi: f64, mut value: impl FnMut(f64) -> Result<f64>) -
         if fm.signum() == flo.signum() {
             lo = mid;
             flo = fm;
+            // Illinois damping prevents a stationary endpoint from stalling.
+            if previous_side == 1 {
+                fhi *= 0.5;
+            }
+            previous_side = 1;
         } else {
             hi = mid;
+            fhi = fm;
+            if previous_side == -1 {
+                flo *= 0.5;
+            }
+            previous_side = -1;
         }
     }
     Err(Error::Convergence(
@@ -125,7 +150,7 @@ fn frozen_expansion(reference: &State, p: f64) -> Result<State> {
         .map(|(_, sp)| sp.data().valid_temperature_range().0)
         .fold(300.0_f64, f64::max);
     let target = reference.entropy_j_kg_k;
-    let t = bisect(min_t.ln(), reference.temperature_k.ln(), |x| {
+    let t = bracketed_root(min_t.ln(), reference.temperature_k.ln(), |x| {
         Ok((frozen_state(reference, x.exp(), p)?.entropy_j_kg_k - target) / target.abs().max(1.0))
     })?
     .exp();
@@ -175,7 +200,7 @@ impl Solver {
             }
             low *= 0.5;
         }
-        let pt = bisect(low.ln(), (pc * 0.99999).ln(), sonic_residual)?.exp();
+        let pt = bracketed_root(low.ln(), (pc * 0.99999).ln(), sonic_residual)?.exp();
         let throat = expand(pt)?;
         let vt = (2.0 * (chamber.enthalpy_j_kg - throat.enthalpy_j_kg)).sqrt();
         let flux = throat.density_kg_m3 * vt;
@@ -204,7 +229,7 @@ impl Solver {
                 }
                 low *= 0.5;
             }
-            bisect(low.ln(), pt.ln(), area_residual)?.exp()
+            bracketed_root(low.ln(), pt.ln(), area_residual)?.exp()
         };
         let exit = exit_at(pe)?;
         let ve = (2.0 * (chamber.enthalpy_j_kg - exit.enthalpy_j_kg)).sqrt();
@@ -240,5 +265,38 @@ impl Solver {
             cstar_m_s: cstar,
             vacuum_velocity_m_s: vacuum_velocity,
         })
+    }
+}
+
+#[cfg(test)]
+mod root_tests {
+    use super::*;
+
+    #[test]
+    fn smooth_pressure_root_uses_few_calls_and_stays_bracketed() {
+        let mut calls = 0;
+        let result = bracketed_root(0.0, 10.0, |x| {
+            assert!((0.0..=10.0).contains(&x));
+            calls += 1;
+            Ok(x.exp() - 20.0)
+        })
+        .unwrap();
+        assert!((result - 20.0_f64.ln()).abs() < 1e-9);
+        assert!(calls < 25, "{calls} expensive residual evaluations");
+    }
+
+    #[test]
+    fn endpoint_roots_and_invalid_brackets_are_explicit() {
+        assert_eq!(bracketed_root(0.0, 1.0, Ok).unwrap(), 0.0);
+        assert_eq!(bracketed_root(0.0, 1.0, |x| Ok(x - 1.0)).unwrap(), 1.0);
+        assert!(bracketed_root(0.0, 1.0, |x| Ok(x + 1.0)).is_err());
+        assert!(bracketed_root(0.0, 1.0, |_| Ok(f64::NAN)).is_err());
+        assert!(bracketed_root(0.0, 1.0, |_| Ok(f64::INFINITY)).is_err());
+    }
+
+    #[test]
+    fn strongly_skewed_root_does_not_stagnate() {
+        let root = bracketed_root(0.0, 2.0, |x| Ok(x.powi(10) - 1.0)).unwrap();
+        assert!((root - 1.0).abs() < 1e-9);
     }
 }
