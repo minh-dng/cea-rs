@@ -1,0 +1,474 @@
+{
+  "native_version": "3.3.4",
+  "native_library_version": "3.3.4",
+  "rust_version": "0.1.0a1",
+  "python": "3.15.0",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "rust_module": "/Volumes/T7 Shield/keplr-work/wheel-smoke/site/cea_rs/__init__.py",
+  "rust_data_sha256": "fa7746572952d74e249e818a82a35c113829742fb421a308e167185528884363",
+  "native_loaded_extension": "/Users/minh/.t3/worktrees/hybrid/feat-liquid-design-point/.venv/lib/python3.15/site-packages/cea/lib/libcea.cpython-315-darwin.so",
+  "native_files_sha256": {
+    "libcea.cpython-315-darwin.so": "c07b12c271cf00ca27b14c075194d71c543df8e7bb6dd9f1607688b1db65a9d8",
+    "trans.lib": "c203d9330746405e1b57008cd697354745ab991694b4ca11ed556b18cb834111",
+    "thermo.lib": "dab359a56d3001c6d2c320aaf5eee9c2dc4069cb74ad0c7e36ecd1f61d905e7d"
+  },
+  "scale_definition": "abs(rust-native)/max(abs(native), 1 SI unit)",
+  "cases": [
+    {
+      "case": "TP:['H2', 'O2']:1000.0:100000.0",
+      "native": {
+        "temperature_k": 1000.0,
+        "pressure_pa": 100000.0,
+        "density_kg_m3": 0.2173409673551391,
+        "enthalpy_j_kg": -11890701.789127912,
+        "energy_j_kg": -12350808.326873269,
+        "entropy_j_kg_k": 12893.450183845414,
+        "cp_equilibrium_j_kg_k": 2283.5754711199434,
+        "cp_frozen_j_kg_k": 2283.5452940728337,
+        "gamma_s": 1.2523253777017715,
+        "molecular_weight_kg_kmol": 18.070836464839783
+      },
+      "rust": {
+        "temperature_k": 1000.0,
+        "pressure_pa": 100000.0,
+        "density_kg_m3": 0.2173409673551387,
+        "enthalpy_j_kg": -11890701.789273882,
+        "energy_j_kg": -12350808.327019243,
+        "entropy_j_kg_k": 12893.450183625411,
+        "cp_equilibrium_j_kg_k": 2283.5754711198847,
+        "cp_frozen_j_kg_k": 2283.5452940612486,
+        "gamma_s": 1.2523253777017813,
+        "molecular_weight_kg_kmol": 18.070836464839743
+      },
+      "scaled_differences": {
+        "gamma_s": 7.801457025993443e-15,
+        "density_kg_m3": 4.163336342344337e-16,
+        "molecular_weight_kg_kmol": 2.1625922265880014e-15,
+        "enthalpy_j_kg": 1.2275971174657483e-11,
+        "energy_j_kg": 1.1818954179903102e-11,
+        "cp_equilibrium_j_kg_k": 2.5688841470864034e-14,
+        "pressure_pa": 0.0,
+        "entropy_j_kg_k": 1.7063169845392717e-11,
+        "cp_frozen_j_kg_k": 5.073314525993392e-12,
+        "temperature_k": 0.0
+      },
+      "tolerance": 0.0003,
+      "passed": true
+    },
+    {
+      "case": "composition:['H2', 'O2']:1000.0:100000.0",
+      "native": {
+        "H": 8.433135333233918e-14,
+        "H2": 1.3788995803194957e-09,
+        "H2O": 0.9960268174802093,
+        "H2O2": 1.7826507867969944e-10,
+        "HO2": 1.606263371831e-10,
+        "O": 9.914108283282279e-12,
+        "O2": 0.003973008138900134,
+        "O3": 2.4862522476465334e-15,
+        "OH": 1.726530987362992e-07,
+        "H2O(L)": 0.0,
+        "H2O(cr)": 0.0
+      },
+      "rust": {
+        "H": 8.433135333235442e-14,
+        "H2": 1.3788995803200094e-09,
+        "H2O": 0.9960268174802123,
+        "H2O2": 1.7826507867963218e-10,
+        "HO2": 1.606263371830092e-10,
+        "O": 9.914108283278645e-12,
+        "O2": 0.003973008138897238,
+        "O3": 2.4862522476437854e-15,
+        "OH": 1.7265309873626908e-07
+      },
+      "scaled_differences": {
+        "H": 1.523448180162818e-26,
+        "O2": 2.895253481405291e-15,
+        "H2O": 2.9976021664879227e-15,
+        "HO2": 9.080892162183707e-23,
+        "O": 3.63345546412453e-24,
+        "H2O(cr)": 0.0,
+        "H2O(L)": 0.0,
+        "H2O2": 6.726012355821806e-23,
+        "O3": 2.7479969633373946e-27,
+        "H2": 5.136791603954302e-22,
+        "OH": 3.0122609186731056e-20
+      },
+      "tolerance": 3e-05,
+      "passed": true
+    },
+    {
+      "case": "TP:['H2', 'O2']:2500.0:1000000.0",
+      "native": {
+        "temperature_k": 2500.0,
+        "pressure_pa": 1000000.0,
+        "density_kg_m3": 0.8577689002128832,
+        "enthalpy_j_kg": -7414587.537578467,
+        "energy_j_kg": -8580402.711982455,
+        "entropy_j_kg_k": 14447.442754441825,
+        "cp_equilibrium_j_kg_k": 4557.806934574143,
+        "cp_frozen_j_kg_k": 3027.736097962579,
+        "gamma_s": 1.1430753263940046,
+        "molecular_weight_kg_kmol": 17.829820246272554
+      },
+      "rust": {
+        "temperature_k": 2500.0,
+        "pressure_pa": 1000000.0,
+        "density_kg_m3": 0.857768900212888,
+        "enthalpy_j_kg": -7414587.53757847,
+        "energy_j_kg": -8580402.711982451,
+        "entropy_j_kg_k": 14447.442754441803,
+        "cp_equilibrium_j_kg_k": 4557.80693458316,
+        "cp_frozen_j_kg_k": 3027.7360979625782,
+        "gamma_s": 1.1430753264316207,
+        "molecular_weight_kg_kmol": 17.82982024627265
+      },
+      "scaled_differences": {
+        "gamma_s": 3.290783342319635e-11,
+        "density_kg_m3": 4.773959005888173e-15,
+        "molecular_weight_kg_kmol": 5.379934738695245e-15,
+        "enthalpy_j_kg": 3.768203840990619e-16,
+        "energy_j_kg": 4.3416264055527136e-16,
+        "cp_equilibrium_j_kg_k": 1.97830461070622e-12,
+        "pressure_pa": 0.0,
+        "entropy_j_kg_k": 1.5108468130693482e-15,
+        "cp_frozen_j_kg_k": 3.00387706308005e-16,
+        "temperature_k": 0.0
+      },
+      "tolerance": 0.0003,
+      "passed": true
+    },
+    {
+      "case": "HP:['H2', 'O2']",
+      "native": {
+        "temperature_k": 2500.00000376535,
+        "pressure_pa": 1000000.0,
+        "density_kg_m3": 0.8577688987453123,
+        "enthalpy_j_kg": -7414587.520256828,
+        "energy_j_kg": -8580402.696655428,
+        "entropy_j_kg_k": 14447.442760835473,
+        "cp_equilibrium_j_kg_k": 4557.806952589917,
+        "cp_frozen_j_kg_k": 3027.7360988951737,
+        "gamma_s": 1.1430753261491207,
+        "molecular_weight_kg_kmol": 17.829820242621423
+      },
+      "rust": {
+        "temperature_k": 2500.000003765341,
+        "pressure_pa": 1000000.0,
+        "density_kg_m3": 0.8577688987453207,
+        "enthalpy_j_kg": -7414587.520256812,
+        "energy_j_kg": -8580402.696655402,
+        "entropy_j_kg_k": 14447.442760835425,
+        "cp_equilibrium_j_kg_k": 4557.806952598509,
+        "cp_frozen_j_kg_k": 3027.7360988951577,
+        "gamma_s": 1.1430753261854103,
+        "molecular_weight_kg_kmol": 17.829820242621533
+      },
+      "scaled_differences": {
+        "gamma_s": 3.174737231322529e-11,
+        "density_kg_m3": 8.43769498715119e-15,
+        "molecular_weight_kg_kmol": 6.176962108655735e-15,
+        "enthalpy_j_kg": 2.1353155148831162e-15,
+        "energy_j_kg": 3.0391384893156606e-15,
+        "cp_equilibrium_j_kg_k": 1.8851163590345917e-12,
+        "pressure_pa": 0.0,
+        "entropy_j_kg_k": 3.2735014268682484e-15,
+        "cp_frozen_j_kg_k": 5.2567848587709075e-15,
+        "temperature_k": 3.6379788016124075e-15
+      },
+      "tolerance": 0.0003,
+      "passed": true
+    },
+    {
+      "case": "SP:['H2', 'O2']",
+      "native": {
+        "temperature_k": 2500.000017923964,
+        "pressure_pa": 1000000.0,
+        "density_kg_m3": 0.8577688932685232,
+        "enthalpy_j_kg": -7414587.455773671,
+        "energy_j_kg": -8580402.639615914,
+        "entropy_j_kg_k": 14447.442786838903,
+        "cp_equilibrium_j_kg_k": 4557.80702025288,
+        "cp_frozen_j_kg_k": 3027.7361027666793,
+        "gamma_s": 1.1430753252085084,
+        "molecular_weight_kg_kmol": 17.8298202297576
+      },
+      "rust": {
+        "temperature_k": 2500.000017923915,
+        "pressure_pa": 1000000.0,
+        "density_kg_m3": 0.8577688932685544,
+        "enthalpy_j_kg": -7414587.455773862,
+        "energy_j_kg": -8580402.639616063,
+        "entropy_j_kg_k": 14447.442786838787,
+        "cp_equilibrium_j_kg_k": 4557.807020261434,
+        "cp_frozen_j_kg_k": 3027.736102766659,
+        "gamma_s": 1.143075325245302,
+        "molecular_weight_kg_kmol": 17.829820229757892
+      },
+      "scaled_differences": {
+        "gamma_s": 3.2188324253947003e-11,
+        "density_kg_m3": 3.11972669919669e-14,
+        "molecular_weight_kg_kmol": 1.6339061073393765e-14,
+        "enthalpy_j_kg": 2.574939319752774e-14,
+        "energy_j_kg": 1.73665057686788e-14,
+        "cp_equilibrium_j_kg_k": 1.8769349221813968e-12,
+        "pressure_pa": 0.0,
+        "entropy_j_kg_k": 8.057849651634195e-15,
+        "cp_frozen_j_kg_k": 6.7587233812060655e-15,
+        "temperature_k": 1.9645085417448128e-14
+      },
+      "tolerance": 0.0003,
+      "passed": true
+    },
+    {
+      "case": "TV:['H2', 'O2']",
+      "native": {
+        "temperature_k": 2500.0,
+        "pressure_pa": 1000000.000057131,
+        "density_kg_m3": 0.8577689002128832,
+        "enthalpy_j_kg": -7414587.5375878895,
+        "energy_j_kg": -8580402.712058483,
+        "entropy_j_kg_k": 14447.442754476142,
+        "cp_equilibrium_j_kg_k": 4557.806934571078,
+        "cp_frozen_j_kg_k": 3027.736097968624,
+        "gamma_s": 1.1430753264035567,
+        "molecular_weight_kg_kmol": 17.829820245253917
+      },
+      "rust": {
+        "temperature_k": 2500.0,
+        "pressure_pa": 1000000.0000571193,
+        "density_kg_m3": 0.8577689002128832,
+        "enthalpy_j_kg": -7414587.537587767,
+        "energy_j_kg": -8580402.712058345,
+        "entropy_j_kg_k": 14447.442754476004,
+        "cp_equilibrium_j_kg_k": 4557.806934579571,
+        "cp_frozen_j_kg_k": 3027.736097968587,
+        "gamma_s": 1.1430753264394147,
+        "molecular_weight_kg_kmol": 17.829820245254126
+      },
+      "scaled_differences": {
+        "gamma_s": 3.136974652594665e-11,
+        "density_kg_m3": 0.0,
+        "molecular_weight_kg_kmol": 1.1756153688931622e-14,
+        "enthalpy_j_kg": 1.6580096900337653e-14,
+        "energy_j_kg": 1.6064017700402703e-14,
+        "cp_equilibrium_j_kg_k": 1.8633657912837507e-12,
+        "pressure_pa": 1.1757947503848673e-14,
+        "entropy_j_kg_k": 9.56869648274981e-15,
+        "cp_frozen_j_kg_k": 1.2315895958603616e-14,
+        "temperature_k": 0.0
+      },
+      "tolerance": 0.0003,
+      "passed": true
+    },
+    {
+      "case": "UV:['H2', 'O2']",
+      "native": {
+        "temperature_k": 2500.000004316107,
+        "pressure_pa": 1000000.001958011,
+        "density_kg_m3": 0.8577689002128832,
+        "enthalpy_j_kg": -7414587.518017122,
+        "energy_j_kg": -8580402.69470379,
+        "entropy_j_kg_k": 14447.442760727543,
+        "cp_equilibrium_j_kg_k": 4557.806954136879,
+        "cp_frozen_j_kg_k": 3027.736099029472,
+        "gamma_s": 1.1430753261307542,
+        "molecular_weight_kg_kmol": 17.829820242143732
+      },
+      "rust": {
+        "temperature_k": 2500.0000043160803,
+        "pressure_pa": 1000000.0019579934,
+        "density_kg_m3": 0.8577689002128832,
+        "enthalpy_j_kg": -7414587.518017183,
+        "energy_j_kg": -8580402.69470383,
+        "entropy_j_kg_k": 14447.442760727434,
+        "cp_equilibrium_j_kg_k": 4557.806954145327,
+        "cp_frozen_j_kg_k": 3027.7360990294465,
+        "gamma_s": 1.143075326166613,
+        "molecular_weight_kg_kmol": 17.829820242143857
+      },
+      "scaled_differences": {
+        "gamma_s": 3.1370329289267044e-11,
+        "density_kg_m3": 0.0,
+        "molecular_weight_kg_kmol": 6.9739894777013844e-15,
+        "enthalpy_j_kg": 8.29004847205037e-15,
+        "energy_j_kg": 4.775789055725163e-15,
+        "cp_equilibrium_j_kg_k": 1.8535880018131662e-12,
+        "pressure_pa": 1.7578713561447844e-14,
+        "entropy_j_kg_k": 7.554234062060085e-15,
+        "cp_frozen_j_kg_k": 8.41085577366038e-15,
+        "temperature_k": 1.0732037462392304e-14
+      },
+      "tolerance": 0.0003,
+      "passed": true
+    },
+    {
+      "case": "SV:['H2', 'O2']",
+      "native": {
+        "temperature_k": 2500.0000205769397,
+        "pressure_pa": 1000000.0092677411,
+        "density_kg_m3": 0.8577689002128832,
+        "enthalpy_j_kg": -7414587.445030446,
+        "energy_j_kg": -8580402.63023891,
+        "entropy_j_kg_k": 14447.44278667887,
+        "cp_equilibrium_j_kg_k": 4557.807027752259,
+        "cp_frozen_j_kg_k": 3027.73610346202,
+        "gamma_s": 1.143075325114336,
+        "molecular_weight_kg_kmol": 17.82982022778365
+      },
+      "rust": {
+        "temperature_k": 2500.0000205769065,
+        "pressure_pa": 1000000.0092677182,
+        "density_kg_m3": 0.8577689002128832,
+        "enthalpy_j_kg": -7414587.445030504,
+        "energy_j_kg": -8580402.63023894,
+        "entropy_j_kg_k": 14447.44278667873,
+        "cp_equilibrium_j_kg_k": 4557.8070277606375,
+        "cp_frozen_j_kg_k": 3027.7361034619853,
+        "gamma_s": 1.1430753251501957,
+        "molecular_weight_kg_kmol": 17.82982022778382
+      },
+      "scaled_differences": {
+        "gamma_s": 3.137130057688529e-11,
+        "density_kg_m3": 0.0,
+        "molecular_weight_kg_kmol": 9.564328434264979e-15,
+        "enthalpy_j_kg": 7.787621368584799e-15,
+        "energy_j_kg": 3.4733011575315213e-15,
+        "cp_equilibrium_j_kg_k": 1.838222886953611e-12,
+        "pressure_pa": 2.2933818187361467e-14,
+        "entropy_j_kg_k": 9.694600362229776e-15,
+        "cp_frozen_j_kg_k": 1.1414732818970993e-14,
+        "temperature_k": 1.3278622536591386e-14
+      },
+      "tolerance": 0.0003,
+      "passed": true
+    },
+    {
+      "case": "composition:['H2', 'O2']:2500.0:1000000.0",
+      "native": {
+        "H": 0.0010732385340388173,
+        "H2": 0.01815976478709262,
+        "H2O": 0.9575822098433795,
+        "H2O2": 2.130839110433828e-06,
+        "HO2": 8.145358599186057e-06,
+        "O": 0.0004534772851168686,
+        "O2": 0.009805443243517065,
+        "O3": 1.1229179984011096e-09,
+        "OH": 0.0129155889862275,
+        "H2O(L)": 0.0,
+        "H2O(cr)": 0.0
+      },
+      "rust": {
+        "H": 0.0010732385340388468,
+        "H2": 0.01815976478709357,
+        "H2O": 0.9575822098433803,
+        "H2O2": 2.1308391104337086e-06,
+        "HO2": 8.145358599185196e-06,
+        "O": 0.00045347728511683914,
+        "O2": 0.00980544324351582,
+        "O3": 1.1229179984009667e-09,
+        "OH": 0.01291558898622712
+      },
+      "scaled_differences": {
+        "H": 2.949029909160572e-17,
+        "O2": 1.2437967322753707e-15,
+        "H2O": 7.771561172376096e-16,
+        "HO2": 8.605854744103691e-19,
+        "O": 2.9436088982981445e-17,
+        "H2O(cr)": 0.0,
+        "H2O(L)": 0.0,
+        "H2O2": 1.1943164556285635e-19,
+        "O3": 1.4289545081853553e-22,
+        "H2": 9.506284648352903e-16,
+        "OH": 3.7990444123892075e-16
+      },
+      "tolerance": 3e-05,
+      "passed": true
+    },
+    {
+      "case": "TP:['H2', 'O2']:3500.0:5000000.0",
+      "native": {
+        "temperature_k": 3500.0,
+        "pressure_pa": 5000000.0,
+        "density_kg_m3": 2.7855710625097623,
+        "enthalpy_j_kg": -1323389.3784164651,
+        "energy_j_kg": -3118353.458598669,
+        "entropy_j_kg_k": 15682.361362726393,
+        "cp_equilibrium_j_kg_k": 9890.492948579824,
+        "cp_frozen_j_kg_k": 3217.018901888267,
+        "gamma_s": 1.1280668163362806,
+        "molecular_weight_kg_kmol": 16.21246091846363
+      },
+      "rust": {
+        "temperature_k": 3500.0,
+        "pressure_pa": 5000000.0,
+        "density_kg_m3": 2.7855710625097596,
+        "enthalpy_j_kg": -1323389.3784164744,
+        "energy_j_kg": -3118353.45859868,
+        "entropy_j_kg_k": 15682.361362726513,
+        "cp_equilibrium_j_kg_k": 9890.492948579897,
+        "cp_frozen_j_kg_k": 3217.018901888292,
+        "gamma_s": 1.128066816336279,
+        "molecular_weight_kg_kmol": 16.212460918463616
+      },
+      "scaled_differences": {
+        "gamma_s": 1.3778547617625101e-15,
+        "density_kg_m3": 9.565490160928312e-16,
+        "molecular_weight_kg_kmol": 8.765390267814253e-16,
+        "enthalpy_j_kg": 7.0374040309275864e-15,
+        "energy_j_kg": 3.434572042673756e-15,
+        "cp_equilibrium_j_kg_k": 7.356516658988348e-15,
+        "pressure_pa": 0.0,
+        "entropy_j_kg_k": 7.655307632393132e-15,
+        "cp_frozen_j_kg_k": 7.774621493232435e-15,
+        "temperature_k": 0.0
+      },
+      "tolerance": 0.0003,
+      "passed": true
+    },
+    {
+      "case": "composition:['H2', 'O2']:3500.0:5000000.0",
+      "native": {
+        "H": 0.027236328311288374,
+        "H2": 0.10605664238157354,
+        "H2O": 0.7277351890162355,
+        "H2O2": 3.159056992710253e-05,
+        "HO2": 0.0001724297750486972,
+        "O": 0.012814360760412768,
+        "O2": 0.03381467288272831,
+        "O3": 1.639700119072716e-07,
+        "OH": 0.09213862233277385,
+        "H2O(L)": 0.0,
+        "H2O(cr)": 0.0
+      },
+      "rust": {
+        "H": 0.027236328311288294,
+        "H2": 0.10605664238157182,
+        "H2O": 0.7277351890162357,
+        "H2O2": 3.159056992710308e-05,
+        "HO2": 0.0001724297750487033,
+        "O": 0.012814360760412914,
+        "O2": 0.03381467288272939,
+        "O3": 1.639700119072366e-07,
+        "OH": 0.09213862233277431
+      },
+      "scaled_differences": {
+        "H": 7.979727989493313e-17,
+        "O2": 1.0755285551056204e-15,
+        "H2O": 2.220446049250313e-16,
+        "HO2": 6.0986372202309624e-18,
+        "O": 1.457167719820518e-16,
+        "H2O(cr)": 0.0,
+        "H2O(L)": 0.0,
+        "H2O2": 5.488773498207866e-19,
+        "O3": 3.499304863344328e-20,
+        "H2": 1.7208456881689926e-15,
+        "OH": 4.579669976578771e-16
+      },
+      "tolerance": 3e-05,
+      "passed": true
+    }
+  ],
+  "all_passed": true,
+  "scope": "Finite cases only; not full CEA parity, flight qualification, or a performance benchmark."
+}
