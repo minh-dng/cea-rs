@@ -1,7 +1,7 @@
-# Unreleased nozzle-root performance candidate
+# Alpha2 nozzle-root performance evidence
 
-The released 0.1.0a1 artifacts remain unchanged. This branch uses candidate
-version 0.1.0a2. No consumer dependency or production default changes.
+The released 0.1.0a1 artifacts remain unchanged. The reviewed nozzle-root
+change is released as version 0.1.0a2. No consumer dependency or production default changes.
 
 A sampled alpha1 NTO/Aerozine50 solve spends substantial time in repeated
 thermochemistry calls from bracketed roots. The private root search now uses

@@ -1,7 +1,7 @@
 # cea-rs
 
 Experimental native Rust thermochemistry and chemical equilibrium, with Python
-bindings. Install distribution `cea-keplr-rs`; import `cea_rs`. Version 0.1.0a1
+bindings. Install distribution `cea-keplr-rs`; import `cea_rs`. Version 0.1.0a2
 is an alpha, not a full NASA CEA replacement. Native NASA CEA remains the Keplr
 and Hybrid production default.
 
@@ -22,7 +22,10 @@ the first binary wheel targets macOS arm64, with an sdist for other builds.
 
 [Implementation matrix](docs/implementation-matrix.md) gives exact units,
 unsupported modes and failure behavior. [Validation](docs/validation.md)
-separates native comparisons, packaging tests and performance evidence.
+separates the initial native comparisons, packaging tests and performance evidence.
+[Alpha2 performance](docs/performance-0.1.0a2/README.md) records the reviewed
+nozzle-root optimization; [CI validation](docs/ci-validation.md) records local
+Linux checks and quota-blocked GitLab execution.
 [Provenance](docs/provenance.md) identifies NASA and prior Rust sources/licenses.
 
 The current release is **slower than native CEA** in the measured workloads.
