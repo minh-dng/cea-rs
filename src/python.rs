@@ -284,7 +284,7 @@ fn _cea_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Station>()?;
     m.add("ConvergenceError", m.py().get_type::<ConvergenceError>())?;
     m.add("DomainError", m.py().get_type::<DomainError>())?;
-    m.add("__version__", "0.1.0a1")?;
+    m.add("__version__", "0.1.0a2")?;
     m.add("R", crate::R)?;
     Ok(())
 }
