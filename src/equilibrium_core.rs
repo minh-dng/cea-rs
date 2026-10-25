@@ -388,7 +388,10 @@ fn solve_for_products_debug(
     only: Option<&[Species]>,
 ) -> EquilibriumDebug {
     solve_for_products_debug_seeded(
-        &reactants.iter().map(|&(n, sp)| crate::thermo::Feed::from_species(n, sp)).collect::<Vec<_>>(),
+        &reactants
+            .iter()
+            .map(|&(n, sp)| crate::thermo::Feed::from_species(n, sp))
+            .collect::<Vec<_>>(),
         const_t,
         const_s,
         const_p,
@@ -404,15 +407,13 @@ fn solve_for_products_debug(
 #[allow(unused_assignments, clippy::too_many_arguments)]
 pub(crate) fn solve_for_products_debug_seeded(
     reactants: &[crate::thermo::Feed],
-    // Section E.1: which state1/state2 pair this problem fixes. Only 't'
-    // (TP), 'h' (HP), and 's' (SP) are implemented so far — TV/UV/SV need
-    // const_v support, which isn't written yet.
+    // Select fixed temperature vs variable-temperature energy/entropy modes.
     const_t: bool,
     // Only meaningful when !const_t: true = SP (state1 = S⁰/R), false = HP
     // (state1 = H⁰/R). Selects the 's·' vs 'h·' branch of E.2's tmp_j table.
     const_s: bool,
     // true = P fixed (state2 = P [bar], TP/HP/SP); false = V fixed
-    // (state2 = V [m³/kg], TV — UV/SV aren't wired up yet). When !const_p,
+    // (state2 = V [m³/kg], TV/UV/SV). When !const_p,
     // pressure is recomputed every iteration from the ideal-gas closure
     // (Global conventions: P = 1e-5 * R * n * T / V) instead of being fixed.
     const_p: bool,
@@ -1283,7 +1284,13 @@ pub(crate) fn solve_for_products_debug_seeded(
         // state (RAW ln_nj, like test 4 — the ln(nj) term isn't meaningful
         // for a truncated 0).
         let test6 = if const_s {
-            let new_ln_p_over_n = (pressure_bar / n).ln();
+            // Recompute the constant-volume closure after updating n and T.
+            let post_pressure_bar = if const_p {
+                state2
+            } else {
+                1e-5 * R_CEA * n * temperature_k / state2
+            };
+            let new_ln_p_over_n = (post_pressure_bar / n).ln();
             let gas_s: f64 = (0..ng)
                 .map(|j| {
                     let nj_raw = ln_nj[j].exp();
@@ -1711,7 +1718,7 @@ pub(crate) fn solve_for_products_debug_seeded(
         _ => {
             converged = false;
             (f64::NAN, f64::NAN, f64::NAN)
-        },
+        }
     };
 
     let gamma_s = -1.0 / (dlnv_dlnp + dlnv_dlnt * dlnv_dlnt * n / cp_eq_over_r);
@@ -1811,7 +1818,10 @@ pub fn solve_for_products(
     };
 
     let debug_result = solve_for_products_debug_seeded(
-        &reactants.iter().map(|&(n, sp)| crate::thermo::Feed::from_species(n, sp)).collect::<Vec<_>>(),
+        &reactants
+            .iter()
+            .map(|&(n, sp)| crate::thermo::Feed::from_species(n, sp))
+            .collect::<Vec<_>>(),
         const_t,
         const_s,
         const_p,

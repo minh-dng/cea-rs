@@ -16,6 +16,7 @@ Licensed under the Apache License, Version 2.0.
 cea-rs modifications (2026): Rust/Python validation, reactant support, rocket
 expansion and packaging by Keplr contributors. This is not a NASA product.
 
+Copyright (c) 2026 Bit Mango.
 Rust equilibrium algorithm adapted from bit-mango/cea-rs commit
 914ffd48f3acd49dbacfdc54e9e12bf848a5e9ad, under Apache-2.0.
 Thermo polynomial types/generator adapted from bit-mango/thermo-species commit
