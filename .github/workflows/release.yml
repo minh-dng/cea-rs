@@ -1,0 +1,58 @@
+name: Release artifacts
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Check new release identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Require a new version on main
+        run: |
+          python3 - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          rust_version = tomllib.loads(Path("Cargo.toml").read_text())["package"]["version"]
+          assert rust_version.replace("-alpha.", "a") == version, "Cargo and Python versions must match"
+          assert version not in {"0.1.0a1", "0.1.0a2"}, "Existing packages are immutable; bump the version first"
+          assert os.environ["GITHUB_REF_NAME"] == f"v{version}", "Tag must match the Python package version"
+          PY
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+  validate:
+    needs: guard
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Attach tested artifacts
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: Create alpha release with checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cd dist
+          sha256sum ./* > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" ./* --verify-tag --generate-notes --prerelease --latest=false

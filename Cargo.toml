@@ -4,7 +4,7 @@ version = "0.1.0-alpha.2"
 edition = "2024"
 license = "Apache-2.0"
 description = "Experimental Rust chemical equilibrium and rocket performance with Python bindings"
-repository = "https://gitlab.com/keplr-space/cea-rs"
+repository = "https://github.com/minh-dng/cea-rs"
 
 [lib]
 name = "cea_rs"
