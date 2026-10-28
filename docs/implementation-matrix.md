@@ -1,6 +1,6 @@
 # Implemented scope and remaining work
 
-Version 0.1.0a2 is an experimental, separately named distribution. Full NASA CEA
+Version 0.1.0a3 is an experimental, separately named distribution. Full NASA CEA
 parity, Python API compatibility and consumer replacement are not established.
 
 | Capability | Rust status | Evidence or remaining gate |
@@ -63,9 +63,9 @@ states. The Rust field is valid only when `State.equilibrium` is true.
 
 ## Production and performance gate
 
-Keep native CEA as the production default. The release benchmark shows the
-current Rust implementation is slower, especially the bracketed nozzle's
-many independent equilibrium solves. Optimization requires measured profiles,
+Consumers configure their production backend. The 0.1.0a2 benchmark found
+Rust slower, especially the bracketed nozzle's many independent equilibrium
+solves; 0.1.0a3 has not been benchmarked. Optimization requires measured profiles,
 reused immutable species/model data and better root algorithms, with the same
 native and residual tests retained. Language alone does not establish speed.
 

@@ -26,18 +26,18 @@ for the wheel targets and future release process.
 [Implementation matrix](docs/implementation-matrix.md) gives exact units,
 unsupported modes and failure behavior. [Validation](docs/validation.md)
 separates the initial native comparisons, packaging tests and performance evidence.
-[Alpha2 performance](docs/performance-0.1.0a2/README.md) records the reviewed
+[0.1.0a2 performance](docs/performance-0.1.0a2/README.md) records the reviewed
 nozzle-root optimization; [historical CI validation](docs/ci-validation.md)
 records local Linux checks and quota-blocked GitLab execution.
 [GitHub Actions](https://github.com/minh-dng/cea-rs/actions) runs the current CI.
 [Provenance](docs/provenance.md) identifies NASA and prior Rust sources/licenses.
 
-Alpha.2 was **slower than native CEA** in its measured workloads; alpha.3 has
-no new performance claim.
+Version 0.1.0a2 was **slower than native CEA** in its measured workloads.
+Version 0.1.0a3 has not been benchmarked.
 Full CEA parity and drop-in consumer compatibility are unproven. In particular,
 N2O at Hybrid's 298.15 K input is rejected because its NASA fit starts at 300 K.
 
-## Alpha.3 nozzle continuation
+## Nozzle phase initialization
 
 Equilibrium nozzle solves reuse the chamber's active condensed phases as
 initial guesses. Phase removal, iteration budgets, equations, fitted-data and

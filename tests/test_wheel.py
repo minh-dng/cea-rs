@@ -88,43 +88,49 @@ class InstalledWheelTests(unittest.TestCase):
                 for name, formula, mw, h in feeds
             ]
         )
+        # Regression point from a carbon-bearing Hybrid alpha.2 burn.
         weights = [
             0.2015848925668829,
             0.23920531966165437,
             0.06418196354020744,
             0.49502782423125524,
         ]
-        for area in (1.0, 7.5608953312955025):
-            r = solver.rocket(weights, [298.15] * 4, 417101.1025245694, area)
-            self.assertGreater(r.chamber.state.mole_fractions["C(gr)"], 0)
-            self.assertLess(abs(r.throat.mach - 1), 2e-6)
-            flux = r.throat.state.density_kg_m3 * r.throat.velocity_m_s
-            self.assertLess(
-                abs(
-                    flux / (r.exit.state.density_kg_m3 * r.exit.velocity_m_s * area) - 1
-                ),
-                2e-6,
-            )
-            for station in (r.chamber, r.throat, r.exit):
-                self.assertLess(station.state.element_residual, 2e-5)
-                self.assertLess(station.state.constraint_residual, 2e-5)
+        for flow in ("equilibrium", "frozen_at_throat"):
+            for area in (1.0, 7.5608953312955025):
+                r = solver.rocket(
+                    weights, [298.15] * 4, 417101.1025245694, area, flow=flow
+                )
+                self.assertGreater(r.chamber.state.mole_fractions["C(gr)"], 0)
+                self.assertLess(abs(r.throat.mach - 1), 2e-6)
+                flux = r.throat.state.density_kg_m3 * r.throat.velocity_m_s
                 self.assertLess(
                     abs(
-                        station.state.entropy_j_kg_k / r.chamber.state.entropy_j_kg_k
+                        flux / (r.exit.state.density_kg_m3 * r.exit.velocity_m_s * area)
                         - 1
                     ),
-                    2e-5,
+                    2e-6,
                 )
-                self.assertLess(
-                    abs(
-                        (station.state.enthalpy_j_kg + station.velocity_m_s**2 / 2)
-                        / r.chamber.state.enthalpy_j_kg
-                        - 1
-                    ),
-                    2e-5,
-                )
-            if area > 1:
-                self.assertGreater(r.exit.mach, 1)
+                for station in (r.chamber, r.throat, r.exit):
+                    self.assertLess(station.state.element_residual, 2e-5)
+                    self.assertLess(station.state.constraint_residual, 2e-5)
+                    self.assertLess(
+                        abs(
+                            station.state.entropy_j_kg_k
+                            / r.chamber.state.entropy_j_kg_k
+                            - 1
+                        ),
+                        2e-5,
+                    )
+                    self.assertLess(
+                        abs(
+                            (station.state.enthalpy_j_kg + station.velocity_m_s**2 / 2)
+                            / r.chamber.state.enthalpy_j_kg
+                            - 1
+                        ),
+                        2e-5,
+                    )
+                if area > 1:
+                    self.assertGreater(r.exit.mach, 1)
 
     def test_nozzle_identities(self) -> None:
         """Check sonic, entropy, energy, mass and explicit frozen diagnostics."""

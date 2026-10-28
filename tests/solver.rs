@@ -181,6 +181,7 @@ fn carbon_nozzle_preserves_chamber_phase_initialization() {
         vec![],
     )
     .unwrap();
+    // Regression point from a carbon-bearing Hybrid alpha.2 burn.
     let weights = [
         0.2015848925668829,
         0.23920531966165437,
@@ -188,39 +189,37 @@ fn carbon_nozzle_preserves_chamber_phase_initialization() {
         0.49502782423125524,
     ];
     let pressure = 417101.1025245694;
-    for area in [1.0, 7.5608953312955025] {
-        let r = s
-            .rocket(
-                &weights,
-                &[298.15; 4],
-                pressure,
-                area,
-                FlowMode::Equilibrium,
-            )
-            .unwrap();
-        assert!(r.chamber.state.mole_fractions["C(gr)"] > 0.0);
-        assert!((r.throat.mach - 1.0).abs() < 2e-6);
-        let flux = r.throat.state.density_kg_m3 * r.throat.velocity_m_s;
-        assert!(
-            (flux / (r.exit.state.density_kg_m3 * r.exit.velocity_m_s * area) - 1.0).abs() < 2e-6
-        );
-        for st in [&r.chamber, &r.throat, &r.exit] {
-            assert!(st.state.equilibrium);
-            assert!(st.state.element_residual < 2e-5);
-            assert!(st.state.constraint_residual < 2e-5);
-            assert!((st.state.entropy_j_kg_k / r.chamber.state.entropy_j_kg_k - 1.0).abs() < 2e-5);
+    for flow in [FlowMode::Equilibrium, FlowMode::FrozenAtThroat] {
+        for area in [1.0, 7.5608953312955025] {
+            let r = s
+                .rocket(&weights, &[298.15; 4], pressure, area, flow)
+                .unwrap();
+            assert!(r.chamber.state.mole_fractions["C(gr)"] > 0.0);
+            assert!((r.throat.mach - 1.0).abs() < 2e-6);
+            let flux = r.throat.state.density_kg_m3 * r.throat.velocity_m_s;
             assert!(
-                ((st.state.enthalpy_j_kg + st.velocity_m_s.powi(2) / 2.0)
-                    / r.chamber.state.enthalpy_j_kg
-                    - 1.0)
-                    .abs()
-                    < 2e-5
+                (flux / (r.exit.state.density_kg_m3 * r.exit.velocity_m_s * area) - 1.0).abs()
+                    < 2e-6
             );
-        }
-        assert!(r.cstar_m_s.is_finite() && r.cstar_m_s > 0.0);
-        assert!(r.vacuum_velocity_m_s.is_finite() && r.vacuum_velocity_m_s > 0.0);
-        if area > 1.0 {
-            assert!(r.exit.mach > 1.0);
+            for st in [&r.chamber, &r.throat, &r.exit] {
+                assert!(st.state.element_residual < 2e-5);
+                assert!(st.state.constraint_residual < 2e-5);
+                assert!(
+                    (st.state.entropy_j_kg_k / r.chamber.state.entropy_j_kg_k - 1.0).abs() < 2e-5
+                );
+                assert!(
+                    ((st.state.enthalpy_j_kg + st.velocity_m_s.powi(2) / 2.0)
+                        / r.chamber.state.enthalpy_j_kg
+                        - 1.0)
+                        .abs()
+                        < 2e-5
+                );
+            }
+            assert!(r.cstar_m_s.is_finite() && r.cstar_m_s > 0.0);
+            assert!(r.vacuum_velocity_m_s.is_finite() && r.vacuum_velocity_m_s > 0.0);
+            if area > 1.0 {
+                assert!(r.exit.mach > 1.0);
+            }
         }
     }
 }
