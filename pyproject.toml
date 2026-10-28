@@ -13,7 +13,7 @@ license-files = ["LICENSE", "NOTICE", "vendor/*LICENSE*", "vendor/thermo-species
 classifiers = ["Development Status :: 3 - Alpha", "Topic :: Scientific/Engineering :: Chemistry", "Programming Language :: Rust"]
 
 [project.urls]
-Repository = "https://gitlab.com/keplr-space/cea-rs"
+Repository = "https://github.com/minh-dng/cea-rs"
 
 [tool.maturin]
 features = ["python"]
