@@ -181,11 +181,20 @@ impl Solver {
         } else {
             chamber_eq
         };
+        // Keep chamber condensates as initial guesses; unstable phases can still leave.
+        let mut nozzle_solver = self.clone();
+        nozzle_solver.insert.extend(
+            chamber
+                .amounts
+                .iter()
+                .filter(|(n, sp)| *n > 0.0 && sp.data().phase() != 0)
+                .map(|(_, sp)| *sp),
+        );
         let expand = |p: f64| {
             if flow == FlowMode::FrozenAtChamber {
                 frozen_expansion(&chamber, p)
             } else {
-                self.solve(Mode::SP(chamber.entropy_j_kg_k, p), weights)
+                nozzle_solver.solve(Mode::SP(chamber.entropy_j_kg_k, p), weights)
             }
         };
         let sonic_residual = |ln_p: f64| {

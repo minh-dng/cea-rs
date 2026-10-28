@@ -22,7 +22,7 @@ Bit Mango license pairs were checked against the pinned upstream sources in
   treated as errors.
 - Maturin 1.15.0: release wheels for Linux x86-64, Linux ARM64 (the Keplr target),
   and macOS ARM64, using native runners. Linux wheels target manylinux 2.28.
-- Each wheel is installed into a separate directory and the existing three
+- Each wheel is installed into a separate directory and the four
   installed-wheel tests run outside the checkout on Python 3.12 and 3.15.1.
 - The Linux x86-64 job also builds the source distribution. Successful jobs
   retain their artifacts in GitHub Actions.

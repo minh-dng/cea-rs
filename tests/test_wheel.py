@@ -68,6 +68,70 @@ class InstalledWheelTests(unittest.TestCase):
             for flow, values in zip(flows, pool.map(hot, flows), strict=True):
                 self.assertEqual(values, baseline[flow])
 
+    def test_condensed_nozzle_phase_initialization(self) -> None:
+        """Carry chamber phases through a carbon-bearing nozzle expansion."""
+        feeds = [
+            ("C3H3N_reference", {"C": 3, "H": 3, "N": 1}, 53.0626, 140000.0),
+            ("C4H6_reference", {"C": 4, "H": 6}, 54.0904, 90500.0),
+            ("C8H8_reference", {"C": 8, "H": 8}, 104.1491, 103400.0),
+            ("N2O_ref298", {"N": 2, "O": 1}, 44.0128, 81600.0),
+        ]
+        solver = cea_rs.Solver(
+            [
+                cea_rs.Reactant(
+                    name=name,
+                    formula=formula,
+                    molecular_weight=mw,
+                    enthalpy_j_mol=h,
+                    reference_temperature_k=298.15,
+                )
+                for name, formula, mw, h in feeds
+            ]
+        )
+        # Regression point from a carbon-bearing Hybrid alpha.2 burn.
+        weights = [
+            0.2015848925668829,
+            0.23920531966165437,
+            0.06418196354020744,
+            0.49502782423125524,
+        ]
+        for flow in ("equilibrium", "frozen_at_throat"):
+            for area in (1.0, 7.5608953312955025):
+                r = solver.rocket(
+                    weights, [298.15] * 4, 417101.1025245694, area, flow=flow
+                )
+                self.assertGreater(r.chamber.state.mole_fractions["C(gr)"], 0)
+                self.assertLess(abs(r.throat.mach - 1), 2e-6)
+                flux = r.throat.state.density_kg_m3 * r.throat.velocity_m_s
+                self.assertLess(
+                    abs(
+                        flux / (r.exit.state.density_kg_m3 * r.exit.velocity_m_s * area)
+                        - 1
+                    ),
+                    2e-6,
+                )
+                for station in (r.chamber, r.throat, r.exit):
+                    self.assertLess(station.state.element_residual, 2e-5)
+                    self.assertLess(station.state.constraint_residual, 2e-5)
+                    self.assertLess(
+                        abs(
+                            station.state.entropy_j_kg_k
+                            / r.chamber.state.entropy_j_kg_k
+                            - 1
+                        ),
+                        2e-5,
+                    )
+                    self.assertLess(
+                        abs(
+                            (station.state.enthalpy_j_kg + station.velocity_m_s**2 / 2)
+                            / r.chamber.state.enthalpy_j_kg
+                            - 1
+                        ),
+                        2e-5,
+                    )
+                if area > 1:
+                    self.assertGreater(r.exit.mach, 1)
+
     def test_nozzle_identities(self) -> None:
         """Check sonic, entropy, energy, mass and explicit frozen diagnostics."""
         solver = cea_rs.Solver(["H2", "O2"])
