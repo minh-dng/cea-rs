@@ -141,5 +141,5 @@ def capabilities() -> dict[str, object]:
             "analytic sensitivities",
         ],
         "full_cea_parity": False,
-        "production_default": "native NASA CEA",
+        "production_default": "configured by consumer",
     }

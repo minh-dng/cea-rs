@@ -2,7 +2,7 @@
 
 Experimental native Rust thermochemistry and chemical equilibrium, with Python
 bindings. Canonical source: [minh-dng/cea-rs](https://github.com/minh-dng/cea-rs).
-Install distribution `cea-keplr-rs`; import `cea_rs`. Version 0.1.0a2 is an
+Install distribution `cea-keplr-rs`; import `cea_rs`. Version 0.1.0a3 is an
 alpha, not a full NASA CEA replacement. Native `cea==3.3.4` remains the default
 in the released Hybrid and keplr-solver consumers.
 
@@ -32,9 +32,19 @@ records local Linux checks and quota-blocked GitLab execution.
 [GitHub Actions](https://github.com/minh-dng/cea-rs/actions) runs the current CI.
 [Provenance](docs/provenance.md) identifies NASA and prior Rust sources/licenses.
 
-The current release is **slower than native CEA** in the measured workloads.
+Alpha.2 was **slower than native CEA** in its measured workloads; alpha.3 has
+no new performance claim.
 Full CEA parity and drop-in consumer compatibility are unproven. In particular,
 N2O at Hybrid's 298.15 K input is rejected because its NASA fit starts at 300 K.
+
+## Alpha.3 nozzle continuation
+
+Equilibrium nozzle solves reuse the chamber's active condensed phases as
+initial guesses. Phase removal, iteration budgets, equations, fitted-data and
+closure checks remain unchanged. This fixes a carbon-bearing nozzle
+initialization failure; it does not repair every standalone unseeded SP solve
+or confer numerical acceptance. Consumers must update their exact version
+guards and pins before loading alpha.3.
 
 ## Released consumers
 
