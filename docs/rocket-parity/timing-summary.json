@@ -1,0 +1,120 @@
+[
+  {
+    "propellant": [
+      "H2",
+      "O2"
+    ],
+    "first_before": {
+      "native": 0.098333,
+      "rust": 1.206708
+    },
+    "first_after": {
+      "native": 0.082166,
+      "rust": 0.418667
+    },
+    "median_before": {
+      "rust": {
+        "median_ms": 1.157229,
+        "min_ms": 1.131125,
+        "max_ms": 1.258417
+      },
+      "native": {
+        "median_ms": 0.055292,
+        "min_ms": 0.054958,
+        "max_ms": 0.066708
+      }
+    },
+    "median_after": {
+      "rust": {
+        "median_ms": 0.385792,
+        "min_ms": 0.383,
+        "max_ms": 0.410625
+      },
+      "native": {
+        "median_ms": 0.054583,
+        "min_ms": 0.054208,
+        "max_ms": 0.071125
+      }
+    },
+    "rust_speedup": 2.999618965660252
+  },
+  {
+    "propellant": [
+      "O2(L)",
+      "RP-1"
+    ],
+    "first_before": {
+      "native": 0.936334,
+      "rust": 9.55625
+    },
+    "first_after": {
+      "native": 0.91475,
+      "rust": 2.971084
+    },
+    "median_before": {
+      "rust": {
+        "median_ms": 9.149687499999999,
+        "min_ms": 9.052625,
+        "max_ms": 9.520166
+      },
+      "native": {
+        "median_ms": 0.8439795,
+        "min_ms": 0.829042,
+        "max_ms": 0.87925
+      }
+    },
+    "median_after": {
+      "rust": {
+        "median_ms": 2.8884375,
+        "min_ms": 2.792834,
+        "max_ms": 3.550458
+      },
+      "native": {
+        "median_ms": 0.8360415,
+        "min_ms": 0.809666,
+        "max_ms": 0.889416
+      }
+    },
+    "rust_speedup": 3.1676944714919393
+  },
+  {
+    "propellant": [
+      "N2O4(L)",
+      "N2H4(L)",
+      "C2H8N2(L),UDMH"
+    ],
+    "first_before": {
+      "native": 1.280958,
+      "rust": 12.15325
+    },
+    "first_after": {
+      "native": 1.307792,
+      "rust": 4.297333
+    },
+    "median_before": {
+      "rust": {
+        "median_ms": 11.603978999999999,
+        "min_ms": 11.482667,
+        "max_ms": 12.665625
+      },
+      "native": {
+        "median_ms": 1.1491255,
+        "min_ms": 1.142166,
+        "max_ms": 1.181125
+      }
+    },
+    "median_after": {
+      "rust": {
+        "median_ms": 4.2065,
+        "min_ms": 4.189,
+        "max_ms": 4.281625
+      },
+      "native": {
+        "median_ms": 1.1365835,
+        "min_ms": 1.126792,
+        "max_ms": 1.168125
+      }
+    },
+    "rust_speedup": 2.7585829074052057
+  }
+]

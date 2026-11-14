@@ -1,0 +1,22 @@
+{
+  "native_version": "3.3.4",
+  "native_library_version": "3.3.4",
+  "rust_version": "0.1.0a3",
+  "python": "3.15.0",
+  "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "rust_module": "/private/tmp/cea-rocket-oracle.5sYWwH/.venv/lib/python3.15/site-packages/cea_rs/__init__.py",
+  "rust_data_sha256": "fa7746572952d74e249e818a82a35c113829742fb421a308e167185528884363",
+  "native_loaded_extension": "/private/tmp/cea-rocket-oracle.5sYWwH/.venv/lib/python3.15/site-packages/cea/lib/libcea.cpython-315-darwin.so",
+  "native_files_sha256": {
+    "libcea.cpython-315-darwin.so": "48b6f36a8cc575755f48224ce0f46722dad9a2c4d30b6a6f794833d5410ccb85",
+    "trans.lib": "c203d9330746405e1b57008cd697354745ab991694b4ca11ed556b18cb834111",
+    "thermo.lib": "dab359a56d3001c6d2c320aaf5eee9c2dc4069cb74ad0c7e36ecd1f61d905e7d"
+  },
+  "scale_definition": "abs(rust-native)/max(abs(native), 1 SI unit)",
+  "scope": "Finite cases only; not full CEA parity, flight qualification, or a performance benchmark.",
+  "process_isolated": true,
+  "worker_failures": [],
+  "all_passed": true,
+  "row_count": 146,
+  "worst_scaled_difference": 5.8398346353771203e-05
+}

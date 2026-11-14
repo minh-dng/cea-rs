@@ -98,27 +98,46 @@ class Solver:
         weights: list[float],
         temperatures_k: list[float],
         chamber_pressure_pa: float,
-        expansion_ratio: float,
+        expansion_ratio: float | None = None,
         *,
         flow: str = "equilibrium",
         iac: bool = True,
         transport: bool = False,
+        pi_p: float | list[float] | None = None,
+        subar: float | list[float] | None = None,
+        supar: float | list[float] | None = None,
+        ac_at: float | None = None,
+        mdot: float | None = None,
+        n_frz: int | None = None,
+        hc: float | None = None,
+        tc: float | None = None,
+        tc_est: float | None = None,
     ) -> RocketResult:
-        """Solve an infinite-area chamber, sonic throat, and supersonic exit.
+        """Solve chamber, throat and pressure/area exit schedules in SI.
 
-        Args:
-            weights: Nonnegative reactant masses, normalized internally.
-            temperatures_k: Temperatures in reactant order, without extrapolation.
-            chamber_pressure_pa: Stagnation chamber pressure in Pa.
-            expansion_ratio: Geometric exit area divided by throat area, >= 1.
-            flow: equilibrium, frozen_at_chamber, or frozen_at_throat.
-            iac: Must be True; finite-area chambers are unimplemented.
-            transport: Must be False; transport is unimplemented.
+        The existing positional expansion_ratio specifies one supersonic exit.
+        Otherwise pi_p, subar and supar accept scalars or lists, processed in
+        that order. pi_p is injector/chamber pressure divided by exit pressure.
+        FAC (iac=False) requires ac_at or mdot in kg/(s m²), and returns injector,
+        infinity, combustor end and throat before the requested exits.
 
-        Returns:
-            Three stations and ideal c-star/vacuum velocity in m/s. Divide
-            vacuum_velocity_m_s by 9.80665 for vacuum specific impulse in seconds.
+        n_frz counts stations from one, including FAC's infinity station; zero
+        means equilibrium. Points upstream of the freeze point are omitted as
+        in NASA CEA. A frozen fit-limit stop returns complete=False and only
+        verified stations, with stop_reason explaining the limit.
+
+        hc (J/kg) or tc (K) assigns the stagnation state instead of the reactant
+        enthalpy. tc_est seeds a chamber temperature iteration. transport must be
+        False. Specific impulses are velocities in m/s; divide by 9.80665 to obtain seconds.
         """
+
+        def schedule(value: float | list[float] | None) -> list[float]:
+            if value is None:
+                return []
+            if isinstance(value, (float, int)):
+                return [float(value)]
+            return list(value)
+
         return self._inner.rocket(
             weights,
             temperatures_k,
@@ -127,6 +146,15 @@ class Solver:
             flow=flow,
             iac=iac,
             transport=transport,
+            pi_p=schedule(pi_p),
+            subar=schedule(subar),
+            supar=schedule(supar),
+            ac_at=ac_at,
+            mdot=mdot,
+            n_frz=n_frz,
+            hc=hc,
+            tc=tc,
+            tc_est=tc_est,
         )
 
 
@@ -134,11 +162,17 @@ def capabilities() -> dict[str, object]:
     """Describe implemented algorithms separately from established parity."""
     return {
         "equilibrium": ["TP", "HP", "SP", "TV", "UV", "SV"],
-        "rocket": ["IAC equilibrium", "IAC frozen at chamber", "IAC frozen at throat"],
+        "rocket": [
+            "IAC equilibrium",
+            "IAC frozen at chamber",
+            "IAC frozen at throat",
+            "FAC",
+            "pressure and area station schedules",
+            "station-index freezing",
+        ],
         "condensed": "experimental active-set equilibrium",
         "ions": "experimental charge-neutral equilibrium",
         "unsupported": [
-            "finite-area chamber",
             "shock",
             "detonation",
             "transport",
