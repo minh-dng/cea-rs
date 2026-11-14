@@ -1,7 +1,9 @@
 //! Experimental native Rust chemical equilibrium. No Fortran runtime is used.
 #![allow(clippy::needless_range_loop)]
+pub mod derivatives;
 #[allow(dead_code)]
 mod equilibrium_core;
+pub mod mixture;
 #[cfg(feature = "python")]
 mod python;
 pub mod rocket;

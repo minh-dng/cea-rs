@@ -75,6 +75,27 @@ pub struct Reactant {
 }
 
 impl Reactant {
+    /// NASA's inclusive nominal range in K. Reference-only reactants report
+    /// T_ref ± 10 K; properties() still requires their exact reference state.
+    pub fn get_valid_temperature_range(&self) -> (f64, f64) {
+        if let Some(sp) = self.species {
+            return sp.data().valid_temperature_range();
+        }
+        if self.fits.is_empty() {
+            return (
+                self.reference_temperature - 10.0,
+                self.reference_temperature + 10.0,
+            );
+        }
+        (
+            self.fits.iter().map(|f| f.lo).fold(f64::INFINITY, f64::min),
+            self.fits
+                .iter()
+                .map(|f| f.hi)
+                .fold(f64::NEG_INFINITY, f64::max),
+        )
+    }
+
     /// Load a NASA species, including reference-only liquid fuels.
     pub fn named(name: &str) -> Result<Self> {
         if let Ok(sp) = Species::from_str(name) {

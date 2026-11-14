@@ -18,11 +18,18 @@ class Reactant:
         enthalpy_j_mol: float | None = None,
         reference_temperature_k: float = 298.15,
     ) -> None: ...
+    def get_valid_temperature_range(self) -> tuple[float, float]: ...
     def thermo(
         self, temperature_k: float
     ) -> tuple[float | None, float, float | None]: ...
 
 class State:
+    gibbs_energy_j_kg: float
+    cv_frozen_j_kg_k: float
+    cv_equilibrium_j_kg_k: float | None
+    specific_volume_m3_kg: float
+    M: float
+    MW: float
     temperature_k: float
     pressure_pa: float
     density_kg_m3: float
@@ -71,6 +78,40 @@ class Solver:
     def reactant_enthalpy(
         self, weights: list[float], temperatures_k: list[float]
     ) -> float: ...
+    def of_ratio_to_weights(
+        self, oxidant_weights: list[float], fuel_weights: list[float], of_ratio: float
+    ) -> list[float]: ...
+    def chem_eq_ratio_to_of_ratio(
+        self,
+        oxidant_weights: list[float],
+        fuel_weights: list[float],
+        chem_eq_ratio: float,
+    ) -> float: ...
+    def of_ratio_to_chem_eq_ratio(
+        self, oxidant_weights: list[float], fuel_weights: list[float], of_ratio: float
+    ) -> float: ...
+    def weight_eq_ratio_to_of_ratio(
+        self,
+        oxidant_weights: list[float],
+        fuel_weights: list[float],
+        weight_eq_ratio: float,
+    ) -> float: ...
+    def of_ratio_to_weight_eq_ratio(
+        self, oxidant_weights: list[float], fuel_weights: list[float], of_ratio: float
+    ) -> float: ...
+    def weights_to_moles(self, weights: list[float]) -> list[float]: ...
+    def moles_to_weights(self, moles: list[float]) -> list[float]: ...
+    def get_valence(self) -> dict[str, tuple[float, float]]: ...
+    def derivatives(
+        self,
+        mode: str,
+        state1: float,
+        state2: float,
+        weights: list[float],
+        *,
+        finite_difference: bool = False,
+        relative_step: float = 1e-4,
+    ) -> EqDerivatives: ...
     def rocket(
         self,
         weights: list[float],
@@ -82,3 +123,14 @@ class Solver:
         iac: bool = True,
         transport: bool = False,
     ) -> RocketResult: ...
+
+class EqDerivatives:
+    """SI response vectors in order [state1, state2, reactant weights...]."""
+    temperature: list[float]
+    total_moles: list[float]
+    species_amounts: dict[str, list[float]]
+    enthalpy: list[float]
+    energy: list[float]
+    gibbs_energy: list[float]
+    entropy: list[float]
+    closure_defect: float | None

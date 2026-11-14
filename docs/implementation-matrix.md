@@ -18,8 +18,9 @@ parity, Python API compatibility and consumer replacement are not established.
 | Transport | Unsupported | NASA transport fits, missing-species rules, gas/condensed mixing and equilibrium transport required |
 | Arbitrary exit pressures/subsonic stations | Unsupported | Currently one area-specified supersonic exit only |
 | Input-deck CLI, C/Fortran/Excel/MATLAB bindings | Unsupported | No legacy input or ABI compatibility layer |
-| NASA Python classes and options | Unsupported | No Mixture/EqSolution/RocketSolution mutation API, equivalence-ratio utilities, trace/smoothing controls or EqDerivatives API |
-| Analytic sensitivities | Unsupported | Internal equilibrium heat capacity/gamma do not imply a public derivative API |
+| NASA Python classes and options | Partial utilities | Solver has O/F, chemical r, mass phi, mole/mass conversions and valences; Reactant has NASA nominal temperature bounds. Four propellant conversion goldens pass at 1e-12; native Python rounds non-binary scalar ratios through float32. No native mutation API or trace/smoothing controls |
+| Extra state properties | Implemented | Gibbs energy, frozen/equilibrium Cv, specific volume and NASA M/MW; native equilibrium and graphite goldens at 1e-4 relative |
+| Analytic sensitivities | Default hard truncation | Solver.derivatives returns SI derivatives of T, gas n, species amounts, H/U/G/S by both state inputs and raw weights. TP/HP/SP native goldens for H2/O2 and CH4/O2/N2 at 2500 K, 1 MPa; worst relative difference 6.98e-7 (tolerance 1e-4). All six gas modes cross-checked; finite differences reject changed product pools/phases. Analytic ions and UV/SV with condensates are rejected. Recovery/smoothing need the core's converged cutoff, raw log amounts and active element/ion masks; the analytic path assumes tsize=18.420681 |
 | Ambient/separated nozzle thrust | Unsupported | Outputs are ideal vacuum velocity; no consumer thrust-efficiency model is inherited |
 
 ## Units and failures
