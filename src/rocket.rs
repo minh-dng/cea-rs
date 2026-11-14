@@ -6,6 +6,7 @@ use crate::{
     solver::{Mode, Solver, State},
     thermo::check_species_temperature,
 };
+use thermo_species::Species;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FlowMode {
@@ -224,6 +225,24 @@ fn station(name: &'static str, state: State, h0: f64, flux: Option<f64>) -> Resu
     })
 }
 
+/// Seed the next solve with this state's condensed phases, one phase per compound.
+/// Seeding two phases of one compound makes a fresh solve singular, so the larger
+/// one is kept, as NASA's RocketSolver_set_init_state collapses a coexisting pair.
+fn seed_phases(insert: &mut Vec<Species>, st: &State) {
+    let mut condensed: Vec<_> = st
+        .amounts
+        .iter()
+        .filter(|(n, sp)| *n > 0.0 && sp.data().phase() != 0)
+        .collect();
+    condensed.sort_by(|a, b| a.0.total_cmp(&b.0));
+    for &&(_, sp) in &condensed {
+        insert.retain(|other| {
+            other.data().phase() == 0 || other.data().constituents() != sp.data().constituents()
+        });
+        insert.push(sp);
+    }
+}
+
 /// An isentrope uses the public equilibrium interface and carries phase seeds forward.
 struct Nozzle<'a> {
     solver: Solver,
@@ -241,11 +260,7 @@ impl Nozzle<'_> {
         let st = self
             .solver
             .solve(Mode::SP(self.reference.entropy_j_kg_k, p), self.weights)?;
-        for &(n, sp) in &st.amounts {
-            if n > 0.0 && sp.data().phase() != 0 && !self.solver.insert.contains(&sp) {
-                self.solver.insert.push(sp);
-            }
-        }
+        seed_phases(&mut self.solver.insert, &st);
         Ok(st)
     }
 
@@ -438,11 +453,7 @@ impl Solver {
         let mut injector = chamber_at(pc)?;
         let h0 = injector.enthalpy_j_kg;
         let mut phase_solver = self.clone();
-        for &(n, sp) in &injector.amounts {
-            if n > 0.0 && sp.data().phase() != 0 && !phase_solver.insert.contains(&sp) {
-                phase_solver.insert.push(sp);
-            }
-        }
+        seed_phases(&mut phase_solver.insert, &injector);
         let mut stations;
         let throat;
         let infinity;

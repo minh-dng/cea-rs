@@ -89,6 +89,10 @@ impl Reactant {
                 self.reference_temperature + 10.0,
             );
         }
+        // NASA reports its compiled gas intervals for a gaseous reactant.
+        if self.fits.len() == 3 && self.fits[2].lo == 6000.0 {
+            return (200.0, 20000.0);
+        }
         let nominal = self.fits.iter().filter_map(|f| f.nominal);
         (
             nominal.clone().map(|r| r.0).fold(f64::INFINITY, f64::min),

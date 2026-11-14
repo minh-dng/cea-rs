@@ -351,3 +351,49 @@ fn native_edge_cases_still_obey_assigned_geometry_and_conservation() {
         }
     }
 }
+
+#[test]
+fn coexisting_alumina_phases_do_not_break_later_nozzle_solves() {
+    // Native cea==3.3.4 RocketSolver, NH4CLO4(I)/AL(cr) 4:1 by mass at 298.15 K,
+    // supar=80, equilibrium: [chamber T, exit T, c-star, vacuum Isp] in K and m/s.
+    let solver = model(&["NH4CLO4(I)", "AL(cr)"], None);
+    for (pc, native) in [
+        (
+            7e6,
+            [
+                3804.2682518721285,
+                2327.000012414637,
+                1445.7244492140692,
+                3005.515885669441,
+            ],
+        ),
+        (
+            20e6,
+            [
+                3949.292838977873,
+                2327.000012414635,
+                1456.4897310305407,
+                3020.637505987826,
+            ],
+        ),
+    ] {
+        let r = solver
+            .rocket(
+                &[4.0, 1.0],
+                &[298.15; 2],
+                pc,
+                80.0,
+                cea_rs::rocket::FlowMode::Equilibrium,
+            )
+            .unwrap();
+        let rust = [
+            r.chamber.state.temperature_k,
+            r.exit.state.temperature_k,
+            r.cstar_m_s,
+            r.vacuum_velocity_m_s,
+        ];
+        for (a, b) in rust.iter().zip(native) {
+            assert!((a - b).abs() <= 1e-4 * b, "{pc}: {a} != {b}");
+        }
+    }
+}

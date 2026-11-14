@@ -153,6 +153,7 @@ fn nasa_temperature_ranges() {
         ("N2O4(L)", (288.15, 308.15)),
         ("N2H4(L)", (100.0, 800.0)),
         ("C2H8N2(L),UDMH", (288.15, 308.15)),
+        ("Air", (200.0, 20000.0)),
     ] {
         assert_eq!(
             Reactant::named(name).unwrap().get_valid_temperature_range(),

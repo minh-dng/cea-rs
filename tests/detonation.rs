@@ -15,9 +15,7 @@
 //! Both use phi=0.5/1/2, 300 K, 1 bar. Full product pools, including condensates.
 //! Named Air also uses CH4/Air moles [1, 4/0.41895] at 300 K, 1 bar; the
 //! oxygen allowance accounts for the trace carbon in Air's NASA formula.
-//! The extra named-Air case uses 3e-4 because U differs by 3.78 J/kg near zero;
-//! the requested ten cases use 1e-4. The equilibrium solvers also differ at the
-//! same TP for named Air; this is not repaired by detonation iteration.
+//! All cases, including named Air, use 1e-4.
 //! Native Python rounds T1/p1 to float32; goldens use its recorded effective T1.
 //! A separate check covers exactly 298.15 K without that wrapper rounding.
 use cea_rs::{Error, detonation::DetonationResult, solver::Solver, thermo::Reactant};
@@ -210,7 +208,7 @@ const GOLDENS: &[Golden] = &[
     Golden {
         // Named-Air equilibrium properties differ even at the same native TP.
         // Its nearly zero U magnifies a 3.78 J/kg difference; all requested cases above use 1e-4.
-        tolerance: 3e-4,
+        tolerance: 1e-4,
         names: &["CH4", "Air"],
         weights: &[16.04246, 276.54962071846285],
         values: [

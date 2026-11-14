@@ -56,7 +56,7 @@ pub struct ShockResult {
 }
 
 fn fixed_state(amounts: &[(f64, Species)], t: f64, p: f64) -> Result<State> {
-    if !t.is_finite() || t <= 0.0 || t > 20000.0 || !p.is_finite() || p <= 0.0 {
+    if !t.is_finite() || t <= 0.0 || !p.is_finite() || p <= 0.0 {
         return Err(Error::Domain(
             "Shock temperature/pressure outside the thermodynamic domain".into(),
         ));
