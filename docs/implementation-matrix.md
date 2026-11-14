@@ -5,10 +5,10 @@ parity, Python API compatibility and consumer replacement are not established.
 
 | Capability | Rust status | Evidence or remaining gate |
 |---|---|---|
-| NASA nine-coefficient Cp, H, S | Implemented | Named product/reactant fits and reference-only reactants; exact NASA data identity |
+| NASA nine-coefficient Cp, H, S | Implemented | NASA gas extensions, reactant reference/extrapolation rules and exact source-data identity; [parity evidence](equilibrium-parity.md) |
 | Custom formulas and enthalpy | Implemented | Custom N2O/ABS three-component fuel comparisons; caller supplies consistent formula/molar mass |
-| TP, HP, SP, TV, UV, SV | Implemented | Both H2/O2 and CH4/O2/N2 compared with native 3.3.4 |
-| Condensed products | Experimental active set | Graphite comparison; general phase coexistence and metal systems unproven; 11 invalid data records omitted |
+| TP, HP, SP, TV, UV, SV | Implemented | NASA 160–22000 K bounds; RP-1311 examples 1–5 and 14 plus native regressions; extrapolated products exposed on State |
+| Condensed products | Experimental active set | Compiled phase numbering/coexistence and all 11 previously skipped records restored; aluminized and low-temperature native comparisons pass; broader metal systems unproven |
 | Ions | Experimental neutral balance | H/H2/H+/e- declared pool at 10000 K; broad ionized mixtures unproven |
 | IAC equilibrium nozzle | Implemented | Chamber, sonic throat, one supersonic exit; five propellant sets at two operating points |
 | Frozen at chamber / throat | Implemented | Native n_frz=1/2 comparisons; fixed species and phases; equilibrium Cp unavailable for frozen composition |
@@ -18,7 +18,7 @@ parity, Python API compatibility and consumer replacement are not established.
 | Transport | Unsupported | NASA transport fits, missing-species rules, gas/condensed mixing and equilibrium transport required |
 | Arbitrary exit pressures/subsonic stations | Unsupported | Currently one area-specified supersonic exit only |
 | Input-deck CLI, C/Fortran/Excel/MATLAB bindings | Unsupported | No legacy input or ABI compatibility layer |
-| NASA Python classes and options | Unsupported | No Mixture/EqSolution/RocketSolution mutation API, equivalence-ratio utilities, trace/smoothing controls or EqDerivatives API |
+| NASA Python classes and options | Partial | Rust/Python omit and trace supported; no Mixture/EqSolution/RocketSolution mutation API, equivalence-ratio utilities, smoothing controls or EqDerivatives API |
 | Analytic sensitivities | Unsupported | Internal equilibrium heat capacity/gamma do not imply a public derivative API |
 | Ambient/separated nozzle thrust | Unsupported | Outputs are ideal vacuum velocity; no consumer thrust-efficiency model is inherited |
 

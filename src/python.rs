@@ -76,7 +76,8 @@ struct PySolver {
 #[pymethods]
 impl PySolver {
     #[new]
-    #[pyo3(signature=(reactants, *, condensed=true, ions=false, only=None, insert=Vec::new()))]
+    #[pyo3(signature=(reactants, *, condensed=true, ions=false, only=None, insert=Vec::new(), omit=Vec::new(), trace=0.0))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
         reactants: Vec<Py<Reactant>>,
@@ -84,6 +85,8 @@ impl PySolver {
         ions: bool,
         only: Option<Vec<String>>,
         insert: Vec<String>,
+        omit: Vec<String>,
+        trace: f64,
     ) -> PyResult<Self> {
         Ok(Self {
             inner: Solver::new(
@@ -92,7 +95,9 @@ impl PySolver {
                 ions,
                 only,
                 insert,
-            )?,
+            )?
+            .with_omit(omit)?
+            .with_trace(trace)?,
         })
     }
     /// Solve TP/HP/SP/TV/UV/SV in SI (K, Pa, J/kg, J/kg/K, m³/kg).
@@ -203,6 +208,10 @@ impl State {
     #[getter(equilibrium)]
     fn equilibrium_py(&self) -> bool {
         self.equilibrium
+    }
+    #[getter(extrapolated_species)]
+    fn get_extrapolated_species(&self) -> Vec<String> {
+        self.extrapolated_species.clone()
     }
     #[getter(trace_extrapolated_species)]
     fn trace_extrapolated(&self) -> Vec<String> {

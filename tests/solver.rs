@@ -223,3 +223,222 @@ fn carbon_nozzle_preserves_chamber_phase_initialization() {
         }
     }
 }
+
+fn fixture_reactant(name: &str) -> Reactant {
+    if name == "CHOS-Binder" {
+        Reactant::custom(
+            name.into(),
+            [("C", 1.0), ("H", 1.86955), ("O", 0.031256), ("S", 0.008415)]
+                .into_iter()
+                .map(|(e, n)| (e.into(), n))
+                .collect(),
+            14.6652984484,
+            -2999.082 * 4.184,
+            298.15,
+        )
+        .unwrap()
+    } else {
+        Reactant::named(name).unwrap()
+    }
+}
+
+#[test]
+fn native_equilibrium_domain_regressions() {
+    // Oracle and regeneration command are in scripts/record_equilibrium_parity.py.
+    let numbers = |s: &str| {
+        s.split(';')
+            .filter(|x| !x.is_empty())
+            .map(|x| x.parse::<f64>().unwrap())
+            .collect::<Vec<_>>()
+    };
+    let names = |s: &str| {
+        s.split(';')
+            .filter(|x| !x.is_empty())
+            .map(String::from)
+            .collect::<Vec<_>>()
+    };
+    let mut worst = 0.0_f64;
+    let mut worst_x = 0.0_f64;
+    for line in include_str!("fixtures/equilibrium-native.txt")
+        .lines()
+        .filter(|s| !s.starts_with('#'))
+    {
+        let c: Vec<_> = line.split('|').collect();
+        let weights = numbers(c[2]);
+        let solver = Solver::new(
+            c[1].split(';').map(fixture_reactant).collect(),
+            true,
+            false,
+            if c[7].is_empty() {
+                None
+            } else {
+                Some(names(c[7]))
+            },
+            vec![],
+        )
+        .unwrap()
+        .with_omit(names(c[8]))
+        .unwrap()
+        .with_trace(c[6].parse().unwrap())
+        .unwrap();
+        let first = c[4].parse().unwrap();
+        let second = c[5].parse().unwrap();
+        let mode = match c[3] {
+            "TP" => Mode::TP(first, second),
+            "HP" => Mode::HP(first, second),
+            "SP" => Mode::SP(first, second),
+            "TV" => Mode::TV(first, second),
+            "UV" => Mode::UV(first, second),
+            _ => panic!("Unknown fixture mode"),
+        };
+        if !c[9].is_empty() {
+            let h = solver.reactant_enthalpy(&weights, &numbers(c[9])).unwrap();
+            assert!(
+                (h - first).abs() <= 1e-8 * first.abs().max(1.0),
+                "{}: reactant enthalpy {h} != {first}",
+                c[0]
+            );
+        }
+        let state = solver
+            .solve(mode, &weights)
+            .unwrap_or_else(|e| panic!("{}: {e}", c[0]));
+        let values = [
+            state.temperature_k,
+            state.pressure_pa,
+            state.density_kg_m3,
+            state.enthalpy_j_kg,
+            state.entropy_j_kg_k,
+            state.cp_equilibrium_j_kg_k,
+            state.gamma_s,
+            state.molecular_weight_kg_kmol,
+        ];
+        for (i, (actual, expected)) in values.into_iter().zip(numbers(c[10])).enumerate() {
+            let difference = if expected == 0.0 {
+                actual.abs()
+            } else {
+                ((actual - expected) / expected).abs()
+            };
+            worst = worst.max(difference);
+            assert!(
+                difference <= 1e-4,
+                "{} field {i}: {actual} != {expected} (relative {difference})",
+                c[0]
+            );
+        }
+        let expected: std::collections::BTreeMap<_, _> = c[11]
+            .split(';')
+            .map(|pair| {
+                let (name, value) = pair.split_once('=').unwrap();
+                (name.to_string(), value.parse::<f64>().unwrap())
+            })
+            .collect();
+        for name in expected.keys().chain(state.mole_fractions.keys()) {
+            let difference = (expected.get(name).unwrap_or(&0.0)
+                - state.mole_fractions.get(name).unwrap_or(&0.0))
+            .abs();
+            worst_x = worst_x.max(difference);
+            assert!(
+                difference <= 3e-5,
+                "{} mole fraction {name}: difference {difference}",
+                c[0]
+            );
+        }
+    }
+    println!(
+        "Native equilibrium goldens: worst relative property difference={worst:e}, absolute mole fraction difference={worst_x:e}"
+    );
+}
+
+#[test]
+fn native_reactant_reference_enthalpies_and_restored_records() {
+    // cea==3.3.4 Mixture([name]).calc_property(ENTHALPY, [1.0], T), in J/kg.
+    for (name, t, expected) in [
+        ("N2O", 298.15, 1854006.1071421793),
+        ("N2O", 250.0, 1812994.569278336),
+        ("Air", 298.15, -4333.823194800017),
+        ("Air", 7000.0, 0.0),
+        ("AL(cr)", 298.15, 0.0015293115434638815),
+        ("CH4(L)", 111.64, -5562301.54228217),
+        ("RP-1", 500.0, -1768558.6973210066),
+    ] {
+        let solver = Solver::new(
+            vec![Reactant::named(name).unwrap()],
+            true,
+            false,
+            None,
+            vec![],
+        )
+        .unwrap();
+        let h = solver.reactant_enthalpy(&[1.0], &[t]).unwrap();
+        assert!(
+            (h - expected).abs() <= 1e-7 * expected.abs().max(1.0),
+            "{name}: {h} != {expected}"
+        );
+    }
+    let methane = Reactant::named("CH4(L)").unwrap();
+    assert!(methane.properties(111.64).is_ok());
+    assert!(
+        methane
+            .properties(methane.reference_temperature + 10.0)
+            .is_ok()
+    );
+    assert!(
+        methane
+            .properties(methane.reference_temperature + 10.01)
+            .is_err()
+    );
+
+    // Same native call at 350 K, converted to J/mol by multiplying M/1000.
+    for (name, expected) in [
+        ("Br2(cr)", -7204.888557889754),
+        ("Ca(a)", 1351.2922740037761),
+        ("CrN(cr)", -114675.50761929515),
+        ("FeCL3(cr)", -394097.66498064925),
+        ("FeOCL(cr)", -407256.6824007526),
+        ("Fe3O4(cr)", -1110183.0954285394),
+        ("Li(cr)", 1312.6528028556324),
+        ("NH4F(cr)", -463940.1652045158),
+        ("Si(cr)", 1068.0958048973955),
+        ("Ti3O5(a)", -2447778.298560001),
+        ("U3O8(II)", -3561923.662937205),
+    ] {
+        let h = Reactant::named(name).unwrap().properties(350.0).unwrap().1;
+        assert!(
+            (h / expected - 1.0).abs() < 1e-8,
+            "{name}: {h} != {expected}"
+        );
+    }
+}
+
+#[test]
+fn omission_trace_and_extrapolation_are_explicit() {
+    let solver = hydrogen()
+        .with_omit(vec!["H2O".into()])
+        .unwrap()
+        .with_trace(1e-15)
+        .unwrap();
+    let state = solver.solve(Mode::TP(3000.0, 1e6), &[1.0, 8.0]).unwrap();
+    assert!(!state.mole_fractions.contains_key("H2O"));
+    assert!(state.element_residual < 2e-5);
+    let low = hydrogen().solve(Mode::TP(180.0, 1e5), &[1.0, 8.0]).unwrap();
+    assert!(low.extrapolated_species.contains(&"H2O".to_string()));
+    assert!(
+        low.trace_extrapolated_species
+            .iter()
+            .all(|n| low.mole_fractions[n] <= 1e-11)
+    );
+    let high = hydrogen()
+        .solve(Mode::TP(10000.0, 1e6), &[1.0, 8.0])
+        .unwrap();
+    assert!(high.extrapolated_species.contains(&"H2O".to_string()));
+    assert!(hydrogen().with_trace(f64::NAN).is_err());
+    assert!(
+        hydrogen()
+            .with_omit(vec!["unknown-product".into()])
+            .unwrap()
+            .solve(Mode::TP(3000.0, 1e6), &[1.0, 8.0])
+            .unwrap()
+            .mole_fractions
+            .contains_key("H2O")
+    );
+}
