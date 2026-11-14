@@ -97,12 +97,16 @@ fn frozen_state(reference: &State, t: f64, p: f64) -> Result<State> {
         .sum();
     let total: f64 = reference.amounts.iter().map(|(n, _)| n).sum();
     out.trace_extrapolated_species.clear();
+    out.extrapolated_species.clear();
     let mut h = 0.0;
     let mut s = 0.0;
     let mut cp = 0.0;
     for &(n, sp) in &reference.amounts {
         if n == 0.0 {
             continue;
+        }
+        if check_species_temperature(sp, t).is_err() {
+            out.extrapolated_species.push(sp.data().symbol().into());
         }
         if n / total > 1e-11 {
             check_species_temperature(sp, t)?;

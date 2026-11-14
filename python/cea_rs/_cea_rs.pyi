@@ -39,6 +39,7 @@ class State:
     element_residual: float
     constraint_residual: float
     trace_extrapolated_species: list[str]
+    extrapolated_species: list[str]
     mole_fractions: dict[str, float]
     mass_fractions: dict[str, float]
 
@@ -64,6 +65,8 @@ class Solver:
         ions: bool = False,
         only: list[str] | None = None,
         insert: list[str] = ...,
+        omit: list[str] = ...,
+        trace: float = 0.0,
     ) -> None: ...
     def solve(
         self, mode: str, state1: float, state2: float, weights: list[float]

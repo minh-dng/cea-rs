@@ -30,3 +30,5 @@ modules. See the implementation matrix for the substantial API and mode gaps.
 Consumer seams were read without edits at Hybrid `b249d5d` and its
 `feat-liquid-design-point` checkout: `RocketCEA`, custom ABS/paraffin/HTPB,
 and liquid thermochemistry. Their production dependency stays native `cea`.
+
+- Equilibrium parity changes derive from Apache-2.0 NASA CEA at the commit above: `equilibrium.f90`, `thermo.f90`, `mixture.f90` and `database_compile.f90`. Adapted modules: `src/equilibrium_core.rs`, `src/thermo.rs` and `vendor/thermo-species/{build.rs,src/types.rs}`. This supersedes the older omission note above: all 11 condensed records are now retained, with NASA interval order and compiled phase numbering. Source database bytes and NOTICE are unchanged.

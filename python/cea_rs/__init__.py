@@ -40,6 +40,8 @@ class Solver:
         ions: Include charged species and electron balance.
         only: Optional explicit product names. This changes the physical model.
         insert: Condensed product names to activate at the initial iteration.
+        omit: Product names to exclude from equilibrium.
+        trace: NASA trace convergence level; zero selects the default.
     """
 
     def __init__(
@@ -50,6 +52,8 @@ class Solver:
         ions: bool = False,
         only: list[str] | None = None,
         insert: list[str] | None = None,
+        omit: list[str] | None = None,
+        trace: float = 0.0,
     ) -> None:
         """Validate the species model before any numerical solve."""
         self._inner = _Solver(
@@ -58,6 +62,8 @@ class Solver:
             ions=ions,
             only=only,
             insert=insert or [],
+            omit=omit or [],
+            trace=trace,
         )
 
     def solve(

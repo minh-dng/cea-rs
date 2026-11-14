@@ -1,3 +1,4 @@
+//! Thermodynamic fits; NASA-derived range rules are Apache-2.0; see provenance.
 // Modified: NASA CEA gas constant 8.31451 J/mol/K. See NOTICE.
 use crate::{Constituent, Species};
 use std::fmt;
@@ -33,10 +34,10 @@ pub struct SpeciesData<const C: usize, const T: usize> {
     pub temperature_data: [(f64, f64, [f64; 9]); T],
     pub mw: f64,
     pub h_formation: f64,
-    /// 0 = gas, non-zero = condensed: thermo.inp's raw `ifaz` column.
-    /// Sibling phases of one substance carry adjacent values (H2O(cr)=1,
-    /// H2O(L)=2), which is what CEA's phase-transition logic compares.
+    /// 0 = gas, non-zero = condensed: NASA's compiled phase number, after interval numbering.
     pub phase: u8,
+    /// NASA's database compiler supplies a high-temperature extension above this limit.
+    pub extrapolated_above: Option<f64>,
 }
 
 fn find_coefficients(ranges: &[(f64, f64, [f64; 9])], temperature_k: f64) -> &(f64, f64, [f64; 9]) {
@@ -61,6 +62,7 @@ pub trait AnySpeciesData {
     fn mw(&self) -> f64;
     fn h_formation(&self) -> f64;
     fn phase(&self) -> u8;
+    fn extrapolated_above(&self) -> Option<f64>;
     fn cp(&self, temperature_k: f64) -> f64 {
         let coeff = find_coefficients(self.temperature_data(), temperature_k);
         let t_1 = temperature_k;
@@ -169,9 +171,12 @@ impl<const C: usize, const T: usize> AnySpeciesData for SpeciesData<C, T> {
         &self.temperature_data
     }
     fn valid_temperature_range(&self) -> (f64, f64) {
-        let first = self.temperature_data.first().unwrap();
-        let last = self.temperature_data.last().unwrap();
-        (first.0, last.1)
+        // NASA uses min/max across all intervals, including reversed database intervals.
+        self.temperature_data
+            .iter()
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), r| {
+                (lo.min(r.0), hi.max(r.1))
+            })
     }
     fn mw(&self) -> f64 {
         self.mw
@@ -181,6 +186,9 @@ impl<const C: usize, const T: usize> AnySpeciesData for SpeciesData<C, T> {
     }
     fn phase(&self) -> u8 {
         self.phase
+    }
+    fn extrapolated_above(&self) -> Option<f64> {
+        self.extrapolated_above
     }
 }
 
