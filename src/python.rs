@@ -24,6 +24,10 @@ impl From<Error> for PyErr {
 }
 #[pymethods]
 impl Reactant {
+    #[pyo3(name = "get_valid_temperature_range")]
+    fn py_valid_temperature_range(&self) -> (f64, f64) {
+        self.get_valid_temperature_range()
+    }
     #[new]
     #[pyo3(signature=(name, *, formula=None, molecular_weight=None, enthalpy_j_mol=None, reference_temperature_k=298.15))]
     fn py_new(
@@ -77,6 +81,101 @@ struct PySolver {
 }
 #[pymethods]
 impl PySolver {
+    fn of_ratio_to_weights(
+        &self,
+        oxidant_weights: Vec<f64>,
+        fuel_weights: Vec<f64>,
+        of_ratio: f64,
+    ) -> PyResult<Vec<f64>> {
+        Ok(self
+            .inner
+            .of_ratio_to_weights(&oxidant_weights, &fuel_weights, of_ratio)?)
+    }
+    fn chem_eq_ratio_to_of_ratio(
+        &self,
+        oxidant_weights: Vec<f64>,
+        fuel_weights: Vec<f64>,
+        chem_eq_ratio: f64,
+    ) -> PyResult<f64> {
+        Ok(self
+            .inner
+            .chem_eq_ratio_to_of_ratio(&oxidant_weights, &fuel_weights, chem_eq_ratio)?)
+    }
+    fn of_ratio_to_chem_eq_ratio(
+        &self,
+        oxidant_weights: Vec<f64>,
+        fuel_weights: Vec<f64>,
+        of_ratio: f64,
+    ) -> PyResult<f64> {
+        Ok(self
+            .inner
+            .of_ratio_to_chem_eq_ratio(&oxidant_weights, &fuel_weights, of_ratio)?)
+    }
+    fn weight_eq_ratio_to_of_ratio(
+        &self,
+        oxidant_weights: Vec<f64>,
+        fuel_weights: Vec<f64>,
+        weight_eq_ratio: f64,
+    ) -> PyResult<f64> {
+        Ok(self.inner.weight_eq_ratio_to_of_ratio(
+            &oxidant_weights,
+            &fuel_weights,
+            weight_eq_ratio,
+        )?)
+    }
+    fn of_ratio_to_weight_eq_ratio(
+        &self,
+        oxidant_weights: Vec<f64>,
+        fuel_weights: Vec<f64>,
+        of_ratio: f64,
+    ) -> PyResult<f64> {
+        Ok(self
+            .inner
+            .of_ratio_to_weight_eq_ratio(&oxidant_weights, &fuel_weights, of_ratio)?)
+    }
+    fn weights_to_moles(&self, weights: Vec<f64>) -> PyResult<Vec<f64>> {
+        Ok(self.inner.weights_to_moles(&weights)?)
+    }
+    fn moles_to_weights(&self, moles: Vec<f64>) -> PyResult<Vec<f64>> {
+        Ok(self.inner.moles_to_weights(&moles)?)
+    }
+    fn get_valence(&self) -> PyResult<BTreeMap<String, (f64, f64)>> {
+        Ok(self.inner.get_valence()?)
+    }
+    #[pyo3(signature=(mode,state1,state2,weights, *, finite_difference=false,relative_step=1e-4))]
+    #[allow(clippy::too_many_arguments)]
+    fn derivatives(
+        &self,
+        py: Python<'_>,
+        mode: &str,
+        state1: f64,
+        state2: f64,
+        weights: Vec<f64>,
+        finite_difference: bool,
+        relative_step: f64,
+    ) -> PyResult<crate::derivatives::EqDerivatives> {
+        let mode = match mode {
+            "TP" => Mode::TP(state1, state2),
+            "HP" => Mode::HP(state1, state2),
+            "SP" => Mode::SP(state1, state2),
+            "TV" => Mode::TV(state1, state2),
+            "UV" => Mode::UV(state1, state2),
+            "SV" => Mode::SV(state1, state2),
+            _ => {
+                return Err(PyValueError::new_err(
+                    "Supported equilibrium modes: TP HP SP TV UV SV",
+                ));
+            }
+        };
+        Ok(py.detach(|| {
+            if finite_difference {
+                self.inner
+                    .finite_difference_derivatives(mode, &weights, relative_step)
+            } else {
+                self.inner.derivatives(mode, &weights)
+            }
+        })?)
+    }
     #[new]
     #[pyo3(signature=(reactants, *, condensed=true, ions=false, only=None, insert=Vec::new(), omit=Vec::new(), trace=0.0))]
     #[allow(clippy::too_many_arguments)]
@@ -269,6 +368,32 @@ impl PySolver {
 }
 #[pymethods]
 impl State {
+    #[getter(gibbs_energy_j_kg)]
+    fn gibbs_energy_py(&self) -> f64 {
+        crate::mixture::gibbs_energy(self)
+    }
+    #[getter(cv_frozen_j_kg_k)]
+    fn cv_frozen_py(&self) -> f64 {
+        crate::mixture::cv_frozen(self)
+    }
+    #[getter(cv_equilibrium_j_kg_k)]
+    fn cv_equilibrium_py(&self) -> PyResult<Option<f64>> {
+        self.equilibrium
+            .then(|| crate::mixture::cv_equilibrium(self))
+            .transpose()
+            .map_err(Into::into)
+    }
+    #[getter(specific_volume_m3_kg)]
+    fn specific_volume_py(&self) -> f64 {
+        crate::mixture::specific_volume(self)
+    }
+    #[getter(M)]
+    fn nasa_m_py(&self) -> f64 {
+        crate::mixture::molecular_weight_m(self)
+    }
+    #[getter(MW)]
+    fn nasa_mw_py(&self) -> f64 {
+        crate::mixture::molecular_weight_mw(self)
     #[pyo3(name = "transport")]
     fn transport_py(&self, py: Python<'_>) -> PyResult<crate::transport::Transport> {
         Ok(py.detach(|| self.transport())?)
@@ -434,6 +559,7 @@ impl RocketResult {
 }
 #[pymodule]
 fn _cea_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<crate::derivatives::EqDerivatives>()?;
     m.add_class::<Reactant>()?;
     m.add_class::<PySolver>()?;
     m.add_class::<State>()?;
@@ -449,4 +575,40 @@ fn _cea_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", "0.1.0a3")?;
     m.add("R", crate::R)?;
     Ok(())
+}
+
+#[pymethods]
+impl crate::derivatives::EqDerivatives {
+    #[getter(temperature)]
+    fn temperature_py(&self) -> Vec<f64> {
+        self.temperature.clone()
+    }
+    #[getter(total_moles)]
+    fn total_moles_py(&self) -> Vec<f64> {
+        self.total_moles.clone()
+    }
+    #[getter(species_amounts)]
+    fn species_amounts_py(&self) -> BTreeMap<String, Vec<f64>> {
+        self.species_amounts.clone()
+    }
+    #[getter(enthalpy)]
+    fn enthalpy_py(&self) -> Vec<f64> {
+        self.enthalpy.clone()
+    }
+    #[getter(energy)]
+    fn energy_py(&self) -> Vec<f64> {
+        self.energy.clone()
+    }
+    #[getter(gibbs_energy)]
+    fn gibbs_energy_py(&self) -> Vec<f64> {
+        self.gibbs_energy.clone()
+    }
+    #[getter(entropy)]
+    fn entropy_py(&self) -> Vec<f64> {
+        self.entropy.clone()
+    }
+    #[getter(closure_defect)]
+    fn closure_defect_py(&self) -> Option<f64> {
+        self.closure_defect
+    }
 }

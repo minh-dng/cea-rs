@@ -3,6 +3,7 @@
 from ._cea_rs import (
     ConvergenceError,
     DomainError,
+    EqDerivatives,
     DetonationResult,
     R,
     Reactant,
@@ -25,6 +26,7 @@ __all__ = [
     "NASA_THERMO_SHA256",
     "ConvergenceError",
     "DomainError",
+    "EqDerivatives",
     "DetonationResult",
     "R",
     "Reactant",
@@ -102,6 +104,97 @@ class Solver:
     ) -> float:
         """Compute stream enthalpy in J/kg at each reactant's temperature."""
         return self._inner.reactant_enthalpy(weights, temperatures_k)
+
+    def of_ratio_to_weights(
+        self, oxidant_weights: list[float], fuel_weights: list[float], of_ratio: float
+    ) -> list[float]:
+        """Return NASA's scaled reactant masses for an oxidant/fuel mass ratio.
+
+        Each stream vector follows the full reactant order. Its internal ratios
+        are normalized separately; the returned vector need not sum to one.
+        For percent fuel p, use of_ratio=(100-p)/p, with 0 < p <= 100.
+        """
+        return self._inner.of_ratio_to_weights(oxidant_weights, fuel_weights, of_ratio)
+
+    def chem_eq_ratio_to_of_ratio(
+        self,
+        oxidant_weights: list[float],
+        fuel_weights: list[float],
+        chem_eq_ratio: float,
+    ) -> float:
+        """Convert chemical equivalence ratio r using NASA's element valences."""
+        return self._inner.chem_eq_ratio_to_of_ratio(
+            oxidant_weights, fuel_weights, chem_eq_ratio
+        )
+
+    def of_ratio_to_chem_eq_ratio(
+        self, oxidant_weights: list[float], fuel_weights: list[float], of_ratio: float
+    ) -> float:
+        return self._inner.of_ratio_to_chem_eq_ratio(
+            oxidant_weights, fuel_weights, of_ratio
+        )
+
+    def weight_eq_ratio_to_of_ratio(
+        self,
+        oxidant_weights: list[float],
+        fuel_weights: list[float],
+        weight_eq_ratio: float,
+    ) -> float:
+        """Convert mass equivalence ratio phi to oxidant/fuel mass ratio."""
+        return self._inner.weight_eq_ratio_to_of_ratio(
+            oxidant_weights, fuel_weights, weight_eq_ratio
+        )
+
+    def of_ratio_to_weight_eq_ratio(
+        self, oxidant_weights: list[float], fuel_weights: list[float], of_ratio: float
+    ) -> float:
+        return self._inner.of_ratio_to_weight_eq_ratio(
+            oxidant_weights, fuel_weights, of_ratio
+        )
+
+    def weights_to_moles(self, weights: list[float]) -> list[float]:
+        """Convert kg to kmol without normalizing."""
+        return self._inner.weights_to_moles(weights)
+
+    def moles_to_weights(self, moles: list[float]) -> list[float]:
+        """Convert kmol to kg without normalizing."""
+        return self._inner.moles_to_weights(moles)
+
+    def get_valence(self) -> dict[str, tuple[float, float]]:
+        """Return each element's (negative, positive) NASA valences."""
+        return self._inner.get_valence()
+
+    def derivatives(
+        self,
+        mode: str,
+        state1: float,
+        state2: float,
+        weights: list[float],
+        *,
+        finite_difference: bool = False,
+        relative_step: float = 1e-4,
+    ) -> EqDerivatives:
+        """Solve afresh and return response derivatives in SI.
+
+        Every response vector is ordered [state1, state2, weights...]; species
+        amounts and total gas moles use kmol/kg. Weights are differentiated as
+        supplied, including their normalization, while state inputs stay fixed.
+        Analytic derivatives assume default hard truncation and fixed phases;
+        ion sensitivities require finite_difference=True. Smooth truncation
+        and recovery solves with a changed cutoff need additional core data.
+        Analytic UV/SV with condensed products is unavailable; finite differences
+        remain available wherever the public forward solver converges.
+        Finite differences use a central stencil (second-order forward at a
+        zero weight) and reject changes to the product pool or active phases.
+        """
+        return self._inner.derivatives(
+            mode,
+            state1,
+            state2,
+            weights,
+            finite_difference=finite_difference,
+            relative_step=relative_step,
+        )
 
     def rocket(
         self,

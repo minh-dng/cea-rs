@@ -19,8 +19,9 @@ parity, Python API compatibility and consumer replacement are not established.
 | Arbitrary exit pressures/subsonic stations | Implemented | Any number of pi_p/subar/supar stations; native pressure and area Newton iterations; large-subar native stopping defect recorded in [rocket evidence](rocket-parity/README.md) |
 | Input-deck CLI, C/Fortran/Excel/MATLAB bindings | Unsupported | No legacy input or ABI compatibility layer |
 | NASA Python classes and options | Partial | Rust/Python omit and trace supported; no Mixture/EqSolution/RocketSolution mutation API, equivalence-ratio utilities, smoothing controls or EqDerivatives API |
-| Analytic sensitivities | Unsupported | Internal equilibrium heat capacity/gamma do not imply a public derivative API |
+| Analytic sensitivities | Default hard truncation | Solver.derivatives returns SI derivatives of T, gas n, species amounts, H/U/G/S by both state inputs and raw weights. TP/HP/SP native goldens for H2/O2 and CH4/O2/N2 at 2500 K, 1 MPa; worst relative difference 6.98e-7 (tolerance 1e-4). All six gas modes cross-checked; finite differences reject changed product pools/phases. Analytic ions and UV/SV with condensates are rejected. Recovery/smoothing need the core's converged cutoff, raw log amounts and active element/ion masks; the analytic path assumes tsize=18.420681 |
 | Ambient/separated nozzle thrust | Ideal ambient-matched performance | Per-station Cf, Isp and Isp_vacuum in SI; no assigned ambient pressure, separation or consumer thrust-efficiency model |
+| Extra state properties | Implemented | Gibbs energy, frozen/equilibrium Cv, specific volume and NASA M/MW; native equilibrium and graphite goldens at 1e-4 relative |
 
 ## Units and failures
 
