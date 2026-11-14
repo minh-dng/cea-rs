@@ -1,6 +1,7 @@
 //! Python boundary: SI units, typed failures and a distinct import namespace.
 use crate::{
     Error,
+    detonation::{DetonationResult, UnburnedState},
     rocket::{FlowMode, RocketResult, Station},
     solver::{Mode, Solver, State},
     thermo::Reactant,
@@ -122,6 +123,21 @@ impl PySolver {
     /// Return stream enthalpy in J/kg at specified reactant temperatures.
     fn reactant_enthalpy(&self, weights: Vec<f64>, temperatures_k: Vec<f64>) -> PyResult<f64> {
         Ok(self.inner.reactant_enthalpy(&weights, &temperatures_k)?)
+    }
+    /// Solve a CJ detonation from mass weights, unburned K and Pa.
+    #[pyo3(signature=(weights, temperature_k, pressure_pa, *, frozen=false))]
+    fn detonation(
+        &self,
+        py: Python<'_>,
+        weights: Vec<f64>,
+        temperature_k: f64,
+        pressure_pa: f64,
+        frozen: bool,
+    ) -> PyResult<DetonationResult> {
+        Ok(py.detach(|| {
+            self.inner
+                .detonation(&weights, temperature_k, pressure_pa, frozen)
+        })?)
     }
     #[pyo3(signature=(weights,temperatures_k,chamber_pressure_pa,expansion_ratio, *, flow="equilibrium",iac=true,transport=false))]
     #[allow(clippy::too_many_arguments)]
@@ -282,6 +298,8 @@ fn _cea_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<State>()?;
     m.add_class::<RocketResult>()?;
     m.add_class::<Station>()?;
+    m.add_class::<DetonationResult>()?;
+    m.add_class::<UnburnedState>()?;
     m.add("ConvergenceError", m.py().get_type::<ConvergenceError>())?;
     m.add("DomainError", m.py().get_type::<DomainError>())?;
     m.add("__version__", "0.1.0a3")?;

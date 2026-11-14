@@ -14,7 +14,7 @@ parity, Python API compatibility and consumer replacement are not established.
 | Frozen at chamber / throat | Implemented | Native n_frz=1/2 comparisons; fixed species and phases; equilibrium Cp unavailable for frozen composition |
 | Finite-area chamber (FAC) | Unsupported | Conservation closure, chamber area/mass-flux API and native regression cases required |
 | Incident/reflected shocks | Unsupported | Equilibrium/frozen Rankine-Hugoniot solver and native examples required |
-| Chapman-Jouguet detonation | Unsupported | CJ sonic closure, initial-state model and native examples required |
+| Chapman-Jouguet detonation | Implemented equilibrium CJ, SI | Fixed-composition unburned gas fits; NASA's damped iteration; fresh burned state with mass/momentum/energy/sonic checks. Native 3.3.4: RP-1311 example 6, CH4/O2/N2 air and acetylene/O2 at phi=0.5/1/2 meet 1e-4 relative. An extra named-Air case needs 3e-4 for near-zero internal energy; shared equilibrium parity remains open. Frozen detonation is unsupported in native CEA and here. Native Python rounds T1 to float32; goldens use its effective T1, with a separate exact 298.15 K fit check. |
 | Transport | Unsupported | NASA transport fits, missing-species rules, gas/condensed mixing and equilibrium transport required |
 | Arbitrary exit pressures/subsonic stations | Unsupported | Currently one area-specified supersonic exit only |
 | Input-deck CLI, C/Fortran/Excel/MATLAB bindings | Unsupported | No legacy input or ABI compatibility layer |
