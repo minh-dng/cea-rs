@@ -42,6 +42,14 @@ class State:
     extrapolated_species: list[str]
     mole_fractions: dict[str, float]
     mass_fractions: dict[str, float]
+    def transport(self) -> Transport: ...
+
+class Transport:
+    viscosity_pa_s: float
+    conductivity_frozen_w_m_k: float
+    conductivity_equilibrium_w_m_k: float
+    prandtl_frozen: float
+    prandtl_equilibrium: float
 
 class Station:
     name: str

@@ -19,5 +19,5 @@ Repository = "https://github.com/minh-dng/cea-rs"
 features = ["python"]
 module-name = "cea_rs._cea_rs"
 python-source = "python"
-include = ["NOTICE", "docs/**", "tests/**", "scripts/**"]
+include = ["NOTICE", "docs/**", "tests/**", "scripts/**", {path = "vendor/nasa-transport/trans.inp", format = "sdist"}]
 exclude = ["**/._*", "**/.DS_Store", "**/__pycache__/**"]

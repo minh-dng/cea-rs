@@ -11,6 +11,7 @@ from ._cea_rs import (
     ShockStation,
     State,
     Station,
+    Transport,
     UnburnedState,
     __version__,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "Solver",
     "State",
     "Station",
+    "Transport",
     "UnburnedState",
     "__version__",
     "capabilities",

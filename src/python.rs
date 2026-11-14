@@ -269,6 +269,10 @@ impl PySolver {
 }
 #[pymethods]
 impl State {
+    #[pyo3(name = "transport")]
+    fn transport_py(&self, py: Python<'_>) -> PyResult<crate::transport::Transport> {
+        Ok(py.detach(|| self.transport())?)
+    }
     #[getter(temperature_k)]
     fn t(&self) -> f64 {
         self.temperature_k
@@ -435,6 +439,7 @@ fn _cea_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<State>()?;
     m.add_class::<RocketResult>()?;
     m.add_class::<Station>()?;
+    m.add_class::<crate::transport::Transport>()?;
     m.add_class::<DetonationResult>()?;
     m.add_class::<UnburnedState>()?;
     m.add_class::<crate::shock::ShockStation>()?;
