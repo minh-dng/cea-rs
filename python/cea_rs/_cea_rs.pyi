@@ -43,12 +43,22 @@ class State:
     mass_fractions: dict[str, float]
 
 class Station:
+    name: str
+    sound_speed_m_s: float
+    cstar_m_s: float
+    thrust_coefficient: float
+    isp_m_s: float
+    isp_vacuum_m_s: float
     state: State
     velocity_m_s: float
     mach: float
     area_ratio: float | None
 
 class RocketResult:
+    stations: list[Station]
+    throat_index: int
+    complete: bool
+    stop_reason: str | None
     chamber: Station
     throat: Station
     exit: Station
@@ -76,9 +86,18 @@ class Solver:
         weights: list[float],
         temperatures_k: list[float],
         chamber_pressure_pa: float,
-        expansion_ratio: float,
+        expansion_ratio: float | None = None,
         *,
         flow: str = "equilibrium",
         iac: bool = True,
         transport: bool = False,
+        pi_p: list[float] = ...,
+        subar: list[float] = ...,
+        supar: list[float] = ...,
+        ac_at: float | None = None,
+        mdot: float | None = None,
+        n_frz: int | None = None,
+        hc: float | None = None,
+        tc: float | None = None,
+        tc_est: float | None = None,
     ) -> RocketResult: ...

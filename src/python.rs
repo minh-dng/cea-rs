@@ -1,7 +1,7 @@
 //! Python boundary: SI units, typed failures and a distinct import namespace.
 use crate::{
     Error,
-    rocket::{FlowMode, RocketResult, Station},
+    rocket::{RocketOptions, RocketResult, Station},
     solver::{Mode, Solver, State},
     thermo::Reactant,
 };
@@ -123,7 +123,7 @@ impl PySolver {
     fn reactant_enthalpy(&self, weights: Vec<f64>, temperatures_k: Vec<f64>) -> PyResult<f64> {
         Ok(self.inner.reactant_enthalpy(&weights, &temperatures_k)?)
     }
-    #[pyo3(signature=(weights,temperatures_k,chamber_pressure_pa,expansion_ratio, *, flow="equilibrium",iac=true,transport=false))]
+    #[pyo3(signature=(weights,temperatures_k,chamber_pressure_pa,expansion_ratio=None, *, flow="equilibrium",iac=true,transport=false,pi_p=Vec::new(),subar=Vec::new(),supar=Vec::new(),ac_at=None,mdot=None,n_frz=None,hc=None,tc=None,tc_est=None))]
     #[allow(clippy::too_many_arguments)]
     fn rocket(
         &self,
@@ -131,31 +131,93 @@ impl PySolver {
         weights: Vec<f64>,
         temperatures_k: Vec<f64>,
         chamber_pressure_pa: f64,
-        expansion_ratio: f64,
+        expansion_ratio: Option<f64>,
         flow: &str,
         iac: bool,
         transport: bool,
+        pi_p: Vec<f64>,
+        subar: Vec<f64>,
+        mut supar: Vec<f64>,
+        ac_at: Option<f64>,
+        mdot: Option<f64>,
+        n_frz: Option<isize>,
+        hc: Option<f64>,
+        tc: Option<f64>,
+        tc_est: Option<f64>,
     ) -> PyResult<RocketResult> {
-        if !iac || transport {
+        if !iac && ac_at.is_none() && mdot.is_none() && expansion_ratio.is_some() {
             return Err(PyNotImplementedError::new_err(
-                "Finite-area chambers and transport are not implemented",
+                "FAC calls require ac_at or mdot",
             ));
         }
-        let flow = match flow {
-            "equilibrium" => FlowMode::Equilibrium,
-            "frozen_at_chamber" => FlowMode::FrozenAtChamber,
-            "frozen_at_throat" => FlowMode::FrozenAtThroat,
+        if transport {
+            return Err(PyNotImplementedError::new_err(
+                "Rocket transport is not implemented",
+            ));
+        }
+        let n_frz = n_frz
+            .map(|n| {
+                usize::try_from(n).map_err(|_| {
+                    PyValueError::new_err("n_frz must be zero or a positive station index")
+                })
+            })
+            .transpose()?;
+        let freeze = match flow {
+            "equilibrium" => 0,
+            "frozen_at_chamber" => {
+                if iac {
+                    1
+                } else {
+                    3
+                }
+            }
+            "frozen_at_throat" => {
+                if iac {
+                    2
+                } else {
+                    4
+                }
+            }
             _ => return Err(PyValueError::new_err("Unknown flow mode")),
         };
-        Ok(py.detach(|| {
-            self.inner.rocket(
+        if n_frz.is_some_and(|n| freeze != 0 && n != freeze) {
+            return Err(PyValueError::new_err("flow conflicts with n_frz"));
+        }
+        if let Some(area) = expansion_ratio {
+            if !supar.is_empty() {
+                return Err(PyValueError::new_err(
+                    "Use expansion_ratio or supar, not both",
+                ));
+            }
+            supar.push(area);
+        }
+        let result = py.detach(|| {
+            self.inner.rocket_stations(
                 &weights,
                 &temperatures_k,
                 chamber_pressure_pa,
-                expansion_ratio,
-                flow,
+                &RocketOptions {
+                    pi_p: &pi_p,
+                    subar: &subar,
+                    supar: &supar,
+                    iac,
+                    ac_at,
+                    mdot,
+                    n_frz: n_frz.unwrap_or(freeze),
+                    hc,
+                    tc,
+                    tc_est,
+                },
             )
-        })?)
+        })?;
+        if expansion_ratio.is_some() && !result.complete {
+            return Err(DomainError::new_err(
+                result
+                    .stop_reason
+                    .unwrap_or_else(|| "Frozen exit was not completed".into()),
+            ));
+        }
+        Ok(result)
     }
 }
 #[pymethods]
@@ -235,6 +297,30 @@ impl State {
 }
 #[pymethods]
 impl Station {
+    #[getter(name)]
+    fn name_py(&self) -> &str {
+        self.name
+    }
+    #[getter(sound_speed_m_s)]
+    fn sonic(&self) -> f64 {
+        self.sound_speed_m_s
+    }
+    #[getter(cstar_m_s)]
+    fn cstar_py(&self) -> f64 {
+        self.cstar_m_s
+    }
+    #[getter(thrust_coefficient)]
+    fn cf(&self) -> f64 {
+        self.thrust_coefficient
+    }
+    #[getter(isp_m_s)]
+    fn isp(&self) -> f64 {
+        self.isp_m_s
+    }
+    #[getter(isp_vacuum_m_s)]
+    fn ivac(&self) -> f64 {
+        self.isp_vacuum_m_s
+    }
     #[getter(state)]
     fn state_py(&self) -> State {
         self.state.clone()
@@ -254,6 +340,22 @@ impl Station {
 }
 #[pymethods]
 impl RocketResult {
+    #[getter(stations)]
+    fn stations_py(&self) -> Vec<Station> {
+        self.stations.clone()
+    }
+    #[getter(throat_index)]
+    fn throat_index_py(&self) -> usize {
+        self.throat_index
+    }
+    #[getter(complete)]
+    fn complete_py(&self) -> bool {
+        self.complete
+    }
+    #[getter(stop_reason)]
+    fn stop_reason_py(&self) -> Option<String> {
+        self.stop_reason.clone()
+    }
     #[getter(chamber)]
     fn chamber_py(&self) -> Station {
         self.chamber.clone()

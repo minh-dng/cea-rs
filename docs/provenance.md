@@ -30,3 +30,5 @@ modules. See the implementation matrix for the substantial API and mode gaps.
 Consumer seams were read without edits at Hybrid `b249d5d` and its
 `feat-liquid-design-point` checkout: `RocketCEA`, custom ABS/paraffin/HTPB,
 and liquid thermochemistry. Their production dependency stays native `cea`.
+
+- `src/rocket.rs`: Apache-2.0 derived work ported from NASA CEA `source/rocket.f90` at `2f79a647e85737742fb08a127da00d1ea1d069da`: IAC/FAC stations, pressure/area Newton iterations, station-index freezing, frozen fit limits and ideal performance; original NASA NOTICE remains intact.

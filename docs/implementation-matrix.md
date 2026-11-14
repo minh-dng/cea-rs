@@ -10,17 +10,17 @@ parity, Python API compatibility and consumer replacement are not established.
 | TP, HP, SP, TV, UV, SV | Implemented | Both H2/O2 and CH4/O2/N2 compared with native 3.3.4 |
 | Condensed products | Experimental active set | Graphite comparison; general phase coexistence and metal systems unproven; 11 invalid data records omitted |
 | Ions | Experimental neutral balance | H/H2/H+/e- declared pool at 10000 K; broad ionized mixtures unproven |
-| IAC equilibrium nozzle | Implemented | Chamber, sonic throat, one supersonic exit; five propellant sets at two operating points |
-| Frozen at chamber / throat | Implemented | Native n_frz=1/2 comparisons; fixed species and phases; equilibrium Cp unavailable for frozen composition |
-| Finite-area chamber (FAC) | Unsupported | Conservation closure, chamber area/mass-flux API and native regression cases required |
+| IAC equilibrium nozzle | Implemented station schedules | RP-1311 8 and 12; 11 passes with a custom Li reference; 13 is blocked by equilibrium SP convergence; see [rocket evidence](rocket-parity/README.md) |
+| Frozen at chamber / throat | Implemented station-index freezing | Native n_frz=1/2/3/5 comparisons, schedule omissions and gas/condensed fit stops; fixed species and phases; equilibrium Cp unavailable for frozen composition |
+| Finite-area chamber (FAC) | Experimental | ac_at or mass flux per chamber area; injector/infinity/combustor/throat stations; native RP-1311 9/10 pass; early-freeze and sonic-chamber differences recorded in [rocket evidence](rocket-parity/README.md) |
 | Incident/reflected shocks | Unsupported | Equilibrium/frozen Rankine-Hugoniot solver and native examples required |
 | Chapman-Jouguet detonation | Unsupported | CJ sonic closure, initial-state model and native examples required |
 | Transport | Unsupported | NASA transport fits, missing-species rules, gas/condensed mixing and equilibrium transport required |
-| Arbitrary exit pressures/subsonic stations | Unsupported | Currently one area-specified supersonic exit only |
+| Arbitrary exit pressures/subsonic stations | Implemented | Any number of pi_p/subar/supar stations; native pressure and area Newton iterations; large-subar native stopping defect recorded in [rocket evidence](rocket-parity/README.md) |
 | Input-deck CLI, C/Fortran/Excel/MATLAB bindings | Unsupported | No legacy input or ABI compatibility layer |
 | NASA Python classes and options | Unsupported | No Mixture/EqSolution/RocketSolution mutation API, equivalence-ratio utilities, trace/smoothing controls or EqDerivatives API |
 | Analytic sensitivities | Unsupported | Internal equilibrium heat capacity/gamma do not imply a public derivative API |
-| Ambient/separated nozzle thrust | Unsupported | Outputs are ideal vacuum velocity; no consumer thrust-efficiency model is inherited |
+| Ambient/separated nozzle thrust | Ideal ambient-matched performance | Per-station Cf, Isp and Isp_vacuum in SI; no assigned ambient pressure, separation or consumer thrust-efficiency model |
 
 ## Units and failures
 
