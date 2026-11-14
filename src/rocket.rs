@@ -119,6 +119,7 @@ fn frozen_state(reference: &State, t: f64, p: f64) -> Result<State> {
         .sum();
     out.trace_extrapolated_species.clear();
     out.extrapolated_species.clear();
+    let total: f64 = reference.amounts.iter().map(|(n, _)| n).sum();
     let (mut h, mut s, mut cp) = (0.0, 0.0, 0.0);
     for &(n, sp) in &reference.amounts {
         if n == 0.0 {
@@ -126,8 +127,10 @@ fn frozen_state(reference: &State, t: f64, p: f64) -> Result<State> {
         }
         if check_species_temperature(sp, t).is_err() {
             out.extrapolated_species.push(sp.data().symbol().into());
-            out.trace_extrapolated_species
-                .push(sp.data().symbol().into());
+            if n / total <= 1e-11 {
+                out.trace_extrapolated_species
+                    .push(sp.data().symbol().into());
+            }
         }
         let d = sp.data();
         h += n * d.h_over_r(t) * R;

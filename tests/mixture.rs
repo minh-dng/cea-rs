@@ -159,8 +159,8 @@ fn nasa_temperature_ranges() {
             expected
         );
     }
-    // Nominal native range does not relax the Rust reference-state policy.
-    assert!(Reactant::named("RP-1").unwrap().properties(300.0).is_err());
+    // A reference-only reactant is accepted only inside NASA's nominal range.
+    assert!(Reactant::named("RP-1").unwrap().properties(320.0).is_err());
 }
 #[test]
 #[rustfmt::skip]

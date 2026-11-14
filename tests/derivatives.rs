@@ -695,7 +695,7 @@ fn derivative_failures_are_errors_and_zero_weights_are_one_sided() {
     }
     assert!(s.derivatives(Mode::TP(2500.0, 1e6), &[0.0, 0.0]).is_err());
     assert!(
-        s.finite_difference_derivatives(Mode::TP(300.0, 1e6), &[1.0, 8.0], 1e-4)
+        s.finite_difference_derivatives(Mode::TP(160.0, 1e6), &[1.0, 8.0], 1e-4)
             .is_err()
     );
     // Both reactants carry the same element, so the zero-weight perturbation

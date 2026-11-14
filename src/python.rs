@@ -2,7 +2,6 @@
 use crate::{
     Error,
     detonation::{DetonationResult, UnburnedState},
-    rocket::{FlowMode, RocketResult, Station},
     rocket::{RocketOptions, RocketResult, Station},
     solver::{Mode, Solver, State},
     thermo::Reactant,
@@ -232,10 +231,6 @@ impl PySolver {
     /// Solve a CJ detonation from mass weights, unburned K and Pa.
     #[pyo3(signature=(weights, temperature_k, pressure_pa, *, frozen=false))]
     fn detonation(
-    /// Incident/reflected shock: mass weights, K, Pa, and exactly one speed input.
-    #[pyo3(signature=(weights,temperature_k,pressure_pa, *, u1=None,mach1=None,reflected=false,incident_frozen=false,reflected_frozen=false))]
-    #[allow(clippy::too_many_arguments)]
-    fn shock(
         &self,
         py: Python<'_>,
         weights: Vec<f64>,
@@ -248,6 +243,15 @@ impl PySolver {
                 .detonation(&weights, temperature_k, pressure_pa, frozen)
         })?)
     }
+    /// Incident/reflected shock: mass weights, K, Pa, and exactly one speed input.
+    #[pyo3(signature=(weights,temperature_k,pressure_pa, *, u1=None,mach1=None,reflected=false,incident_frozen=false,reflected_frozen=false))]
+    #[allow(clippy::too_many_arguments)]
+    fn shock(
+        &self,
+        py: Python<'_>,
+        weights: Vec<f64>,
+        temperature_k: f64,
+        pressure_pa: f64,
         u1: Option<f64>,
         mach1: Option<f64>,
         reflected: bool,
@@ -260,6 +264,7 @@ impl PySolver {
             (None, Some(m)) => ShockSpeed::Mach(m),
             _ => return Err(PyValueError::new_err("Specify exactly one of u1 or mach1")),
         };
+        Ok(py.detach(|| {
             self.inner.shock(
                 &weights,
                 temperature_k,
@@ -269,6 +274,8 @@ impl PySolver {
                 incident_frozen,
                 reflected_frozen,
             )
+        })?)
+    }
     #[pyo3(signature=(weights,temperatures_k,chamber_pressure_pa,expansion_ratio=None, *, flow="equilibrium",iac=true,transport=false,pi_p=Vec::new(),subar=Vec::new(),supar=Vec::new(),ac_at=None,mdot=None,n_frz=None,hc=None,tc=None,tc_est=None))]
     #[allow(clippy::too_many_arguments)]
     fn rocket(
@@ -394,6 +401,7 @@ impl State {
     #[getter(MW)]
     fn nasa_mw_py(&self) -> f64 {
         crate::mixture::molecular_weight_mw(self)
+    }
     #[pyo3(name = "transport")]
     fn transport_py(&self, py: Python<'_>) -> PyResult<crate::transport::Transport> {
         Ok(py.detach(|| self.transport())?)

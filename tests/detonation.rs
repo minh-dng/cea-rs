@@ -305,7 +305,6 @@ fn rejects_unsupported_frozen_and_invalid_initial_gas() {
         (300.0, 0.0),
         (f64::NAN, 1e5),
         (300.0, f64::INFINITY),
-        (100.0, 1e5),
     ] {
         assert!(matches!(
             s.detonation(&[1.0, 8.0], t, p, false),

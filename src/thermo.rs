@@ -56,6 +56,8 @@ fn constituent(symbol: &str) -> Result<Constituent> {
 #[derive(Clone, Debug)]
 struct Fit {
     lo: f64,
+    /// Interval as written in the database; None for NASA's zero-filled padding.
+    nominal: Option<(f64, f64)>,
     a: [f64; 9],
 }
 
@@ -87,12 +89,10 @@ impl Reactant {
                 self.reference_temperature + 10.0,
             );
         }
+        let nominal = self.fits.iter().filter_map(|f| f.nominal);
         (
-            self.fits.iter().map(|f| f.lo).fold(f64::INFINITY, f64::min),
-            self.fits
-                .iter()
-                .map(|f| f.hi)
-                .fold(f64::NEG_INFINITY, f64::max),
+            nominal.clone().map(|r| r.0).fold(f64::INFINITY, f64::min),
+            nominal.map(|r| r.1).fold(f64::NEG_INFINITY, f64::max),
         )
     }
 
@@ -330,8 +330,10 @@ fn parse_reactants() -> Result<Vec<Reactant>> {
                 for (i, j) in [0, 1, 3, 4].into_iter().enumerate() {
                     a[5 + i] = number(row2, 16 * j, 16 * (j + 1))?;
                 }
+                let lo = number(range, 0, 11)?;
                 r.fits.push(Fit {
-                    lo: number(range, 0, 11)?,
+                    lo,
+                    nominal: Some((lo, number(range, 11, 22)?)),
                     a,
                 });
             }
@@ -341,7 +343,11 @@ fn parse_reactants() -> Result<Vec<Reactant>> {
                     if let Some(fit) = r.fits.get_mut(i) {
                         fit.lo = lo;
                     } else {
-                        r.fits.push(Fit { lo, a: [0.0; 9] });
+                        r.fits.push(Fit {
+                            lo,
+                            nominal: None,
+                            a: [0.0; 9],
+                        });
                     }
                 }
             }

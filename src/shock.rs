@@ -69,17 +69,19 @@ fn fixed_state(amounts: &[(f64, Species)], t: f64, p: f64) -> Result<State> {
         .sum();
     let mass: f64 = amounts.iter().map(|(n, sp)| n * sp.data().mw()).sum();
     let (mut h, mut s, mut cp) = (0.0, 0.0, 0.0);
-    let mut trace = vec![];
+    let (mut trace, mut extrapolated) = (vec![], vec![]);
     let mut x = BTreeMap::new();
     let mut y = BTreeMap::new();
     for &(n, sp) in amounts {
         if n <= 0.0 {
             continue;
         }
-        if n / total > 1e-11 {
-            check_species_temperature(sp, t)?;
-        } else if check_species_temperature(sp, t).is_err() {
-            trace.push(sp.data().symbol().into());
+        // Same rule as Solver::solve: NASA extrapolates gas fits; report it.
+        if check_species_temperature(sp, t).is_err() {
+            extrapolated.push(sp.data().symbol().into());
+            if n / total <= 1e-11 {
+                trace.push(sp.data().symbol().into());
+            }
         }
         let d = sp.data();
         h += n * d.h_over_r(t) * R;
@@ -114,6 +116,7 @@ fn fixed_state(amounts: &[(f64, Species)], t: f64, p: f64) -> Result<State> {
         constraint_residual: 0.0,
         mole_fractions: x,
         trace_extrapolated_species: trace,
+        extrapolated_species: extrapolated,
         mass_fractions: y,
         amounts: amounts.to_vec(),
     })
