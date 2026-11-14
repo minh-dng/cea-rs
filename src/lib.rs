@@ -5,6 +5,7 @@ mod equilibrium_core;
 #[cfg(feature = "python")]
 mod python;
 pub mod rocket;
+pub mod shock;
 pub mod solver;
 pub mod thermo;
 

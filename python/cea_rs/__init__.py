@@ -6,6 +6,8 @@ from ._cea_rs import (
     R,
     Reactant,
     RocketResult,
+    ShockResult,
+    ShockStation,
     State,
     Station,
     __version__,
@@ -23,6 +25,8 @@ __all__ = [
     "R",
     "Reactant",
     "RocketResult",
+    "ShockResult",
+    "ShockStation",
     "Solver",
     "State",
     "Station",
@@ -155,6 +159,32 @@ class Solver:
             hc=hc,
             tc=tc,
             tc_est=tc_est,
+        )
+
+    def shock(
+        self,
+        weights: list[float],
+        temperature_k: float,
+        pressure_pa: float,
+        *,
+        u1: float | None = None,
+        mach1: float | None = None,
+        reflected: bool = False,
+        incident_frozen: bool = False,
+        reflected_frozen: bool = False,
+    ) -> ShockResult:
+        """Solve a NASA gas-mixture shock in SI, using exactly one of u1/mach1.
+
+        Station velocities use each shock's frame; v2_m_s uses the wall frame.
+        Any incident/reflected frozen/equilibrium combination is supported.
+        Reflected-frozen sound speed and gamma retain NASA's station-2 Cp basis;
+        cp_frozen_j_kg_k is evaluated at the actual station temperature.
+        Failed solves raise an error and never return a retained earlier state.
+        """
+        return self._inner.shock(
+            weights, temperature_k, pressure_pa, u1=u1, mach1=mach1,
+            reflected=reflected, incident_frozen=incident_frozen,
+            reflected_frozen=reflected_frozen,
         )
 
 

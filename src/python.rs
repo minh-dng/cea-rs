@@ -128,6 +128,39 @@ impl PySolver {
     fn reactant_enthalpy(&self, weights: Vec<f64>, temperatures_k: Vec<f64>) -> PyResult<f64> {
         Ok(self.inner.reactant_enthalpy(&weights, &temperatures_k)?)
     }
+    /// Incident/reflected shock: mass weights, K, Pa, and exactly one speed input.
+    #[pyo3(signature=(weights,temperature_k,pressure_pa, *, u1=None,mach1=None,reflected=false,incident_frozen=false,reflected_frozen=false))]
+    #[allow(clippy::too_many_arguments)]
+    fn shock(
+        &self,
+        py: Python<'_>,
+        weights: Vec<f64>,
+        temperature_k: f64,
+        pressure_pa: f64,
+        u1: Option<f64>,
+        mach1: Option<f64>,
+        reflected: bool,
+        incident_frozen: bool,
+        reflected_frozen: bool,
+    ) -> PyResult<crate::shock::ShockResult> {
+        use crate::shock::ShockSpeed;
+        let speed = match (u1, mach1) {
+            (Some(u), None) => ShockSpeed::Velocity(u),
+            (None, Some(m)) => ShockSpeed::Mach(m),
+            _ => return Err(PyValueError::new_err("Specify exactly one of u1 or mach1")),
+        };
+        Ok(py.detach(|| {
+            self.inner.shock(
+                &weights,
+                temperature_k,
+                pressure_pa,
+                speed,
+                reflected,
+                incident_frozen,
+                reflected_frozen,
+            )
+        })?)
+    }
     #[pyo3(signature=(weights,temperatures_k,chamber_pressure_pa,expansion_ratio=None, *, flow="equilibrium",iac=true,transport=false,pi_p=Vec::new(),subar=Vec::new(),supar=Vec::new(),ac_at=None,mdot=None,n_frz=None,hc=None,tc=None,tc_est=None))]
     #[allow(clippy::too_many_arguments)]
     fn rocket(
@@ -393,6 +426,8 @@ fn _cea_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<State>()?;
     m.add_class::<RocketResult>()?;
     m.add_class::<Station>()?;
+    m.add_class::<crate::shock::ShockStation>()?;
+    m.add_class::<crate::shock::ShockResult>()?;
     m.add("ConvergenceError", m.py().get_type::<ConvergenceError>())?;
     m.add("DomainError", m.py().get_type::<DomainError>())?;
     m.add("__version__", "0.1.0a3")?;

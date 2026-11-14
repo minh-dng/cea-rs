@@ -67,6 +67,18 @@ class RocketResult:
     vacuum_velocity_m_s: float
 
 class Solver:
+    def shock(
+        self,
+        weights: list[float],
+        temperature_k: float,
+        pressure_pa: float,
+        *,
+        u1: float | None = None,
+        mach1: float | None = None,
+        reflected: bool = False,
+        incident_frozen: bool = False,
+        reflected_frozen: bool = False,
+    ) -> ShockResult: ...
     def __init__(
         self,
         reactants: list[Reactant],
@@ -104,3 +116,24 @@ class Solver:
         tc: float | None = None,
         tc_est: float | None = None,
     ) -> RocketResult: ...
+
+class ShockStation:
+    state: State
+    velocity_m_s: float
+    mach: float
+    sonic_velocity_m_s: float
+
+class ShockResult:
+    station1: ShockStation
+    station2: ShockStation
+    station5: ShockStation | None
+    p2_p1: float
+    t2_t1: float
+    m2_m1: float
+    rho2_rho1: float
+    v2_m_s: float
+    p5_p2: float | None
+    t5_t2: float | None
+    m5_m2: float | None
+    rho5_rho2: float | None
+    u5_plus_v2_m_s: float | None
