@@ -96,6 +96,14 @@ class Solver:
     def reactant_enthalpy(
         self, weights: list[float], temperatures_k: list[float]
     ) -> float: ...
+    def detonation(
+        self,
+        weights: list[float],
+        temperature_k: float,
+        pressure_pa: float,
+        *,
+        frozen: bool = False,
+    ) -> DetonationResult: ...
     def rocket(
         self,
         weights: list[float],
@@ -117,10 +125,26 @@ class Solver:
         tc_est: float | None = None,
     ) -> RocketResult: ...
 
+class UnburnedState:
+    temperature_k: float
+    pressure_pa: float
+    density_kg_m3: float
+    enthalpy_j_kg: float
+    molecular_weight_kg_kmol: float
+    gamma_s: float
+    sound_speed_m_s: float
+
+class DetonationResult:
+    unburned: UnburnedState
+    burned: State
+    pressure_ratio: float
+    temperature_ratio: float
+    molecular_weight_ratio: float
+    density_ratio: float
+    mach: float
+    velocity_m_s: float
 class ShockStation:
     state: State
-    velocity_m_s: float
-    mach: float
     sonic_velocity_m_s: float
 
 class ShockResult:

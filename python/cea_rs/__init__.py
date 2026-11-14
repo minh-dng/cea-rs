@@ -3,6 +3,7 @@
 from ._cea_rs import (
     ConvergenceError,
     DomainError,
+    DetonationResult,
     R,
     Reactant,
     RocketResult,
@@ -10,6 +11,7 @@ from ._cea_rs import (
     ShockStation,
     State,
     Station,
+    UnburnedState,
     __version__,
 )
 from ._cea_rs import (
@@ -22,6 +24,7 @@ __all__ = [
     "NASA_THERMO_SHA256",
     "ConvergenceError",
     "DomainError",
+    "DetonationResult",
     "R",
     "Reactant",
     "RocketResult",
@@ -30,6 +33,7 @@ __all__ = [
     "Solver",
     "State",
     "Station",
+    "UnburnedState",
     "__version__",
     "capabilities",
 ]
@@ -185,6 +189,25 @@ class Solver:
             weights, temperature_k, pressure_pa, u1=u1, mach1=mach1,
             reflected=reflected, incident_frozen=incident_frozen,
             reflected_frozen=reflected_frozen,
+        )
+
+    def detonation(
+        self,
+        weights: list[float],
+        temperature_k: float,
+        pressure_pa: float,
+        *,
+        frozen: bool = False,
+    ) -> DetonationResult:
+        """Solve a Chapman-Jouguet wave from unburned gas temperature and pressure.
+
+        Inputs and outputs use SI; weights are reactant masses. The unburned
+        composition stays fixed and the burned state is in equilibrium.
+        Reactants must be named gas species with NASA fits. frozen=True raises
+        NotImplementedError here; native CEA 3.3.4 also leaves it unimplemented.
+        """
+        return self._inner.detonation(
+            weights, temperature_k, pressure_pa, frozen=frozen
         )
 
 
