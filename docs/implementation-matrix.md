@@ -15,7 +15,7 @@ parity, Python API compatibility and consumer replacement are not established.
 | Finite-area chamber (FAC) | Unsupported | Conservation closure, chamber area/mass-flux API and native regression cases required |
 | Incident/reflected shocks | Unsupported | Equilibrium/frozen Rankine-Hugoniot solver and native examples required |
 | Chapman-Jouguet detonation | Unsupported | CJ sonic closure, initial-state model and native examples required |
-| Transport | Unsupported | NASA transport fits, missing-species rules, gas/condensed mixing and equilibrium transport required |
+| Transport | Implemented for State in Rust/Python | NASA gas selection, missing-data estimates, ion interactions, frozen/equilibrium conductivity and Prandtl; condensed species excluded. 40 native 3.3.4 states pass 1e-4 relative. RP-1311 example 11 chamber TP passes; HP blocked by missing Li(cr)/existing solver nonconvergence. Rocket transport option still rejects; State.transport() is available. |
 | Arbitrary exit pressures/subsonic stations | Unsupported | Currently one area-specified supersonic exit only |
 | Input-deck CLI, C/Fortran/Excel/MATLAB bindings | Unsupported | No legacy input or ABI compatibility layer |
 | NASA Python classes and options | Unsupported | No Mixture/EqSolution/RocketSolution mutation API, equivalence-ratio utilities, trace/smoothing controls or EqDerivatives API |

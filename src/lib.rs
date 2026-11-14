@@ -7,6 +7,7 @@ mod python;
 pub mod rocket;
 pub mod solver;
 pub mod thermo;
+pub mod transport;
 
 /// NASA CEA gas constant, J/(kmol K), kept for oracle comparisons.
 pub const R: f64 = 8314.51;

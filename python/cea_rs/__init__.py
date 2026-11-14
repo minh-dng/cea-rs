@@ -8,6 +8,7 @@ from ._cea_rs import (
     RocketResult,
     State,
     Station,
+    Transport,
     __version__,
 )
 from ._cea_rs import (
@@ -26,6 +27,7 @@ __all__ = [
     "Solver",
     "State",
     "Station",
+    "Transport",
     "__version__",
     "capabilities",
 ]
