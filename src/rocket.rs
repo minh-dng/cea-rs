@@ -6,7 +6,6 @@ use crate::{
     solver::{Mode, Solver, State},
     thermo::check_species_temperature,
 };
-use thermo_species::Species;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FlowMode {
@@ -160,6 +159,7 @@ fn frozen_state(reference: &State, t: f64, p: f64) -> Result<State> {
     out.iterations = 0;
     out.constraint_residual = 0.0;
     out.equilibrium = false;
+    out.equilibrium_seed = None;
     Ok(out)
 }
 
@@ -225,27 +225,10 @@ fn station(name: &'static str, state: State, h0: f64, flux: Option<f64>) -> Resu
     })
 }
 
-/// Seed the next solve with this state's condensed phases, one phase per compound.
-/// Seeding two phases of one compound makes a fresh solve singular, so the larger
-/// one is kept, as NASA's RocketSolver_set_init_state collapses a coexisting pair.
-fn seed_phases(insert: &mut Vec<Species>, st: &State) {
-    let mut condensed: Vec<_> = st
-        .amounts
-        .iter()
-        .filter(|(n, sp)| *n > 0.0 && sp.data().phase() != 0)
-        .collect();
-    condensed.sort_by(|a, b| a.0.total_cmp(&b.0));
-    for &&(_, sp) in &condensed {
-        insert.retain(|other| {
-            other.data().phase() == 0 || other.data().constituents() != sp.data().constituents()
-        });
-        insert.push(sp);
-    }
-}
-
-/// An isentrope uses the public equilibrium interface and carries phase seeds forward.
+/// An isentrope continues from the previous equilibrium solution.
 struct Nozzle<'a> {
-    solver: Solver,
+    solver: &'a Solver,
+    start: Option<crate::equilibrium_core::EquilibriumSeed>,
     weights: &'a [f64],
     reference: &'a State,
     frozen: bool,
@@ -256,11 +239,12 @@ impl Nozzle<'_> {
         if self.frozen {
             return frozen_expansion(self.reference, p);
         }
-        // shortcut: public solve cannot reuse temperature/composition; use a seeded solve when available.
-        let st = self
-            .solver
-            .solve(Mode::SP(self.reference.entropy_j_kg_k, p), self.weights)?;
-        seed_phases(&mut self.solver.insert, &st);
+        let st = self.solver.solve_with_start(
+            Mode::SP(self.reference.entropy_j_kg_k, p),
+            self.weights,
+            self.start.as_ref(),
+        )?;
+        self.start.clone_from(&st.equilibrium_seed);
         Ok(st)
     }
 
@@ -452,8 +436,6 @@ impl Solver {
         };
         let mut injector = chamber_at(pc)?;
         let h0 = injector.enthalpy_j_kg;
-        let mut phase_solver = self.clone();
-        seed_phases(&mut phase_solver.insert, &injector);
         let mut stations;
         let throat;
         let infinity;
@@ -463,8 +445,9 @@ impl Solver {
             }
             infinity = injector.clone();
             let mut nozzle = Nozzle {
-                solver: phase_solver.clone(),
+                solver: self,
                 weights,
+                start: infinity.equilibrium_seed.clone(),
                 reference: &infinity,
                 frozen: o.n_frz == 1,
                 h0,
@@ -483,8 +466,9 @@ impl Solver {
                     chamber_at(pinf)?
                 };
                 let mut nozzle = Nozzle {
-                    solver: phase_solver.clone(),
+                    solver: self,
                     weights,
+                    start: inf.equilibrium_seed.clone(),
                     reference: &inf,
                     frozen: (1..=2).contains(&o.n_frz),
                     h0,
@@ -505,8 +489,9 @@ impl Solver {
                     combustor.name = "combustor";
                     if o.n_frz == 3 {
                         let mut frozen = Nozzle {
-                            solver: phase_solver.clone(),
+                            solver: self,
                             weights,
+                            start: combustor.state.equilibrium_seed.clone(),
                             reference: &combustor.state,
                             frozen: true,
                             h0,
@@ -583,8 +568,11 @@ impl Solver {
                     continue;
                 }
                 let mut nozzle = Nozzle {
-                    solver: phase_solver.clone(),
+                    solver: self,
                     weights,
+                    start: stations
+                        .last()
+                        .and_then(|st| st.state.equilibrium_seed.clone()),
                     reference,
                     frozen,
                     h0,
@@ -616,7 +604,6 @@ impl Solver {
                         "Nozzle failed assigned mass-flow closure".into(),
                     ));
                 }
-                phase_solver = nozzle.solver;
                 stations.push(st);
             }
             if stop_reason.is_some() {

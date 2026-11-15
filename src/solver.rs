@@ -44,6 +44,7 @@ pub struct State {
     pub extrapolated_species: Vec<String>,
     pub mass_fractions: BTreeMap<String, f64>,
     pub(crate) amounts: Vec<(f64, Species)>,
+    pub(crate) equilibrium_seed: Option<equilibrium_core::EquilibriumSeed>,
 }
 impl State {
     pub fn sound_speed(&self) -> f64 {
@@ -253,6 +254,15 @@ impl Solver {
 
     /// Solve an equilibrium state, returning no result on failed verification.
     pub fn solve(&self, mode: Mode, weights: &[f64]) -> Result<State> {
+        self.solve_with_start(mode, weights, None)
+    }
+
+    pub(crate) fn solve_with_start(
+        &self,
+        mode: Mode,
+        weights: &[f64],
+        start: Option<&equilibrium_core::EquilibriumSeed>,
+    ) -> Result<State> {
         let feeds = self.feeds(weights)?;
         let (const_t, const_s, const_p, state1, state2) = match mode {
             Mode::TP(t, p) => (true, false, true, t, p / 1e5),
@@ -279,7 +289,7 @@ impl Solver {
             .into_iter()
             .filter(|sp| !self.omit.contains(sp))
             .collect::<Vec<_>>();
-        let d = equilibrium_core::solve_for_products_debug_with_trace(
+        let d = equilibrium_core::solve_for_products_debug_with_start(
             &feeds,
             const_t,
             const_s,
@@ -291,6 +301,7 @@ impl Solver {
             Some(&pool),
             Some(&self.insert),
             self.trace,
+            start,
         );
         if !d.converged {
             return Err(Error::Convergence(format!(
@@ -330,6 +341,7 @@ impl Solver {
             mole_fractions: BTreeMap::new(),
             mass_fractions: BTreeMap::new(),
             amounts,
+            equilibrium_seed: Some(d.seed),
         };
         if !(160.0..=22000.0).contains(&out.temperature_k) {
             return Err(Error::Domain(

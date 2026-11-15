@@ -397,3 +397,163 @@ fn coexisting_alumina_phases_do_not_break_later_nozzle_solves() {
         }
     }
 }
+
+#[test]
+fn air_jet_a_nozzle_continues_from_the_chamber() {
+    // cea==3.3.4, Mixture(["Air", "Jet-A(L)"], products_from_reactants=True),
+    // RocketSolver(..., transport=False), weights=[25,1], pc=7 bar, supar=[200],
+    // hc=reactants.calc_property(ENTHALPY, weights, [298.15,298.15])/cea.R.
+    // The native rocket stops the throat at Mach=0.9999816. Refine that station
+    // with native EqSolver SP and Eq. 6.17 to |Mach²-1|<1e-10 for sonic closure.
+    // Rows are [T (K), P (Pa), Isp (m/s), area ratio].
+    let native = [
+        [1675.8650845819666, 700000.0, 0.0, 0.0],
+        [1472.26718692791, 384347.40114722203, 735.6035486636265, 1.0],
+        [
+            225.75993685562185,
+            111.46954232281868,
+            1887.603352765888,
+            199.99958302838894,
+        ],
+    ];
+    let result = model(&["Air", "Jet-A(L)"], None)
+        .rocket(
+            &[25.0, 1.0],
+            &[298.15; 2],
+            0.7e6,
+            200.0,
+            cea_rs::rocket::FlowMode::Equilibrium,
+        )
+        .unwrap();
+    assert_eq!(result.stations.len(), native.len());
+    for (station, expected) in result.stations.iter().zip(native) {
+        let actual = [
+            station.state.temperature_k,
+            station.state.pressure_pa,
+            station.isp_m_s,
+            station.area_ratio.unwrap_or(0.0),
+        ];
+        for (a, b) in actual.into_iter().zip(expected) {
+            assert!(
+                (a - b).abs() <= 1e-5 * b.abs(),
+                "{}: {a} != {b}",
+                station.name
+            );
+        }
+    }
+}
+
+#[test]
+fn rp1311_example_13_continues_through_beo_coexistence() {
+    // Native cea==3.3.4 RocketSolver, complete product pool, insert=["BeO(L)"],
+    // trace=1e-10, pc=cea.units.psi_to_bar(3000), pi_p=[3,10,30,300].
+    // hc uses calc_property(ENTHALPY, [0.536,0.134,0.33], [298.15]*3)/cea.R.
+    // Columns: T, P (Pa), Isp, area ratio, gamma_s, Cp_eq (J/kg/K), density, vacuum Isp.
+    let native = [
+        [
+            3002.540057480417,
+            20684271.240234375,
+            0.0,
+            0.0,
+            1.1514625633054552,
+            4073.129166470708,
+            13.776078628398473,
+            0.0,
+        ],
+        [
+            2851.0000144702426,
+            12694215.919241387,
+            1192.191843159618,
+            1.0,
+            0.9978925166135219,
+            0.0,
+            8.912488303325569,
+            2386.8970653942038,
+        ],
+        [
+            2851.000014470235,
+            6894757.080078125,
+            1778.0019553097056,
+            1.2363034553532954,
+            0.997357665019986,
+            0.0,
+            4.83378193202578,
+            2580.233400694492,
+        ],
+        [
+            2449.6978123897047,
+            2068427.1240234375,
+            2525.0245459729804,
+            2.4856568126750918,
+            1.179064134914969,
+            3400.500520006258,
+            1.692924419061845,
+            3008.903853571119,
+        ],
+        [
+            2068.730385127892,
+            689475.7080078125,
+            2974.301520857333,
+            5.338596251807622,
+            1.191557225900547,
+            3127.0636576165014,
+            0.6691635268456835,
+            3320.720529752688,
+        ],
+        [
+            1398.105576095713,
+            68947.57080078125,
+            3575.6292456899077,
+            30.000712669417872,
+            1.2179536350085105,
+            2782.5959869613275,
+            0.09905132119342493,
+            3770.30246727904,
+        ],
+    ];
+    let solver = Solver::new(
+        ["N2H4(L)", "Be(a)", "H2O2(L)"]
+            .iter()
+            .map(|n| Reactant::named(n).unwrap())
+            .collect(),
+        true,
+        false,
+        None,
+        vec!["BeO(L)".into()],
+    )
+    .unwrap()
+    .with_trace(1e-10)
+    .unwrap();
+    let result = solver
+        .rocket_stations(
+            &[0.536, 0.134, 0.33],
+            &[298.15; 3],
+            20684271.240234375,
+            &RocketOptions {
+                pi_p: &[3.0, 10.0, 30.0, 300.0],
+                ..RocketOptions::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(result.stations.len(), native.len());
+    for (station, expected) in result.stations.iter().zip(native) {
+        let state = &station.state;
+        let actual = [
+            state.temperature_k,
+            state.pressure_pa,
+            station.isp_m_s,
+            station.area_ratio.unwrap_or(0.0),
+            state.gamma_s,
+            state.cp_equilibrium_j_kg_k,
+            state.density_kg_m3,
+            station.isp_vacuum_m_s,
+        ];
+        for (a, b) in actual.into_iter().zip(expected) {
+            assert!(
+                (a - b).abs() <= 1e-5 * b.abs(),
+                "{}: {a} != {b}",
+                station.name
+            );
+        }
+    }
+}
