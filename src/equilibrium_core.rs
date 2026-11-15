@@ -71,7 +71,7 @@ pub(crate) struct EquilibriumSeed {
     species: Vec<Species>,
     temperature_k: f64,
     n: f64,
-    ln_nj: Vec<f64>,
+    pub(crate) ln_nj: Vec<f64>,
     nj_stored: Vec<f64>,
     condensed_nj: Vec<f64>,
     condensed_active: Vec<bool>,
@@ -80,6 +80,8 @@ pub(crate) struct EquilibriumSeed {
     j_liq: Option<usize>,
     xsize: f64,
     esize: f64,
+    pub(crate) converged_tsize: f64,
+    pub(crate) elements_reduced: bool,
 }
 
 /// Internal debug struct for validation and testing.
@@ -580,6 +582,7 @@ pub(crate) fn solve_for_products_debug_with_start(
     // because G.2's correct_singular sets it to 80 (disabling truncation)
     // as its first action on any singular matrix.
     let mut tsize: f64 = 18.420681;
+    let mut converged_tsize = tsize;
     // D.4/D.5: the looser threshold tsize relaxes to on each convergence
     // (default ≈1e-11, or the requested trace level) —
     // this second stage is how CEA resolves trace species accurately after
@@ -1429,6 +1432,7 @@ pub(crate) fn solve_for_products_debug_with_start(
             // the main composition settles) and recompute the effective
             // amounts at the looser threshold.
             times_converged += 1;
+            converged_tsize = tsize;
             tsize = xsize;
             for j in 0..ng {
                 let threshold = n.ln() - if is_ion[j] { esize } else { tsize };
@@ -1874,6 +1878,8 @@ pub(crate) fn solve_for_products_debug_with_start(
             j_liq,
             xsize,
             esize,
+            converged_tsize,
+            elements_reduced: element_excluded.iter().any(|excluded| *excluded),
         },
         assembled_first_iteration: assembled_first_iteration
             .expect("MAX_TOTAL_ITERATIONS > 0, so iteration 0 always runs"),
