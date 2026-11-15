@@ -220,12 +220,19 @@ fn basis(gas: &[(f64, Species)]) -> Result<(Vec<usize>, DMatrix<f64>)> {
         }
     }
     // Normalize even an unchanged fallback basis (explicit molecular-only pools).
+    let mut independent = Vec::new();
     for i in 0..ne {
-        let j = components[i];
-        let pivot = a[(i, j)];
-        if pivot == 0.0 {
-            return Err(Error::Convergence("Singular gas transport basis".into()));
+        let mut j = components[i];
+        if a[(i, j)] == 0.0 {
+            // Dependent element rows do not add a gas component or a reaction.
+            let Some(k) = (0..ng).find(|&k| a[(i, k)].abs() > 1e-10) else {
+                continue;
+            };
+            j = k;
+            components[i] = j;
         }
+        let pivot = a[(i, j)];
+        independent.push(i);
         for k in 0..ng {
             a[(i, k)] /= pivot;
         }
@@ -242,7 +249,10 @@ fn basis(gas: &[(f64, Species)]) -> Result<(Vec<usize>, DMatrix<f64>)> {
             }
         }
     }
-    Ok((components, a))
+    Ok((
+        independent.iter().map(|&i| components[i]).collect(),
+        a.select_rows(&independent),
+    ))
 }
 
 /// Compute NASA's gas transport model from the state's composition.

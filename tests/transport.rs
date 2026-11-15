@@ -624,6 +624,103 @@ fn nasa_transport_goldens() {
 }
 
 #[test]
+fn restricted_pool_transport_matches_native() {
+    // Native cea==3.3.4, generated 2026-11-15 with the initialization above:
+    // r = cea.Mixture(names); p = cea.Mixture(names)
+    // solver = cea.EqSolver(p, reactants=r, transport=True)
+    // s = cea.EqSolution(solver)
+    // solver.solve(s, cea.TP, 1000.0, 1.0, numpy.array(weights))
+    // Record the five transport outputs above, then s.cp_fr*1000 and
+    // s.Pr_eq*s.conductivity_eq/s.viscosity*1000 for transport Cp_eq.
+    // Bulk s.cp_eq uses a separate derivative calculation, not transport Cp.
+    let cases = [
+        (
+            &["H2O"][..],
+            &[1.0][..],
+            [
+                3.761226628570708e-5,
+                0.09724001927007181,
+                0.09724001927007181,
+                0.8865418311312162,
+                0.8865418311312162,
+                2292.000808674579,
+                2292.000808674579,
+            ],
+        ),
+        (
+            &["H2O", "CO2"][..],
+            &[1.0, 1.0][..],
+            [
+                4.569330950377368e-5,
+                0.09571094297797181,
+                0.09571094297797181,
+                0.8416785471598109,
+                0.8416785471598109,
+                1763.0118787158933,
+                1763.0118787158933,
+            ],
+        ),
+        (
+            &["Ar"][..],
+            &[1.0][..],
+            [
+                5.5515512393241666e-5,
+                0.0434845806180298,
+                0.0434845806180298,
+                0.664294557174869,
+                0.664294557174869,
+                520.333308300791,
+                520.333308300791,
+            ],
+        ),
+    ];
+    for (names, weights, expected) in cases {
+        let solver = Solver::new(
+            names
+                .iter()
+                .map(|name| Reactant::named(name).unwrap())
+                .collect(),
+            false,
+            false,
+            Some(names.iter().map(|name| (*name).into()).collect()),
+            vec![],
+        )
+        .unwrap();
+        let state = solver.solve(Mode::TP(1000.0, 1e5), weights).unwrap();
+        let result = state.transport().unwrap();
+        let actual = [
+            result.viscosity_pa_s,
+            result.conductivity_frozen_w_m_k,
+            result.conductivity_equilibrium_w_m_k,
+            result.prandtl_frozen,
+            result.prandtl_equilibrium,
+            result.prandtl_frozen * result.conductivity_frozen_w_m_k / result.viscosity_pa_s,
+            result.prandtl_equilibrium * result.conductivity_equilibrium_w_m_k
+                / result.viscosity_pa_s,
+        ];
+        for ((field, actual), expected) in [
+            "viscosity",
+            "k_fr",
+            "k_eq",
+            "Pr_fr",
+            "Pr_eq",
+            "Cp_fr",
+            "Cp_eq",
+        ]
+        .into_iter()
+        .zip(actual)
+        .zip(expected)
+        {
+            let relative = (actual / expected - 1.0).abs();
+            assert!(
+                relative < 1e-4,
+                "{names:?} {field}: {actual} vs {expected}, relative={relative}"
+            );
+        }
+    }
+}
+
+#[test]
 fn transport_rejects_invalid_temperature() {
     let solver = Solver::new(
         vec![Reactant::named("Ar").unwrap()],
