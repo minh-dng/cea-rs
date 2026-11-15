@@ -2,13 +2,9 @@
 //!
 //! Every response vector is ordered [state1, state2, reactant weights...].
 //! Inputs and responses use SI; mole amounts are kmol/kg, n counts gas only.
-//! Analytic derivatives assume NASA's default hard truncation and a fixed
+//! Analytic derivatives use the converged hard truncation and a fixed
 //! product pool/active phase set. Finite differences use verified public solves.
-//! Analytic ions and condensed UV/SV states are rejected. Exact recovery and
-//! smoothing support needs the core's converged cutoff, original gas logs,
-//! active element/ion/condensed masks and smoothing width. Smoothing would use
-//! gated effective amounts in J/Rx and the gate's log/threshold chain rules
-//! when reconstructing reported species derivatives.
+//! Analytic ions, reduced element systems and condensed UV/SV states are rejected.
 //! Very small finite-difference steps amplify the forward solve's constraint
 //! residual, particularly when the exact constrained derivative is zero.
 use crate::{
@@ -217,6 +213,14 @@ impl System {
                 "Equilibrium derivatives require an equilibrium state".into(),
             ));
         }
+        let seed = state.equilibrium_seed.as_ref().ok_or_else(|| {
+            Error::Unsupported("Equilibrium derivatives require the converged core state".into())
+        })?;
+        if seed.elements_reduced {
+            return Err(Error::Unsupported(
+                "Analytic derivatives after element reduction are unsupported; use finite differences".into(),
+            ));
+        }
         let elements: Vec<_> = state
             .amounts
             .iter()
@@ -257,12 +261,15 @@ impl System {
         let a = DMatrix::from_fn(state.amounts.len(), ne, |i, k| {
             count(state.amounts[i].1.data().constituents(), elements[k])
         });
-        // shortcut: assumes tsize=18.420681, expose the converged cutoff before supporting recovery or smoothing.
         let effective: Vec<_> = state
             .amounts
             .iter()
-            .map(|(nj, s)| {
-                if truncate && s.data().phase() == 0 && *nj <= n * (-18.420681_f64).exp() {
+            .enumerate()
+            .map(|(i, (nj, s))| {
+                if truncate
+                    && s.data().phase() == 0
+                    && seed.ln_nj[i] <= n.ln() - seed.converged_tsize
+                {
                     0.0
                 } else {
                     *nj
@@ -609,4 +616,62 @@ pub(crate) fn cv_equilibrium(state: &State) -> Result<f64> {
         return Err(Error::Convergence("Nonphysical equilibrium Cv".into()));
     }
     Ok(cv)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::thermo::Reactant;
+
+    #[test]
+    fn recovered_cutoff_derivatives_match_central_differences() {
+        // The complete AP/Al pool at 300 K, 1 bar takes singular recovery,
+        // then converges with liquid water and Al(OH)3(a), without reducing elements.
+        let solver = Solver::new(
+            ["NH4CLO4(I)", "AL(cr)"]
+                .iter()
+                .map(|name| Reactant::named(name).unwrap())
+                .collect(),
+            true,
+            false,
+            None,
+            vec![],
+        )
+        .unwrap();
+        let mode = Mode::TP(300.0, 1e5);
+        let weights = [4.0, 1.0];
+        let state = solver.solve(mode, &weights).unwrap();
+        let seed = state.equilibrium_seed.as_ref().unwrap();
+        assert_eq!(seed.converged_tsize, 80.0);
+        assert!(!seed.elements_reduced);
+        let analytic = solver.derivatives(mode, &weights).unwrap();
+        let fd = solver
+            .finite_difference_derivatives(mode, &weights, 1e-4)
+            .unwrap();
+        assert!(analytic.closure_defect.unwrap() < 1e-10);
+        for (actual, expected) in [
+            (&analytic.temperature, &fd.temperature),
+            (&analytic.total_moles, &fd.total_moles),
+            (&analytic.enthalpy, &fd.enthalpy),
+            (&analytic.energy, &fd.energy),
+            (&analytic.gibbs_energy, &fd.gibbs_energy),
+            (&analytic.entropy, &fd.entropy),
+        ] {
+            for (col, (&a, &f)) in actual.iter().zip(expected).enumerate() {
+                assert!(
+                    (a - f).abs() <= 1e-5 * a.abs() + 1e-18,
+                    "column {col}: analytic={a:e}, central difference={f:e}"
+                );
+            }
+        }
+        for (name, actual) in &analytic.species_amounts {
+            for (col, (&a, &f)) in actual.iter().zip(&fd.species_amounts[name]).enumerate() {
+                // Independent solve noise dominates derivatives of vanishing traces.
+                assert!(
+                    (a - f).abs() <= 1e-4 * a.abs() + 1e-12,
+                    "{name} column {col}: analytic={a:e}, central difference={f:e}"
+                );
+            }
+        }
+    }
 }

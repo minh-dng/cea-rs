@@ -65,9 +65,29 @@ pub enum EquilibriumMode {
     },
 }
 
+/// Private continuation data for the same reactant and product pool.
+#[derive(Debug, Clone)]
+pub(crate) struct EquilibriumSeed {
+    species: Vec<Species>,
+    temperature_k: f64,
+    n: f64,
+    pub(crate) ln_nj: Vec<f64>,
+    nj_stored: Vec<f64>,
+    condensed_nj: Vec<f64>,
+    condensed_active: Vec<bool>,
+    active_ranked: Vec<usize>,
+    j_sol: Option<usize>,
+    j_liq: Option<usize>,
+    xsize: f64,
+    esize: f64,
+    pub(crate) converged_tsize: f64,
+    pub(crate) elements_reduced: bool,
+}
+
 /// Internal debug struct for validation and testing.
 #[allow(dead_code)]
 pub(crate) struct EquilibriumDebug {
+    pub(crate) seed: EquilibriumSeed,
     pub(crate) assembled_first_iteration: DMatrix<f64>,
     pub(crate) converged: bool,
     pub(crate) iterations_used: usize,
@@ -425,7 +445,7 @@ pub(crate) fn solve_for_products_debug_seeded(
     only: Option<&[Species]>,
     insert: Option<&[Species]>,
 ) -> EquilibriumDebug {
-    solve_for_products_debug_with_trace(
+    solve_for_products_debug_with_start(
         reactants,
         const_t,
         const_s,
@@ -437,11 +457,12 @@ pub(crate) fn solve_for_products_debug_seeded(
         only,
         insert,
         0.0,
+        None,
     )
 }
 
 #[allow(unused_assignments, clippy::too_many_arguments)]
-pub(crate) fn solve_for_products_debug_with_trace(
+pub(crate) fn solve_for_products_debug_with_start(
     reactants: &[crate::thermo::Feed],
     // Select fixed temperature vs variable-temperature energy/entropy modes.
     const_t: bool,
@@ -470,6 +491,7 @@ pub(crate) fn solve_for_products_debug_with_trace(
     // crashes before any condensed insertion can happen).
     insert: Option<&[Species]>,
     trace: f64,
+    start: Option<&EquilibriumSeed>,
 ) -> EquilibriumDebug {
     let mut constituent_set: HashSet<Constituent> = HashSet::new();
     reactants.iter().for_each(|feed| {
@@ -560,6 +582,7 @@ pub(crate) fn solve_for_products_debug_with_trace(
     // because G.2's correct_singular sets it to 80 (disabling truncation)
     // as its first action on any singular matrix.
     let mut tsize: f64 = 18.420681;
+    let mut converged_tsize = tsize;
     // D.4/D.5: the looser threshold tsize relaxes to on each convergence
     // (default ≈1e-11, or the requested trace level) —
     // this second stage is how CEA resolves trace species accurately after
@@ -663,6 +686,40 @@ pub(crate) fn solve_for_products_debug_with_trace(
     // solve — restoring it is only about bookkeeping/output naming in the
     // guide, which we don't expose, so there's nothing to undo here.
     let mut element_excluded = vec![false; ne];
+
+    // NASA reuses the previous station's logs, amounts and phase order, but resets Newton history.
+    if let Some(start) = start.filter(|start| start.species == species) {
+        if !const_t {
+            temperature_k = start.temperature_k;
+        }
+        n = start.n;
+        ln_nj.clone_from(&start.ln_nj);
+        nj_stored.clone_from(&start.nj_stored);
+        nj_c.clone_from(&start.condensed_nj);
+        is_active.clone_from(&start.condensed_active);
+        active_ranked.clone_from(&start.active_ranked);
+        j_sol = start.j_sol;
+        j_liq = start.j_liq;
+        xsize = start.xsize;
+        esize = start.esize;
+        // Check carried phases before building the first matrix, as EqSolver_solve does.
+        for _ in 0..=nc {
+            if !check_condensed_phases(
+                &species,
+                ng,
+                const_t,
+                &mut temperature_k,
+                &mut nj_c,
+                &mut is_active,
+                &mut active_ranked,
+                &mut j_switch,
+                &mut j_sol,
+                &mut j_liq,
+            ) {
+                break;
+            }
+        }
+    }
 
     // D.7 default budget, now per "condensed epoch" (F.3 resets it whenever
     // the active set changes) — max_total_iterations is the hard safety cap
@@ -1375,6 +1432,7 @@ pub(crate) fn solve_for_products_debug_with_trace(
             // the main composition settles) and recompute the effective
             // amounts at the looser threshold.
             times_converged += 1;
+            converged_tsize = tsize;
             tsize = xsize;
             for j in 0..ng {
                 let threshold = n.ln() - if is_ion[j] { esize } else { tsize };
@@ -1807,6 +1865,22 @@ pub(crate) fn solve_for_products_debug_with_trace(
         })
         .collect();
     EquilibriumDebug {
+        seed: EquilibriumSeed {
+            species: species.clone(),
+            temperature_k,
+            n,
+            ln_nj,
+            nj_stored,
+            condensed_nj: nj_c.clone(),
+            condensed_active: is_active.clone(),
+            active_ranked,
+            j_sol,
+            j_liq,
+            xsize,
+            esize,
+            converged_tsize,
+            elements_reduced: element_excluded.iter().any(|excluded| *excluded),
+        },
         assembled_first_iteration: assembled_first_iteration
             .expect("MAX_TOTAL_ITERATIONS > 0, so iteration 0 always runs"),
         converged,

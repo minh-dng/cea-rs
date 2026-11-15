@@ -119,6 +119,7 @@ fn fixed_state(amounts: &[(f64, Species)], t: f64, p: f64) -> Result<State> {
         extrapolated_species: extrapolated,
         mass_fractions: y,
         amounts: amounts.to_vec(),
+        equilibrium_seed: None,
     })
 }
 
