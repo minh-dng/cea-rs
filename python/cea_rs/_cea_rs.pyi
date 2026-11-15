@@ -52,7 +52,10 @@ class State:
     def transport(self) -> Transport: ...
 
 class Transport:
+    """NASA gas transport; Cp values use gas species only."""
     viscosity_pa_s: float
+    cp_frozen_j_kg_k: float
+    cp_equilibrium_j_kg_k: float
     conductivity_frozen_w_m_k: float
     conductivity_equilibrium_w_m_k: float
     prandtl_frozen: float
@@ -69,6 +72,8 @@ class Station:
     velocity_m_s: float
     mach: float
     area_ratio: float | None
+    transport: Transport | None
+    """Set at every station when rocket() is called with transport=True."""
 
 class RocketResult:
     stations: list[Station]

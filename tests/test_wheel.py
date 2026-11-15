@@ -31,9 +31,14 @@ class InstalledWheelTests(unittest.TestCase):
             cea_rs.Solver(["H2"], only=[])
         with self.assertRaises(NotImplementedError):
             solver.solve("shock", 3000, 1e6, [1, 8])
-        for options in ({"iac": False}, {"transport": True}):
-            with self.assertRaises(NotImplementedError):
-                solver.rocket([1, 6], [298.15] * 2, 3e6, 10, **options)
+        with self.assertRaises(NotImplementedError):
+            solver.rocket([1, 6], [298.15] * 2, 3e6, 10, iac=False)
+        for transport in (False, True):
+            rocket = solver.rocket(
+                [1, 6], [298.15] * 2, 3e6, 10, transport=transport
+            )
+            for station in rocket.stations:
+                self.assertEqual(station.transport is not None, transport)
         impossible = cea_rs.Solver(["H2", "O2"], only=["H2O"])
         with self.assertRaises(cea_rs.ConvergenceError):
             impossible.solve("TP", 3000, 1e5, [1, 1])
