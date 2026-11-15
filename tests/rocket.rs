@@ -557,3 +557,43 @@ fn rp1311_example_13_continues_through_beo_coexistence() {
         }
     }
 }
+
+#[test]
+fn frozen_stations_keep_the_reference_composition_and_fail_on_pressure_underflow() {
+    let cold = RocketOptions {
+        tc: Some(300.0),
+        n_frz: 1,
+        ..RocketOptions::default()
+    };
+    let r = model(&["N2", "O2"], None)
+        .rocket_stations(&[1.0, 8.0], &[300.0, 300.0], 1e5, &cold)
+        .unwrap();
+    // Species the chamber reports at zero stay in every frozen station.
+    assert!(r.chamber.state.mole_fractions.values().any(|&x| x == 0.0));
+    for st in &r.stations {
+        assert!(
+            st.state
+                .mole_fractions
+                .keys()
+                .eq(r.chamber.state.mole_fractions.keys())
+        );
+        assert!(
+            st.state
+                .mass_fractions
+                .keys()
+                .eq(r.chamber.state.mass_fractions.keys())
+        );
+    }
+
+    // An exit pressure that underflows to zero is an error, not an early stop.
+    let underflow = RocketOptions {
+        tc: Some(1000.0),
+        n_frz: 1,
+        supar: &[f64::MAX],
+        ..RocketOptions::default()
+    };
+    assert!(matches!(
+        model(&["Ar"], None).rocket_stations(&[1.0], &[300.0], 1e5, &underflow),
+        Err(Error::Convergence(_))
+    ));
+}

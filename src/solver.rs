@@ -55,12 +55,8 @@ impl State {
 /// Ideal-gas mixture with fixed species amounts (mol/kg) at `t` and `p`.
 /// Frozen Cp is reported as both Cp values; `element_residual` is zero, so a
 /// caller freezing an earlier state carries that state's residual over.
+/// A non-physical `t` or `p` fails as a convergence error.
 pub(crate) fn frozen_state(amounts: &[(f64, Species)], t: f64, p: f64) -> Result<State> {
-    if !t.is_finite() || t <= 0.0 || !p.is_finite() || p <= 0.0 {
-        return Err(Error::Domain(
-            "Frozen temperature/pressure outside the thermodynamic domain".into(),
-        ));
-    }
     let total: f64 = amounts.iter().map(|(n, _)| n).sum();
     let ng: f64 = amounts
         .iter()
@@ -73,6 +69,9 @@ pub(crate) fn frozen_state(amounts: &[(f64, Species)], t: f64, p: f64) -> Result
     let mut x = BTreeMap::new();
     let mut y = BTreeMap::new();
     for &(n, sp) in amounts {
+        // Absent species keep a zero entry, as in the state they were frozen from.
+        x.insert(sp.data().symbol().into(), n / total);
+        y.insert(sp.data().symbol().into(), n * sp.data().mw() / mass);
         if n <= 0.0 {
             continue;
         }
@@ -92,8 +91,6 @@ pub(crate) fn frozen_state(amounts: &[(f64, Species)], t: f64, p: f64) -> Result
             0.0
         };
         s += n * (d.s_over_r(t) - mixing) * R;
-        x.insert(d.symbol().into(), n / total);
-        y.insert(d.symbol().into(), n * d.mw() / mass);
     }
     let cv = cp - ng * R;
     if !h.is_finite() || !s.is_finite() || !cv.is_finite() || cv <= 0.0 || ng <= 0.0 {

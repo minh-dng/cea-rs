@@ -210,6 +210,15 @@ impl Solver {
                 amounts.push((w / total / r.molecular_weight, sp));
             }
         }
+        if !temperature_k.is_finite()
+            || temperature_k <= 0.0
+            || !pressure_pa.is_finite()
+            || pressure_pa <= 0.0
+        {
+            return Err(Error::Domain(
+                "Shock temperature/pressure outside the thermodynamic domain".into(),
+            ));
+        }
         let initial = frozen_state(&amounts, temperature_k, pressure_pa)?;
         let u1 = match speed {
             ShockSpeed::Velocity(u) => u,
