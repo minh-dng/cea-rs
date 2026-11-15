@@ -66,13 +66,13 @@ case fails; its known failures have not been suppressed.
 | 8, IAC pressure/subsonic/supersonic stations | Pass | 2.25104e-5 |
 | 9, FAC ac_at=1.58 | Pass | 2.20796e-5 |
 | 10, FAC mdot=1333.9 kg/(s m²) | Pass | 2.44668e-5 |
-| 11, original named Li(cr) input | Blocked by reactant data | — |
+| 11, named Li(cr) input | Pass | 9.42705e-6 |
 | 11, explicit identical Li reference | Pass | 9.42702e-6 |
 | 12, equilibrium | Pass | 4.60226e-5 |
 | 12, frozen at throat | Pass | 1.52142e-5 |
-| 13, BeO condensed phases | Blocked by equilibrium SP convergence | — |
+| 13, BeO condensed phases, trace=1e-10 | Pass | 1.89622e-6 |
 
-Eighteen comparison cases, 134 stations, pass. These include freeze points 1,
+Twenty of the 25 comparison cases pass. These include freeze points 1,
 2, 3 and 5, FAC freeze points 4 and 5, omitted/reordered frozen schedule points,
 assigned hc/tc/tc_est, near-stagnation pressure exits, subar during chamber
 freezing, and gas/condensed fit-limit partial stops. The existing independent
@@ -82,20 +82,6 @@ its metadata and summary are retained in
 
 Every failed or unverified case is listed here:
 
-- **11, named reactant:** `Reactant::named("Li(cr)")` fails because the bundled
-  generator omitted the NASA record's reversed 300..298.15 K first interval.
-  The reference-only replacement uses formula Li=1, M=6.941 kg/kmol, H=0 J/mol
-  at 298.15 K, taken from that record. This verifies the rocket calculation,
-  but does not fix the named-reactant API. Inputs are Li/F2 weights
-  [6.941, 0.5556*37.9968064], temperatures [298.15, 85.02] K, pc=1000 psia,
-  pi_p=[68.0457], subar=[10], supar=[10,20,100], ions enabled.
-- **13:** N2H4(L)/Be(a)/H2O2(L), weights [0.536,0.134,0.33], all at 298.15 K,
-  pc=20684271.879505716 Pa, insert BeO(L). The HP chamber succeeds at
-  3002.5400580041 K, H=-979108.2335090417 J/kg and S=13709.996497296557 J/(kg K).
-  A standalone public SP solve at the first throat estimate,
-  P=11874592.735069104 Pa (pc/p=1.7418931613897868), fails after 21 core
-  iterations. SP also fails at pc/1.8, pc/2 and pc/3, while pc/10, pc/30 and
-  pc/300 converge. No equilibrium-core files were changed.
 - **fac-fr-1:** example 9 inputs, supar=[5,25,50], n_frz=1. NASA computes the
   combustor with the equilibrium throat, then replaces the throat with a
   frozen throat without updating chamber closure. Its combustor/throat mass
