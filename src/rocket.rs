@@ -3,8 +3,7 @@
 //! Apache-2.0 derived work, NASA CEA commit 2f79a647. Public quantities use SI.
 use crate::{
     Error, R, Result,
-    solver::{Mode, Solver, State},
-    thermo::check_species_temperature,
+    solver::{Mode, Solver, State, frozen_state},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,65 +108,18 @@ fn frozen_bounds(reference: &State) -> (f64, f64) {
     (low.max(0.8 * gas_min), high)
 }
 
-fn frozen_state(reference: &State, t: f64, p: f64) -> Result<State> {
-    let mut out = reference.clone();
-    let ng: f64 = reference
-        .amounts
-        .iter()
-        .filter(|(_, s)| s.data().phase() == 0)
-        .map(|(n, _)| n)
-        .sum();
-    out.trace_extrapolated_species.clear();
-    out.extrapolated_species.clear();
-    let total: f64 = reference.amounts.iter().map(|(n, _)| n).sum();
-    let (mut h, mut s, mut cp) = (0.0, 0.0, 0.0);
-    for &(n, sp) in &reference.amounts {
-        if n == 0.0 {
-            continue;
-        }
-        if check_species_temperature(sp, t).is_err() {
-            out.extrapolated_species.push(sp.data().symbol().into());
-            if n / total <= 1e-11 {
-                out.trace_extrapolated_species
-                    .push(sp.data().symbol().into());
-            }
-        }
-        let d = sp.data();
-        h += n * d.h_over_r(t) * R;
-        cp += n * d.cp_over_r(t) * R;
-        let mixing = if d.phase() == 0 {
-            (n / ng * p / 1e5).ln()
-        } else {
-            0.0
-        };
-        s += n * (d.s_over_r(t) - mixing) * R;
-    }
-    let cv = cp - ng * R;
-    if !h.is_finite() || !s.is_finite() || !cv.is_finite() || cv <= 0.0 || ng <= 0.0 {
-        return Err(Error::Convergence("Nonphysical frozen state".into()));
-    }
-    out.temperature_k = t;
-    out.pressure_pa = p;
-    out.enthalpy_j_kg = h;
-    out.entropy_j_kg_k = s;
-    out.energy_j_kg = h - ng * R * t;
-    out.cp_frozen_j_kg_k = cp;
-    out.cp_equilibrium_j_kg_k = cp;
-    out.gamma_s = cp / cv;
-    out.density_kg_m3 = p / (ng * R * t);
-    out.molecular_weight_kg_kmol = 1.0 / ng;
-    out.iterations = 0;
-    out.constraint_residual = 0.0;
-    out.equilibrium = false;
-    out.equilibrium_seed = None;
-    Ok(out)
+/// Reference composition frozen at `t` and `p`; its element balance carries over.
+fn freeze(reference: &State, t: f64, p: f64) -> Result<State> {
+    let mut st = frozen_state(&reference.amounts, t, p)?;
+    st.element_residual = reference.element_residual;
+    Ok(st)
 }
 
 fn frozen_expansion(reference: &State, p: f64) -> Result<State> {
     let (min_t, max_t) = frozen_bounds(reference);
-    if frozen_state(reference, min_t, p)?.entropy_j_kg_k > reference.entropy_j_kg_k
+    if freeze(reference, min_t, p)?.entropy_j_kg_k > reference.entropy_j_kg_k
         || (max_t.is_finite()
-            && frozen_state(reference, max_t, p)?.entropy_j_kg_k < reference.entropy_j_kg_k)
+            && freeze(reference, max_t, p)?.entropy_j_kg_k < reference.entropy_j_kg_k)
     {
         return Err(Error::Domain(format!(
             "Frozen calculations stopped: entropy requires a temperature outside {min_t}..{max_t} K"
@@ -177,7 +129,7 @@ fn frozen_expansion(reference: &State, p: f64) -> Result<State> {
         * (p / reference.pressure_pa).powf((reference.gamma_s - 1.0) / reference.gamma_s);
     t = t.clamp(min_t, max_t);
     for _ in 0..30 {
-        let mut st = frozen_state(reference, t, p)?;
+        let mut st = freeze(reference, t, p)?;
         let ds = reference.entropy_j_kg_k - st.entropy_j_kg_k;
         if ds.abs() / reference.entropy_j_kg_k.abs().max(1.0) < 1e-11 {
             if t < min_t || t > max_t {
@@ -441,7 +393,7 @@ impl Solver {
         let infinity;
         if o.iac {
             if o.n_frz == 1 {
-                injector = frozen_state(&injector, injector.temperature_k, pc)?;
+                injector = freeze(&injector, injector.temperature_k, pc)?;
             }
             infinity = injector.clone();
             let mut nozzle = Nozzle {
@@ -461,7 +413,7 @@ impl Solver {
             let mut closed = None;
             for _ in 0..100 {
                 let inf = if o.n_frz == 1 {
-                    frozen_state(&injector, injector.temperature_k, pinf)?
+                    freeze(&injector, injector.temperature_k, pinf)?
                 } else {
                     chamber_at(pinf)?
                 };

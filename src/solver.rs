@@ -52,6 +52,77 @@ impl State {
     }
 }
 
+/// Ideal-gas mixture with fixed species amounts (mol/kg) at `t` and `p`.
+/// Frozen Cp is reported as both Cp values; `element_residual` is zero, so a
+/// caller freezing an earlier state carries that state's residual over.
+pub(crate) fn frozen_state(amounts: &[(f64, Species)], t: f64, p: f64) -> Result<State> {
+    if !t.is_finite() || t <= 0.0 || !p.is_finite() || p <= 0.0 {
+        return Err(Error::Domain(
+            "Frozen temperature/pressure outside the thermodynamic domain".into(),
+        ));
+    }
+    let total: f64 = amounts.iter().map(|(n, _)| n).sum();
+    let ng: f64 = amounts
+        .iter()
+        .filter(|(_, sp)| sp.data().phase() == 0)
+        .map(|(n, _)| n)
+        .sum();
+    let mass: f64 = amounts.iter().map(|(n, sp)| n * sp.data().mw()).sum();
+    let (mut h, mut s, mut cp) = (0.0, 0.0, 0.0);
+    let (mut trace, mut extrapolated) = (vec![], vec![]);
+    let mut x = BTreeMap::new();
+    let mut y = BTreeMap::new();
+    for &(n, sp) in amounts {
+        if n <= 0.0 {
+            continue;
+        }
+        // Same rule as Solver::solve: NASA extrapolates gas fits; report it.
+        if check_species_temperature(sp, t).is_err() {
+            extrapolated.push(sp.data().symbol().into());
+            if n / total <= 1e-11 {
+                trace.push(sp.data().symbol().into());
+            }
+        }
+        let d = sp.data();
+        h += n * d.h_over_r(t) * R;
+        cp += n * d.cp_over_r(t) * R;
+        let mixing = if d.phase() == 0 {
+            (n / ng * p / 1e5).ln()
+        } else {
+            0.0
+        };
+        s += n * (d.s_over_r(t) - mixing) * R;
+        x.insert(d.symbol().into(), n / total);
+        y.insert(d.symbol().into(), n * d.mw() / mass);
+    }
+    let cv = cp - ng * R;
+    if !h.is_finite() || !s.is_finite() || !cv.is_finite() || cv <= 0.0 || ng <= 0.0 {
+        return Err(Error::Convergence("Nonphysical frozen state".into()));
+    }
+    Ok(State {
+        temperature_k: t,
+        pressure_pa: p,
+        density_kg_m3: p / (ng * R * t),
+        enthalpy_j_kg: h,
+        energy_j_kg: h - ng * R * t,
+        entropy_j_kg_k: s,
+        cp_equilibrium_j_kg_k: cp,
+        cp_frozen_j_kg_k: cp,
+        gamma_s: cp / cv,
+        molecular_weight_kg_kmol: 1.0 / ng,
+        iterations: 0,
+        equilibrium: false,
+        element_residual: 0.0,
+        constraint_residual: 0.0,
+        mole_fractions: x,
+        trace_extrapolated_species: trace,
+        extrapolated_species: extrapolated,
+        mass_fractions: y,
+        amounts: amounts.to_vec(),
+        equilibrium_seed: None,
+    })
+}
+
 #[derive(Clone)]
 pub struct Solver {
     pub reactants: Vec<Reactant>,

@@ -4,10 +4,9 @@
 //! at stations 1/2 use the incident frame, and station 5 uses the reflected frame.
 use crate::{
     Error, R, Result,
-    solver::{Mode, Solver, State},
-    thermo::check_species_temperature,
+    solver::{Mode, Solver, State, frozen_state},
 };
-use std::{collections::BTreeMap, str::FromStr};
+use std::str::FromStr;
 use thermo_species::Species;
 
 /// Specify exactly one incident speed or Mach number.
@@ -53,74 +52,6 @@ pub struct ShockResult {
     pub rho5_rho2: Option<f64>,
     /// Upstream gas speed in the reflected-shock frame.
     pub u5_plus_v2_m_s: Option<f64>,
-}
-
-fn fixed_state(amounts: &[(f64, Species)], t: f64, p: f64) -> Result<State> {
-    if !t.is_finite() || t <= 0.0 || !p.is_finite() || p <= 0.0 {
-        return Err(Error::Domain(
-            "Shock temperature/pressure outside the thermodynamic domain".into(),
-        ));
-    }
-    let total: f64 = amounts.iter().map(|(n, _)| n).sum();
-    let ng: f64 = amounts
-        .iter()
-        .filter(|(_, sp)| sp.data().phase() == 0)
-        .map(|(n, _)| n)
-        .sum();
-    let mass: f64 = amounts.iter().map(|(n, sp)| n * sp.data().mw()).sum();
-    let (mut h, mut s, mut cp) = (0.0, 0.0, 0.0);
-    let (mut trace, mut extrapolated) = (vec![], vec![]);
-    let mut x = BTreeMap::new();
-    let mut y = BTreeMap::new();
-    for &(n, sp) in amounts {
-        if n <= 0.0 {
-            continue;
-        }
-        // Same rule as Solver::solve: NASA extrapolates gas fits; report it.
-        if check_species_temperature(sp, t).is_err() {
-            extrapolated.push(sp.data().symbol().into());
-            if n / total <= 1e-11 {
-                trace.push(sp.data().symbol().into());
-            }
-        }
-        let d = sp.data();
-        h += n * d.h_over_r(t) * R;
-        cp += n * d.cp_over_r(t) * R;
-        let mixing = if d.phase() == 0 {
-            (n / ng * p / 1e5).ln()
-        } else {
-            0.0
-        };
-        s += n * (d.s_over_r(t) - mixing) * R;
-        x.insert(d.symbol().into(), n / total);
-        y.insert(d.symbol().into(), n * d.mw() / mass);
-    }
-    let cv = cp - ng * R;
-    if !h.is_finite() || !s.is_finite() || !cv.is_finite() || cv <= 0.0 || ng <= 0.0 {
-        return Err(Error::Convergence("Nonphysical frozen shock state".into()));
-    }
-    Ok(State {
-        temperature_k: t,
-        pressure_pa: p,
-        density_kg_m3: p / (ng * R * t),
-        enthalpy_j_kg: h,
-        energy_j_kg: h - ng * R * t,
-        entropy_j_kg_k: s,
-        cp_equilibrium_j_kg_k: cp,
-        cp_frozen_j_kg_k: cp,
-        gamma_s: cp / cv,
-        molecular_weight_kg_kmol: 1.0 / ng,
-        iterations: 0,
-        equilibrium: false,
-        element_residual: 0.0,
-        constraint_residual: 0.0,
-        mole_fractions: x,
-        trace_extrapolated_species: trace,
-        extrapolated_species: extrapolated,
-        mass_fractions: y,
-        amounts: amounts.to_vec(),
-        equilibrium_seed: None,
-    })
 }
 
 fn station(state: State, velocity_m_s: f64) -> ShockStation {
@@ -279,7 +210,7 @@ impl Solver {
                 amounts.push((w / total / r.molecular_weight, sp));
             }
         }
-        let initial = fixed_state(&amounts, temperature_k, pressure_pa)?;
+        let initial = frozen_state(&amounts, temperature_k, pressure_pa)?;
         let u1 = match speed {
             ShockSpeed::Velocity(u) => u,
             ShockSpeed::Mach(m) => m * initial.sound_speed(),
@@ -304,7 +235,7 @@ impl Solver {
         };
         let incident = solve_jump(&initial, u1, false, p21, t21, |t, p| {
             if incident_frozen {
-                fixed_state(&amounts, t, p)
+                frozen_state(&amounts, t, p)
             } else {
                 self.solve(Mode::TP(t, p), weights)
             }
@@ -333,7 +264,9 @@ impl Solver {
             let p52 = b + (b * b - 2.0).sqrt();
             let mut down = solve_jump(up, v2, true, p52, 2.0, |t, p| {
                 if reflected_frozen {
-                    fixed_state(&up.amounts, t, p)
+                    let mut st = frozen_state(&up.amounts, t, p)?;
+                    st.element_residual = up.element_residual;
+                    Ok(st)
                 } else {
                     self.solve(Mode::TP(t, p), weights)
                 }
