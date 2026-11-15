@@ -244,7 +244,7 @@ impl Solver {
         };
         let incident = solve_jump(&initial, u1, false, p21, t21, |t, p| {
             if incident_frozen {
-                frozen_state(&amounts, t, p)
+                initial.frozen(t, p)
             } else {
                 self.solve(Mode::TP(t, p), weights)
             }
@@ -273,9 +273,7 @@ impl Solver {
             let p52 = b + (b * b - 2.0).sqrt();
             let mut down = solve_jump(up, v2, true, p52, 2.0, |t, p| {
                 if reflected_frozen {
-                    let mut st = frozen_state(&up.amounts, t, p)?;
-                    st.element_residual = up.element_residual;
-                    Ok(st)
+                    up.frozen(t, p)
                 } else {
                     self.solve(Mode::TP(t, p), weights)
                 }

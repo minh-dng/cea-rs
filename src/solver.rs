@@ -50,11 +50,18 @@ impl State {
     pub fn sound_speed(&self) -> f64 {
         (self.gamma_s * self.pressure_pa / self.density_kg_m3).sqrt()
     }
+
+    /// This composition frozen at `t` and `p`; its element balance carries over.
+    pub(crate) fn frozen(&self, t: f64, p: f64) -> Result<State> {
+        let mut st = frozen_state(&self.amounts, t, p)?;
+        st.element_residual = self.element_residual;
+        Ok(st)
+    }
 }
 
 /// Ideal-gas mixture with fixed species amounts (mol/kg) at `t` and `p`.
-/// Frozen Cp is reported as both Cp values; `element_residual` is zero, so a
-/// caller freezing an earlier state carries that state's residual over.
+/// Frozen Cp is reported as both Cp values. `element_residual` is zero, which
+/// suits amounts taken straight from a feed; use `State::frozen` otherwise.
 /// A non-physical `t` or `p` fails as a convergence error.
 pub(crate) fn frozen_state(amounts: &[(f64, Species)], t: f64, p: f64) -> Result<State> {
     let total: f64 = amounts.iter().map(|(n, _)| n).sum();

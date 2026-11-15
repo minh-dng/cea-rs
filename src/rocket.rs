@@ -3,7 +3,7 @@
 //! Apache-2.0 derived work, NASA CEA commit 2f79a647. Public quantities use SI.
 use crate::{
     Error, R, Result,
-    solver::{Mode, Solver, State, frozen_state},
+    solver::{Mode, Solver, State},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,18 +108,11 @@ fn frozen_bounds(reference: &State) -> (f64, f64) {
     (low.max(0.8 * gas_min), high)
 }
 
-/// Reference composition frozen at `t` and `p`; its element balance carries over.
-fn freeze(reference: &State, t: f64, p: f64) -> Result<State> {
-    let mut st = frozen_state(&reference.amounts, t, p)?;
-    st.element_residual = reference.element_residual;
-    Ok(st)
-}
-
 fn frozen_expansion(reference: &State, p: f64) -> Result<State> {
     let (min_t, max_t) = frozen_bounds(reference);
-    if freeze(reference, min_t, p)?.entropy_j_kg_k > reference.entropy_j_kg_k
+    if reference.frozen(min_t, p)?.entropy_j_kg_k > reference.entropy_j_kg_k
         || (max_t.is_finite()
-            && freeze(reference, max_t, p)?.entropy_j_kg_k < reference.entropy_j_kg_k)
+            && reference.frozen(max_t, p)?.entropy_j_kg_k < reference.entropy_j_kg_k)
     {
         return Err(Error::Domain(format!(
             "Frozen calculations stopped: entropy requires a temperature outside {min_t}..{max_t} K"
@@ -129,7 +122,7 @@ fn frozen_expansion(reference: &State, p: f64) -> Result<State> {
         * (p / reference.pressure_pa).powf((reference.gamma_s - 1.0) / reference.gamma_s);
     t = t.clamp(min_t, max_t);
     for _ in 0..30 {
-        let mut st = freeze(reference, t, p)?;
+        let mut st = reference.frozen(t, p)?;
         let ds = reference.entropy_j_kg_k - st.entropy_j_kg_k;
         if ds.abs() / reference.entropy_j_kg_k.abs().max(1.0) < 1e-11 {
             if t < min_t || t > max_t {
@@ -393,7 +386,7 @@ impl Solver {
         let infinity;
         if o.iac {
             if o.n_frz == 1 {
-                injector = freeze(&injector, injector.temperature_k, pc)?;
+                injector = injector.frozen(injector.temperature_k, pc)?;
             }
             infinity = injector.clone();
             let mut nozzle = Nozzle {
@@ -413,7 +406,7 @@ impl Solver {
             let mut closed = None;
             for _ in 0..100 {
                 let inf = if o.n_frz == 1 {
-                    freeze(&injector, injector.temperature_k, pinf)?
+                    injector.frozen(injector.temperature_k, pinf)?
                 } else {
                     chamber_at(pinf)?
                 };
