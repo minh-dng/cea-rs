@@ -104,7 +104,9 @@ fn check(
         let gap = mu(name) - lowest;
         if *state.mass_fractions.get(name).unwrap_or(&0.0) > 0.0 {
             present += 1;
-            assert!(gap.abs() < 1e-12, "{name}: mu gap={gap}");
+            // At a tabulated crossing both phases are equal within the
+            // rounding of that crossing temperature (about 1e-8 K).
+            assert!(gap.abs() < 1e-9, "{name}: mu gap={gap}");
         }
     }
     assert!(present > 0);
@@ -179,5 +181,16 @@ fn fixed_temperature_selects_the_lower_gibbs_phase_without_coexistence() {
                 1
             );
         }
+    }
+    // Below the lambda transition, NaCN(III) is used outside its fit and must not
+    // replace NaCN(II), although its extrapolated Gibbs energy is lower.
+    let solver = model("NaCN");
+    for t in [250.0, 285.0] {
+        let state = solver.solve(Mode::TP(t, 1e5), &[1.0, 1.0]).unwrap();
+        assert!(state.mass_fractions["NaCN(II)"] > 0.4);
+        assert!(
+            !state.mass_fractions.contains_key("NaCN(III)")
+                || state.mass_fractions["NaCN(III)"] == 0.0
+        );
     }
 }

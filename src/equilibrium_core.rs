@@ -326,14 +326,15 @@ fn check_condensed_phases(
             let Some(j) = cond_index(sp) else { continue };
             let (t_low_j, t_high_j) = species[ng + j].data().valid_temperature_range();
             if const_t {
-                // Fit endpoints approximate the crossing; compare Gibbs energies
-                // in the same 50 K neighborhood used for variable-T phase changes.
+                // Compare Gibbs energies only inside the sibling's own fit:
+                // extrapolated fits can claim a false lower Gibbs energy, for
+                // example NaCN(III) below its 288.5 K lambda transition.
                 let gibbs = |sp: Species| {
                     sp.data().h_over_r(*temperature_k) / *temperature_k
                         - sp.data().s_over_r(*temperature_k)
                 };
-                if (t_low_j <= t_high_j && *temperature_k < t_low_j - DT_PHASE)
-                    || *temperature_k > t_high_j + DT_PHASE
+                if (t_low_j <= t_high_j && *temperature_k < t_low_j)
+                    || *temperature_k > t_high_j
                     || gibbs(sp) >= gibbs(species[sc_i])
                 {
                     continue;
