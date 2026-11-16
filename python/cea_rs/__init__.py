@@ -329,9 +329,11 @@ def capabilities() -> dict[str, object]:
         "transport": ["viscosity", "conductivity", "Prandtl number", "rocket stations"],
         "derivatives": ["analytic", "finite difference"],
         "input_decks": ["problem", "reactants", "only", "omit", "insert", "output", "end"],
+        "nasa_python_api": "cea_rs.nasa: supported NASA cea 3.3.4 classes and units; see docs/nasa-python-api.md",
         "unsupported": [
             "frozen detonation",
-            "NASA Python API compatibility",
+            "NASA smooth truncation and arbitrary initial guesses",
+            "custom NASA binary databases and MATLAB wrappers",
         ],
         "full_cea_parity": False,
         "production_default": "configured by consumer",

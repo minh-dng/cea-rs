@@ -6,6 +6,7 @@ build-backend = "maturin"
 name = "cea-keplr-rs"
 version = "0.1.0a3"
 requires-python = ">=3.12"
+dependencies = ["numpy>=1.26"]
 description = "Experimental Rust CEA thermochemistry; not a drop-in NASA CEA replacement"
 readme = "README.md"
 license = "Apache-2.0"

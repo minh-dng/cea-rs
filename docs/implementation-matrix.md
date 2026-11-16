@@ -1,7 +1,8 @@
 # Implemented scope and remaining work
 
 Version 0.1.0a3 is an experimental, separately named distribution. Full NASA CEA
-parity, Python API compatibility and consumer replacement are not established.
+parity and consumer replacement are not established. The supported NASA Python
+API subset is described in [the member inventory](nasa-python-api.md).
 
 | Capability | Rust status | Evidence or remaining gate |
 |---|---|---|
@@ -19,7 +20,7 @@ parity, Python API compatibility and consumer replacement are not established.
 | Arbitrary exit pressures/subsonic stations | Implemented | Any number of pi_p/subar/supar stations; native pressure and area Newton iterations; large-subar native stopping defect recorded in [rocket evidence](rocket-parity/README.md) |
 | NASA input decks | Implemented for sample keywords | Rust typed parser, case runner and Python `run_deck`; arbitrary dataset order, mixed units, custom formulas/enthalpies, mixture and station schedules; unknown keywords fail by name. All 14 decks run; strict comparison results below |
 | Input-deck CLI, C/Fortran/Excel/MATLAB bindings | Unsupported | Library/Python deck entry points are available; no CLI, report formatter or ABI compatibility layer |
-| NASA Python classes and options | Partial utilities | Solver has omit and trace, O/F, chemical r, mass phi, mole/mass conversions and valences; Reactant has NASA nominal temperature bounds. Four propellant conversion goldens pass at 1e-12; native Python rounds non-binary scalar ratios through float32. No Mixture/EqSolution/RocketSolution mutation API or smoothing controls |
+| NASA Python classes and options | Supported subset in `cea_rs.nasa` | Mixture, Reactant, mutable equilibrium/rocket/shock/detonation solutions and solvers, transport, sensitivities, root eq_solve, constants and units. Preserves NASA units, product order, float32 scalar boundaries and NumPy shapes. Smoothing, arbitrary initial guesses, binary databases, frozen-reactant rockets, untruncated frozen logs and MATLAB wrappers raise named NotImplementedError. [Complete member status and bounded differences](nasa-python-api.md). No solver numerical changes |
 | Analytic sensitivities | Converged hard truncation | Solver.derivatives returns SI derivatives of T, gas n, species amounts, H/U/G/S by both state inputs and raw weights. TP/HP/SP native goldens for H2/O2 and CH4/O2/N2 at 2500 K, 1 MPa; worst relative difference 6.98e-7 (tolerance 1e-4). All six gas modes cross-checked; finite differences reject changed product pools/phases. Core cutoff and original gas logs are retained privately on State, including the residual cutoff before the trace-reporting pass. AP/Al at 300 K, 1 bar takes singular recovery to cutoff 80; all bulk sensitivities agree with central differences at 1e-5 relative and species at 1e-4 plus 1e-12 kmol/kg per input unit for trace noise. Analytic ions, element-reduced systems and UV/SV with condensates return errors; smoothing is unsupported |
 | Ambient/separated nozzle thrust | Ideal ambient-matched performance | Per-station Cf, Isp and Isp_vacuum in SI; no assigned ambient pressure, separation or consumer thrust-efficiency model |
 | Extra state properties | Implemented | Gibbs energy, frozen/equilibrium Cv, specific volume and NASA M/MW; native equilibrium and graphite goldens at 1e-4 relative |
@@ -65,9 +66,10 @@ and rejects any new discrepancy. Green tests do not imply full deck parity.
 
 ## Units and failures
 
-All solver inputs and state outputs use SI: K, Pa, kg/m³, J/kg, J/(kg K), and
+The Rust and original `cea_rs` APIs use SI: K, Pa, kg/m³, J/kg, J/(kg K), and
 m³/kg. Molar mass is numerically g/mol = kg/kmol. Reactant `thermo` uses J/mol
 and J/(mol K); custom enthalpy is J/mol at its declared reference temperature.
+The separate `cea_rs.nasa` adapter uses NASA's bar/kJ conventions instead.
 `R` is NASA CEA's 8314.51 J/(kmol K), deliberately retained for comparison.
 Rocket velocities and c-star are m/s. Divide vacuum velocity by 9.80665 for
 specific impulse in seconds. Chamber area ratio is None for an IAC model.

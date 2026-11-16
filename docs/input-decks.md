@@ -83,7 +83,8 @@ Frozen equilibrium state problems are also unsupported. Application solvers
 retain their existing validation and reactant restrictions; for example,
 custom reference enthalpies do not supply heat capacities for shocks.
 Frozen rocket fit-limit stops retain `complete` and `stop_reason` from the
-public API. There is no NASA Python compatibility layer or optional CLI.
+public API. The separate [NASA Python adapter](nasa-python-api.md) exposes
+NASA calling conventions; there is no optional CLI.
 No solver numerical code was changed.
 
 ## Reference policy

@@ -28,6 +28,30 @@ fn run_deck(py: Python<'_>, text: &str) -> PyResult<Vec<DeckResult>> {
     Ok(py.detach(|| crate::deck::run_deck(text))?)
 }
 
+type NasaSpecies = (String, f64, i32, BTreeMap<String, f64>);
+
+/// Read-only database facts in NASA's compiled gas-then-condensed name order.
+#[pyfunction]
+fn _nasa_species() -> Vec<NasaSpecies> {
+    let mut species = thermo_species::Species::all().to_vec();
+    species.sort_by_key(|sp| (sp.data().phase() != 0, sp.data().symbol()));
+    species
+        .iter()
+        .map(|sp| {
+            let d = sp.data();
+            (
+                d.symbol().into(),
+                d.mw(),
+                d.phase() as i32,
+                d.constituents()
+                    .iter()
+                    .map(|(n, e)| (format!("{e:?}"), *n))
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
 #[pymethods]
 impl DeckResult {
     #[getter]
@@ -71,6 +95,23 @@ impl DeckResult {
 }
 #[pymethods]
 impl Reactant {
+    #[getter]
+    fn _nasa_formula(&self) -> BTreeMap<String, f64> {
+        self.formula
+            .iter()
+            .map(|(n, e)| (format!("{e:?}"), *n))
+            .collect()
+    }
+    #[getter]
+    fn _nasa_phase(&self) -> i32 {
+        include_str!("../vendor/thermo-species/data/thermo.inp")
+            .lines()
+            .skip_while(|line| line.get(..18).is_none_or(|s| s.trim() != self.name))
+            .nth(1)
+            .and_then(|line| line.get(50..52))
+            .and_then(|phase| phase.trim().parse().ok())
+            .unwrap_or(0)
+    }
     #[pyo3(name = "get_valid_temperature_range")]
     fn py_valid_temperature_range(&self) -> (f64, f64) {
         self.get_valid_temperature_range()
@@ -419,6 +460,24 @@ impl PySolver {
 }
 #[pymethods]
 impl State {
+    #[getter]
+    fn _nasa_nj(&self) -> BTreeMap<String, f64> {
+        self.amounts
+            .iter()
+            .map(|(n, sp)| (sp.data().symbol().into(), *n))
+            .collect()
+    }
+    #[getter]
+    fn _nasa_ln_nj(&self) -> Option<BTreeMap<String, f64>> {
+        self.equilibrium_seed.as_ref().map(|seed| {
+            self.amounts
+                .iter()
+                .filter(|(_, sp)| sp.data().phase() == 0)
+                .zip(&seed.ln_nj)
+                .map(|((_, sp), ln_n)| (sp.data().symbol().into(), *ln_n))
+                .collect()
+        })
+    }
     #[getter(gibbs_energy_j_kg)]
     fn gibbs_energy_py(&self) -> f64 {
         crate::mixture::gibbs_energy(self)
@@ -615,6 +674,7 @@ impl RocketResult {
 }
 #[pymodule]
 fn _cea_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(_nasa_species, m)?)?;
     m.add_class::<DeckResult>()?;
     m.add_function(wrap_pyfunction!(run_deck, m)?)?;
     m.add_class::<crate::derivatives::EqDerivatives>()?;
