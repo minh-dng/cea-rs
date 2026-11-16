@@ -207,3 +207,31 @@ fn nacn_at_300_k_selects_the_phase_inside_its_fit() {
         assert!(!state.mass_fractions.contains_key("NaCN(L)"));
     }
 }
+
+#[test]
+fn seeded_nacn_changes_phase_at_fixed_temperature() {
+    let solver = Solver::new(
+        model("NaCN").reactants,
+        true,
+        false,
+        None,
+        vec!["NaCN(II)".into()],
+    )
+    .unwrap();
+    for (t, phases, expected) in [
+        (300.0, vec!["NaCN(III)"], "NaCN(III)"),
+        (835.0, vec!["NaCN(III)", "NaCN(L)"], "NaCN(L)"),
+    ] {
+        let state = solver.solve(Mode::TP(t, 1e5), &[1.0, 1.0]).unwrap();
+        assert_eq!(state.temperature_k, t);
+        check(&state, &solver, &[1.0, 1.0], "NaCN", &phases);
+        assert!(state.mass_fractions[expected] > 0.49);
+        let (low, high) = expected
+            .parse::<Species>()
+            .unwrap()
+            .data()
+            .valid_temperature_range();
+        assert!((low..=high).contains(&state.temperature_k));
+        assert!(!state.mass_fractions.contains_key("NaCN(II)"));
+    }
+}

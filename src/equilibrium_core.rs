@@ -269,6 +269,12 @@ macro_rules! cea_debug {
     };
 }
 
+fn condensed_phase_allowed(sp: Species, t: f64) -> bool {
+    let (low, high) = sp.data().valid_temperature_range();
+    // NASA extends 200 K lower bounds; reversed intervals have no usable lower bound.
+    (t >= low || low == 200.0 || low > high) && t <= high
+}
+
 // F.4 (`check_condensed_phases`): phase-validity and phase-transition logic
 // for condensed species with sibling phases (H2O(cr) vs H2O(L), Al2O3(a) vs
 // Al2O3(L), ...). Sibling discovery uses Species::phases() (the build-time
@@ -287,6 +293,7 @@ fn check_condensed_phases(
     species: &[Species],
     ng: usize,
     const_t: bool,
+    recover_fixed_t: bool,
     temperature_k: &mut f64,
     nj_c: &mut [f64],
     is_active: &mut [bool],
@@ -334,10 +341,15 @@ fn check_condensed_phases(
                     sp.data().h_over_r(*temperature_k) / *temperature_k
                         - sp.data().s_over_r(*temperature_k)
                 };
-                if (t_low_j <= t_high_j && *temperature_k < t_low_j)
-                    || *temperature_k > t_high_j
-                    || gibbs(sp) >= gibbs(species[sc_i])
-                {
+                let candidate_allowed = if recover_fixed_t {
+                    condensed_phase_allowed(sp, *temperature_k)
+                } else {
+                    (t_low_j > t_high_j || *temperature_k >= t_low_j) && *temperature_k <= t_high_j
+                };
+                // An out-of-range incumbent cannot veto its valid replacement on the retry.
+                let compare_gibbs =
+                    !recover_fixed_t || condensed_phase_allowed(species[sc_i], *temperature_k);
+                if !candidate_allowed || (compare_gibbs && gibbs(sp) >= gibbs(species[sc_i])) {
                     continue;
                 }
             } else if *temperature_k > t_high_j {
@@ -746,7 +758,8 @@ fn solve_equilibrium(
     let mut element_excluded = vec![false; ne];
 
     // NASA reuses the previous station's logs, amounts and phase order, but resets Newton history.
-    if let Some(start) = start.filter(|start| start.species == species) {
+    let carried = start.filter(|start| start.species == species);
+    if let Some(start) = carried {
         if !const_t {
             temperature_k = start.temperature_k;
         }
@@ -760,22 +773,32 @@ fn solve_equilibrium(
         j_liq = start.j_liq;
         xsize = start.xsize;
         esize = start.esize;
-        // Check carried phases before building the first matrix, as EqSolver_solve does.
-        for _ in 0..=nc {
-            if !check_condensed_phases(
-                &species,
-                ng,
-                const_t,
-                &mut temperature_k,
-                &mut nj_c,
-                &mut is_active,
-                &mut active_ranked,
-                &mut j_switch,
-                &mut j_sol,
-                &mut j_liq,
-            ) {
-                break;
-            }
+    }
+
+    // Check carried phases, or invalid insert seeds on the fixed-T retry, before assembly.
+    for _ in 0..=nc {
+        if carried.is_none()
+            && (!recover_fixed_t
+                || !active_ranked
+                    .iter()
+                    .any(|&c| !condensed_phase_allowed(species[ng + c], temperature_k)))
+        {
+            break;
+        }
+        if !check_condensed_phases(
+            &species,
+            ng,
+            const_t,
+            recover_fixed_t,
+            &mut temperature_k,
+            &mut nj_c,
+            &mut is_active,
+            &mut active_ranked,
+            &mut j_switch,
+            &mut j_sol,
+            &mut j_liq,
+        ) {
+            break;
         }
     }
 
@@ -1614,6 +1637,7 @@ fn solve_equilibrium(
                 &species,
                 ng,
                 const_t,
+                recover_fixed_t,
                 &mut temperature_k,
                 &mut nj_c,
                 &mut is_active,
@@ -1636,11 +1660,7 @@ fn solve_equilibrium(
                     continue;
                 }
                 let sc = ng + c;
-                let (t_low, t_high) = species[sc].data().valid_temperature_range();
-                // An inverted interval has no usable lower bound; retain its upper phase limit.
-                let allowed = (temperature_k >= t_low || t_low == 200.0 || t_low > t_high)
-                    && temperature_k <= t_high;
-                if !allowed {
+                if !condensed_phase_allowed(species[sc], temperature_k) {
                     continue;
                 }
                 let a_pi: f64 = (0..ne).map(|i| stoich[sc][i] * pi_prev[i]).sum();
