@@ -143,8 +143,9 @@ to that liquid, so the composition is not in phase equilibrium. Rust has
 positive ice and liquid amounts, equal Gibbs energies, and vapour pressure
 equal to both saturation pressures within 2.6e-10 relative. This satisfies
 the water phase-coexistence conditions. The polynomial Gibbs crossing is
-273.121944 K, about 0.028 K below the nominal 273.15 K fit boundary, within
-NASA's existing 50 K condensed-phase guard band. No new extrapolation rule or
+273.121944 K, about 0.028 K below the 273.15 K start of the liquid fit, so the
+liquid polynomial is extrapolated by that amount. NASA's existing rule keeps a
+condensed phase within 50 K of its fit range. No new extrapolation rule or
 real-water pressure correction was introduced.
 
 A fresh native `EqSolver(products, reactants=reactants)` SP solve with

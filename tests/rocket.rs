@@ -461,8 +461,9 @@ fn air_jet_a_high_pressure_exit_obeys_conservation_and_water_phase_equilibrium()
     assert_eq!(result.stations.len(), 3);
     let exit = &result.exit;
     let state = &exit.state;
-    assert!(state.mass_fractions["H2O(cr)"] > 0.0);
-    assert!(state.mass_fractions["H2O(L)"] > 0.0);
+    // Both phases hold a real share of the water, not a trace.
+    assert!(state.mass_fractions["H2O(cr)"] > 1e-3);
+    assert!(state.mass_fractions["H2O(L)"] > 1e-3);
     let amounts: Vec<_> = state
         .mass_fractions
         .iter()

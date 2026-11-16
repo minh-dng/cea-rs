@@ -272,14 +272,17 @@ macro_rules! cea_debug {
 // for condensed species with sibling phases (H2O(cr) vs H2O(L), Al2O3(a) vs
 // Al2O3(L), ...). Sibling discovery uses Species::phases() (the build-time
 // equivalent of CEA's trailing-suffix stripping), sorted by max fit
-// temperature ("melting point") low→high. NASA's compiled phase numbers count
-// fit intervals too, so adjacency uses the sibling order. At most ONE change
-// per call, reported by the return value so the caller restarts its epoch.
+// temperature ("melting point") low→high. At most ONE change per call,
+// reported by the return value so the caller restarts its epoch.
 //
-// One deviation from the Fortran: the melting-point coexistence path pins T
-// to the transition temperature, which only makes sense when T is a Newton
-// unknown — for const-T problems the user's T stays untouched (the doomed
-// phase then dies through F.3.1's negative-amount removal instead).
+// Two deviations from the Fortran:
+// - Adjacency uses the sibling order. NASA compares compiled phase numbers,
+//   which also count fit intervals, so it treats ice (1) and liquid water (3)
+//   as non-adjacent and cycles between them instead of letting them coexist.
+// - The melting-point coexistence path pins T to the transition temperature,
+//   which only makes sense when T is a Newton unknown — for const-T problems
+//   the user's T stays untouched (the doomed phase then dies through F.3.1's
+//   negative-amount removal instead).
 #[allow(clippy::too_many_arguments)]
 fn check_condensed_phases(
     species: &[Species],
