@@ -338,6 +338,8 @@ impl Comparison {
     fn transport(&mut self, page: &Page, col: usize, t: &Transport) {
         for (key, actual) in [
             ("viscosity", t.viscosity_pa_s),
+            ("eq.cp", t.cp_equilibrium_j_kg_k),
+            ("fr.cp", t.cp_frozen_j_kg_k),
             ("eq.conductivity", t.conductivity_equilibrium_w_m_k),
             ("fr.conductivity", t.conductivity_frozen_w_m_k),
             ("eq.prandtl", t.prandtl_equilibrium),
