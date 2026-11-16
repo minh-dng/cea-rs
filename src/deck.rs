@@ -276,7 +276,64 @@ impl Builder {
         if d.ratios.is_some() && d.reactants[0].role == Role::Name {
             return Err(invalid("Mixture ratio requires fuel and oxidant reactants"));
         }
+        for (given, allowed, keyword) in [
+            (
+                !d.temperatures_k.is_empty(),
+                matches!(
+                    d.problem,
+                    Problem::TP
+                        | Problem::TV
+                        | Problem::Rocket
+                        | Problem::Shock
+                        | Problem::Detonation
+                ),
+                "t",
+            ),
+            (
+                !d.enthalpies_j_kg.is_empty(),
+                matches!(d.problem, Problem::HP | Problem::Rocket),
+                "h/r",
+            ),
+            (!d.energies_j_kg.is_empty(), d.problem == Problem::UV, "u/r"),
+            (
+                !d.entropies_j_kg_k.is_empty(),
+                matches!(d.problem, Problem::SP | Problem::SV),
+                "s/r",
+            ),
+            (
+                !d.volumes_m3_kg.is_empty(),
+                matches!(d.problem, Problem::TV | Problem::UV | Problem::SV),
+                "v/rho",
+            ),
+            (
+                !d.shock_speeds.is_empty() || d.incident || d.reflected,
+                d.problem == Problem::Shock,
+                "u1/mach1/incd/refl",
+            ),
+            (
+                d.rocket.finite_area
+                    || d.rocket.ac_at.is_some()
+                    || d.rocket.mass_flux_kg_s_m2.is_some()
+                    || d.rocket.temperature_estimate_k.is_some()
+                    || !d.rocket.pressure_ratios.is_empty()
+                    || !d.rocket.subsonic_area_ratios.is_empty()
+                    || !d.rocket.supersonic_area_ratios.is_empty()
+                    || d.rocket.freeze_station != 1,
+                d.problem == Problem::Rocket,
+                "fac/acat/ma/tcest/pi/p/subar/supar/nfz",
+            ),
+        ] {
+            if given && !allowed {
+                return Err(invalid(format!(
+                    "Keyword {keyword} is not used by {:?}",
+                    d.problem
+                )));
+            }
+        }
         let volume = matches!(d.problem, Problem::TV | Problem::UV | Problem::SV);
+        if volume && !d.pressures_pa.is_empty() {
+            return Err(invalid("Keyword p is not used by a volume problem"));
+        }
         if (volume && d.volumes_m3_kg.is_empty()) || (!volume && d.pressures_pa.is_empty()) {
             return Err(invalid(if volume {
                 "Missing v or rho schedule"
@@ -342,6 +399,35 @@ fn parse_problem(text: &str) -> Result<Deck> {
     let mut words = Words::new(text);
     while let Some(keyword) = words.next() {
         let (key, units) = key_units(&keyword);
+        if !units.is_empty()
+            && !matches!(
+                key.as_str(),
+                "p" | "t"
+                    | "rho"
+                    | "v"
+                    | "o/f"
+                    | "f/o"
+                    | "f/a"
+                    | "%fuel"
+                    | "%f"
+                    | "phi"
+                    | "r"
+                    | "sub"
+                    | "sup"
+                    | "ma"
+                    | "mdot"
+                    | "tces"
+                    | "tcest"
+                    | "u1"
+                    | "mach"
+                    | "mach1"
+            )
+        {
+            return Err(unknown("problem", &keyword));
+        }
+        if matches!(key.as_str(), "sub" | "sup") && !matches!(units.as_str(), "" | "ae/at") {
+            return Err(unknown("area ratio unit", &units));
+        }
         let kind = match key.as_str() {
             "tp" | "pt" => Some(Problem::TP),
             "hp" | "ph" => Some(Problem::HP),
@@ -443,13 +529,25 @@ fn parse_problem(text: &str) -> Result<Deck> {
                 }
             }
             "pi/p" | "pc/p" | "pip" | "pcp" => {
-                d.rocket.pressure_ratios = words.numbers(&keyword)?
+                set_schedule(
+                    &mut d.rocket.pressure_ratios,
+                    words.numbers(&keyword)?,
+                    &keyword,
+                )?;
             }
             "subar" | "sub" | "subsonic" | "sub-ae/at" => {
-                d.rocket.subsonic_area_ratios = words.numbers(&keyword)?
+                set_schedule(
+                    &mut d.rocket.subsonic_area_ratios,
+                    words.numbers(&keyword)?,
+                    &keyword,
+                )?;
             }
             "supar" | "sup" | "supersonic" | "sup-ae/at" => {
-                d.rocket.supersonic_area_ratios = words.numbers(&keyword)?
+                set_schedule(
+                    &mut d.rocket.supersonic_area_ratios,
+                    words.numbers(&keyword)?,
+                    &keyword,
+                )?;
             }
             "acat" | "ac/at" | "ac" => d.rocket.ac_at = Some(words.scalar(&keyword)?),
             "ma" | "mdot" => {
@@ -611,6 +709,9 @@ fn parse_reactants(text: &str, needs_enthalpy: bool) -> Result<Vec<DeckReactant>
         }
         match key.as_str() {
             "moles" | "mole" | "mol" | "mole%" | "mol%" | "wt%" | "wtfrac" | "weight" | "wt" => {
+                if !matches!(units.as_str(), "" | "%") {
+                    return Err(unknown("reactant amount unit", &units));
+                }
                 let b = if key.starts_with('m') {
                     AmountBasis::Moles
                 } else {

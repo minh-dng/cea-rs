@@ -159,6 +159,9 @@ fn rejects_unknown_keywords_bad_units_and_incomplete_decks() {
         ),
         ("problem tp p=1 t=300\nreac name H2", "end"),
         ("problem tp p=1 t=nan\nreac name H2\nend", "finite"),
+        ("problem tp p=1 t=300 h/r=1\nreac name H2\nend", "h/r"),
+        ("problem tp,banana p=1 t=300\nreac name H2\nend", "banana"),
+        ("problem hp p=1\nreac name Fuel C 1 H 4\nend", "requires h"),
         (
             "problem tp p=1 t=300\nreac name H2 wt%=1 name O2 moles=1\nend",
             "mix",

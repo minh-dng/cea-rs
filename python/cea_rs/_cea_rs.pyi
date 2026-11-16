@@ -232,4 +232,3 @@ class DeckResult:
     reactant_density_kg_m3: float | None
 
 def run_deck(text: str) -> list[DeckResult]: ...
-
