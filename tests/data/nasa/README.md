@@ -13,6 +13,8 @@ See the repository's root LICENSE, NOTICE and `docs/provenance.md`.
 | `native-3.3.4/example*.out` | Unmodified NASA executable, run on the corresponding local `.inp` |
 | `native-3.3.4/sample-shock.out` | Combined sample's seventh block, with `output long` added |
 | `native-3.3.4/sample-12.out` | Combined sample's twelfth block (additional HNO2 product), with `output long` added |
+| `shock-reflected-transport.inp` | Additional regression: example 7 mixture at 1400 m/s, incident/reflected equilibrium/frozen modes and transport |
+| `native-3.3.4/shock-reflected-transport.out` | Unmodified pinned NASA executable, run on that regression deck |
 
 Original decks/reports are copied byte-for-byte, including trailing spaces,
 missing final newlines and line endings. `.gitattributes` preserves those bytes.
@@ -55,6 +57,13 @@ column is explicitly marked nonconverged by NASA; the tests exclude only that
 column and compare the other 13 shock cases. Repeat this extraction for the
 twelfth block as `sample-12.inp`; its additional HNO2 product requires its own
 report rather than using the main-interface example 12 report.
+
+Run `shock-reflected-transport.inp` through the same executable to regenerate
+its report. It adds the reflected and transport rows absent from the shipped
+shock decks. NASA prints equilibrium reflection in a separate section without
+repeating the incident state. Its frozen reflected header Cp retains the
+incident value; the separate transport Cp uses the reflected temperature.
+Both header differences are bounded explicitly in the regression test.
 
 The modern example 6 report is retained for provenance but is not an oracle:
 its `UNBURNED GAS` table contains burned properties, followed by a rounded

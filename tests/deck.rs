@@ -57,6 +57,38 @@ end
 }
 
 #[test]
+fn parses_nasa_prefixes_temperature_estimates_and_default_coefficients() {
+    for (literal, problem, options) in [
+        ("rock", Problem::Rocket, "tcesc=3000"),
+        ("rocketry", Problem::Rocket, "tcesr=3000"),
+        ("rkt", Problem::Rocket, "tcesf=3000"),
+        ("shk", Problem::Shock, "u1=1400 inciden refle"),
+        ("deton", Problem::Detonation, ""),
+    ] {
+        let decks = parse_deck(&format!(
+            "problem {literal} p=1 t=300 equilib {options}\n\
+             reacta naming Foo C H 4 O weight%=1\n\
+             outpu trans trace=1e-8 massfr calor long\nend"
+        ))
+        .unwrap();
+        let d = &decks[0];
+        assert_eq!(d.problem, problem);
+        assert!(d.equilibrium);
+        assert_eq!(
+            d.rocket.temperature_estimate_k,
+            (problem == Problem::Rocket).then_some(3000.0)
+        );
+        let mw = 12.0107 + 4.0 * 1.00794 + 15.9994;
+        assert!((d.reactants[0].reactant.molecular_weight - mw).abs() < 1e-12);
+        assert!(d.output.transport && d.output.mass_fractions && d.output.calories);
+        assert_eq!(d.output.trace, 1e-8);
+        if problem == Problem::Shock {
+            assert!(d.incident && d.reflected);
+        }
+    }
+}
+
+#[test]
 fn runs_six_modes_with_si_constraints_and_stream_enthalpy() {
     let solver = Solver::new(
         ["H2", "O2"].map(|n| Reactant::named(n).unwrap()).to_vec(),
@@ -172,6 +204,9 @@ fn rejects_unknown_keywords_bad_units_and_incomplete_decks() {
         ("problem tp p=1 t=nan\nreac name H2\nend", "finite"),
         ("problem tp p=1 t=300 h/r=1\nreac name H2\nend", "h/r"),
         ("problem tp,banana p=1 t=300\nreac name H2\nend", "banana"),
+        ("problem tv t=300 v=1\nreac name H2\nend", "volume unit"),
+        ("problem uv u/r=0 v=1\nreac name H2\nend", "volume unit"),
+        ("problem sv s/r=1 v=1\nreac name H2\nend", "volume unit"),
         ("problem hp p=1\nreac name Fuel C 1 H 4\nend", "requires h"),
         (
             "problem tp p=1 t=300\nreac name H2 wt%=1 name O2 moles=1\nend",

@@ -1,0 +1,5 @@
+! RP-1311 example 7 mixture; all four reflected modes with transport.
+problem case=reflected-transport shock p,mmhg=10 t=300 u1=1400 incd refl eql froz
+reac name H2 moles=.05 name O2 moles=.05 name Ar moles=.9
+output long transport
+end

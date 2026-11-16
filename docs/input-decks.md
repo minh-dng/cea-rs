@@ -42,7 +42,24 @@ averaging. Rust additionally retains the typed case inputs on each result.
 | `end` | Required; datasets may appear in any order; several decks may share a file; `#` and `!` comments |
 
 Keywords and units are case-insensitive; species names keep case and commas
-(`C8H18(L),n-octa`). Numeric lists accept Fortran D exponents. Unknown keywords,
+(`C8H18(L),n-octa`). Supported problem keywords follow NASA's ordered
+four-, three-, two- and one-letter prefix matching, rather than a list of
+abbreviations: `rock`, `rocketry` and `rocket` all match `ro`, `shk` matches
+`sh`, and `deton` matches `det`. Dataset names match their first four letters
+(`end` uses three); reactant roles match two. Output keywords use NASA's
+five-, four- and three-letter prefixes. Exploded formula elements without
+a following numeric coefficient default to 1, including before the next
+reactant parameter. These rules come from pinned `source/input.f90`,
+lines 331–401, 497–530, 721–750, 807–829 and 987–1002.
+
+The pinned parser accepts `tcesc`, `tcesr` and `tcesf`, but reads their
+numeric value directly as the kelvin estimate (`input.f90:335`,
+`main.f90:454`). Its unit-aware `parse_embedded` branch at `input.f90:872–877`
+is bypassed for this parameter. The port follows that behavior:
+`tcesc=3000` retains an estimate of 3000 K. Explicit delimited estimate units
+are rejected rather than applying a conversion NASA never performs.
+
+Numeric lists accept Fortran D exponents. Unknown keywords,
 unknown units, missing values and unused physical constraints return named
 errors. Mass and mole amounts, or `name` and `fuel`/`oxid`, cannot be mixed.
 Each fuel/oxidant stream is normalized independently when a ratio is supplied.
@@ -54,7 +71,9 @@ All parsed physical values and returned properties use the existing SI APIs.
 Pressure constants match pinned NASA `units.f90`: 101325 Pa/atm,
 6894.75729 Pa/psia and **133.3 Pa/mmHg**. Temperature conversions use
 273.15 K and 1.8; 1 cal = 4.184 J. `h/r`, `u/r`, `s/r` multiply by
-8314.51 on this port's kg basis. Input volume in cc/g multiplies by 1e-3;
+8314.51 on this port's kg basis. Specific-volume `v` schedules require an explicit unit,
+as in NASA's `main.f90:1938–1945`; bare `v=...` is an error in TV, UV and SV.
+Input volume in cc/g multiplies by 1e-3;
 density in g/cc multiplies by 1000. Custom formula masses use NASA atomic
 weights from the bundled neutral monatomic records. Report preferences never
 change the SI result units or generate report/plot files.
@@ -90,7 +109,7 @@ unburned enthalpy uses 1e-3 J/kg absolute tolerance (the fit gives
 -0.0005062602429 J/kg). Zero-reference enthalpy has no relative difference
 and is excluded from the reported worst relative error.
 
-Tests check every successful case and every reported rocket station,
+Tests check every successful case and every reported rocket or shock station,
 including repeated report-page prefixes. The virtual FAC infinity station
 is absent from NASA's printed tables. Known differences are allowed only
 for explicitly named cells with bounded errors; every other cell keeps
@@ -121,6 +140,7 @@ All 55 main-interface cases solve successfully. Differences are relative.
 | 14, water condensation | 8 | Pass, 2.04574e-9 | Pass, 2.99496e-7 |
 | `samples/example1.inp` | 12 | Pass, 1.61392e-9 | Same physical case as 1 |
 | `samples/rp1311_examples.inp` | 57 | 56 solve; one known failed shock. Successful cases compared; example 12 has the same two trace mismatches, worst 1.73455e-4 | Combined deck has no original standalone report |
+| `shock-reflected-transport.inp` | 4 | **Fail**, 2.06110e-2; two frozen reflected header Cp cells; all other state, composition, ratio and transport cells pass | Additional regression deck; modern report only |
 | Frozen detonation (validation input) | — | Unsupported, explicit error | Unsupported by NASA 3.3.4 |
 
 The combined deck's valid shock cases pass at 9.19966e-6. Its seventh and
@@ -143,7 +163,10 @@ recorded rather than repaired on this branch.
    OH=3.417414926408429e-5 / 3.417777936134580e-5 (1.06212e-4).
    At NASA's T/P, public Rust TP gives CO=4.901627662510234e-5 and
    OH=3.417777946875311e-5, agreeing within 6.40e-9 relative. The test checks
-   this independently. NASA's residual area error is -3.54861e-5 relative;
+   this independently and requires Rust's area ratio to be within 1e-8
+   of 75 for both main-interface and combined inputs. NASA's supersonic
+   equilibrium area tolerance is 4e-5 (`source/rocket.f90:870,920`).
+   NASA's residual area error is -3.54861e-5 relative;
    the small state difference amplifies in trace composition. The combined
    deck's additional HNO2 changes CO to 4.900914902465053e-5 (Rust) versus
    4.901765137682429e-5 (NASA), a 1.73455e-4 difference at the same exit.
@@ -155,7 +178,9 @@ recorded rather than repaired on this branch.
    but retains P2=8870.053226803845 Pa, T2=1371.901376071067 K and
    u2=703.5613575871638 m/s. Its printed T2/T1=4.656334035059522 disagrees
    with the retained T2/300=4.573004586903557. That column is not an oracle;
-   all 13 other shock cases are compared. This overlaps the existing
+   all 13 other shock cases are compared at their original report columns.
+   The test asserts the exact Rust error and keeps a failed-case slot,
+   without removing any reference values. This overlaps the existing
    `native_nonconvergence_never_returns_a_retained_incident_or_reflected_state`
    regression. Nothing stale is returned by this port.
 
@@ -179,6 +204,24 @@ recorded rather than repaired on this branch.
    Example 10's combustor area is 1.581084992772664 / 1.580904539442940.
    All pass against the modern executable. Example 12's original report
    requests frozen only; it does not validate the new equilibrium branch.
+
+5. **Frozen reflected header Cp.** The additional transport deck uses
+   example 7's H2/O2/Ar mixture, 300 K, 10 mmHg and 1400 m/s, with all four
+   incident/reflected equilibrium/frozen combinations. NASA prints stations
+   1/2 for the first and third cases, and station 5 for every case. Its
+   equilibrium-reflection sections do not repeat stations 1/2
+   (`source/main.f90:1046–1073`). Transport is printed for stations 2 and 5,
+   with only frozen transport rows for frozen shocks
+   (`main.f90:1220–1222,1358–1359,1474–1516`); no initial transport rows
+   are printed. All 187 eligible cells are checked, with only two bounded
+   exceptions: case 1 station 5 Cp is 602.9576961140284 J/(kg K) in Rust
+   versus 593.2530916177532 in NASA (1.63583e-2 relative, bound 1.64e-2);
+   case 3 is 603.5207357881964 versus 591.3327704887254
+   (2.06110e-2, bound 2.07e-2). These are physical Cp at T5 versus NASA's
+   carried incident Cp header basis, explicitly assigned in
+   `source/shock.f90:374–377`. NASA's separate frozen transport Cp uses T5
+   and agrees with the port at 1e-4. Every other newly compared cell passes
+   1e-4; no solver numerics or physical Cp fields were changed.
 
 ## Overlap with existing hand-entered tests
 

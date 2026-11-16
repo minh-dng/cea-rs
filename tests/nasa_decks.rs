@@ -41,6 +41,19 @@ fn reference(text: &str) -> Vec<Page> {
         if upper.contains("COMPOSITION FOR INCIDENT SHOCKED CONDITIONS") {
             frozen = upper.contains("FROZEN");
         }
+        if upper.starts_with("SHOCKED GAS (5)") || upper.starts_with("REFLECTED GAS (5)") {
+            // NASA prints equilibrium reflection separately, without repeating stations 1/2.
+            if pages.last().is_none_or(|p| p.rows.contains_key("5.t")) {
+                pages.push(Page {
+                    frozen: upper.contains("FROZEN"),
+                    ..Page::default()
+                });
+            }
+            active = true;
+            prefix = "5.";
+            section = "";
+            continue;
+        }
         if upper == "THERMODYNAMIC PROPERTIES"
             || upper == "UNBURNED GAS"
             || upper == "INITIAL GAS (1)"
@@ -68,9 +81,7 @@ fn reference(text: &str) -> Vec<Page> {
         }
         if upper.starts_with("SHOCKED GAS (2)") {
             prefix = "2.";
-        }
-        if upper.starts_with("REFLECTED GAS (5)") {
-            prefix = "5.";
+            section = "";
         }
         if upper == "MOLE FRACTIONS" {
             section = "x.";
@@ -102,6 +113,9 @@ fn reference(text: &str) -> Vec<Page> {
         if upper == "PERFORMANCE PARAMETERS" || upper == "DETONATION PARAMETERS" {
             section = "";
         }
+        if upper.starts_with("P2/P1") || upper.starts_with("P5/P2") {
+            section = "";
+        }
         let words: Vec<_> = line.split_whitespace().collect();
         let Some(start) = words.iter().position(|w| w.parse::<f64>().is_ok()) else {
             continue;
@@ -111,16 +125,21 @@ fn reference(text: &str) -> Vec<Page> {
         }
         let page = pages.last_mut().unwrap();
         if matches!(section, "x." | "y.") {
+            let station = if matches!(prefix, "2." | "5.") {
+                prefix
+            } else {
+                ""
+            };
             if start == 1 && words[1..].iter().all(|w| w.parse::<f64>().is_ok()) {
                 page.rows.insert(
-                    format!("{section}{}", words[0].trim_start_matches('*')),
+                    format!("{station}{section}{}", words[0].trim_start_matches('*')),
                     words[1..].iter().map(|w| w.parse().unwrap()).collect(),
                 );
             } else {
                 for pair in words.as_chunks::<2>().0 {
                     if let Ok(value) = pair[1].parse() {
                         page.rows.insert(
-                            format!("{section}{}", pair[0].trim_start_matches('*')),
+                            format!("{station}{section}{}", pair[0].trim_start_matches('*')),
                             vec![value],
                         );
                     }
@@ -166,17 +185,21 @@ fn reference(text: &str) -> Vec<Page> {
             ("u1", 1.0)
         } else if label.starts_with("U2,") {
             ("u2", 1.0)
+        } else if label.starts_with("U5,") {
+            ("u5", 1.0)
+        } else if label.starts_with("U5+V2,") {
+            ("u5_plus_v2", 1.0)
         } else if label.starts_with("V2,") {
             ("v2", 1.0)
         } else if label.starts_with("DET VEL") || label.starts_with("DET. VEL") {
             ("velocity", 1.0)
-        } else if label == "P2/P1" || label == "P/P1" {
+        } else if matches!(label.as_str(), "P2/P1" | "P5/P2" | "P/P1") {
             ("pressure_ratio", 1.0)
-        } else if label == "T2/T1" || label == "T/T1" {
+        } else if matches!(label.as_str(), "T2/T1" | "T5/T2" | "T/T1") {
             ("temperature_ratio", 1.0)
-        } else if label == "M2/M1" || label == "M/M1" {
+        } else if matches!(label.as_str(), "M2/M1" | "M5/M2" | "M/M1") {
             ("molecular_weight_ratio", 1.0)
-        } else if label == "RHO2/RHO1" || label == "RHO/RHO1" {
+        } else if matches!(label.as_str(), "RHO2/RHO1" | "RHO5/RHO2" | "RHO/RHO1") {
             ("density_ratio", 1.0)
         } else if label == "AE/AT" {
             ("area", 1.0)
@@ -286,13 +309,16 @@ impl Comparison {
         ] {
             self.row(page, &format!("{prefix}{key}"), col, actual);
         }
-        if !prefix.is_empty() && prefix != "2." {
+        if prefix == "1." {
             return;
         }
-        let mass = page.rows.keys().any(|k| k.starts_with("y."));
-        let composition_prefix = if mass { "y." } else { "x." };
+        let mass = page
+            .rows
+            .keys()
+            .any(|k| k.starts_with(&format!("{prefix}y.")));
+        let composition_prefix = format!("{prefix}{}", if mass { "y." } else { "x." });
         assert!(
-            page.rows.keys().any(|k| k.starts_with(composition_prefix)),
+            page.rows.keys().any(|k| k.starts_with(&composition_prefix)),
             "Missing reference composition"
         );
         let compact_frozen = state.equilibrium
@@ -300,14 +326,14 @@ impl Comparison {
             && page
                 .rows
                 .iter()
-                .any(|(k, v)| k.starts_with(composition_prefix) && v.len() == 1);
+                .any(|(k, v)| k.starts_with(&composition_prefix) && v.len() == 1);
         if compact_frozen {
             return;
         }
         for (key, values) in &page.rows {
-            let fractions = if key.starts_with("x.") {
+            let fractions = if key.starts_with(&format!("{prefix}x.")) {
                 &state.mole_fractions
-            } else if key.starts_with("y.") {
+            } else if key.starts_with(&format!("{prefix}y.")) {
                 &state.mass_fractions
             } else {
                 continue;
@@ -318,7 +344,7 @@ impl Comparison {
             }
             let expected = values[if values.len() == 1 { 0 } else { col }];
             if expected >= COMPOSITION_THRESHOLD {
-                let actual = *fractions.get(&key[2..]).unwrap_or(&0.0);
+                let actual = *fractions.get(&key[prefix.len() + 2..]).unwrap_or(&0.0);
                 // Composition is dimensionless: use a relative threshold, not the SI scale floor.
                 self.relative(key, actual, expected);
             }
@@ -335,7 +361,7 @@ impl Comparison {
             }
         }
     }
-    fn transport(&mut self, page: &Page, col: usize, t: &Transport) {
+    fn transport(&mut self, page: &Page, prefix: &str, col: usize, t: &Transport) {
         for (key, actual) in [
             ("viscosity", t.viscosity_pa_s),
             ("eq.cp", t.cp_equilibrium_j_kg_k),
@@ -345,26 +371,32 @@ impl Comparison {
             ("eq.prandtl", t.prandtl_equilibrium),
             ("fr.prandtl", t.prandtl_frozen),
         ] {
-            let expected = page.rows[key][col];
-            self.relative(key, actual, expected);
+            let key = format!("{prefix}{key}");
+            if !page.rows.contains_key(&key) && key.contains("eq.") {
+                continue;
+            }
+            self.row(page, &key, col, actual);
         }
     }
 }
 
-fn compare(results: &[DeckResult], pages: &[Page]) -> Comparison {
+fn compare(results: &[Option<DeckResult>], pages: &[Page]) -> Comparison {
     let mut c = Comparison::default();
     let mut offset = 0;
     let mut seen = vec![BTreeSet::new(); results.len()];
+    let first = results.iter().flatten().next().unwrap();
     for page in pages {
-        match &results[0].output {
+        match &first.output {
             CaseOutput::Equilibrium(_) | CaseOutput::Detonation(_) | CaseOutput::Shock(_) => {
                 let count = page
                     .rows
                     .get("t")
                     .or_else(|| page.rows.get("1.t"))
+                    .or_else(|| page.rows.get("5.t"))
                     .unwrap()
                     .len();
                 for (col, r) in results[offset..offset + count].iter().enumerate() {
+                    let Some(r) = r else { continue };
                     c.context = format!("case {}", r.case_index);
                     match &r.output {
                         CaseOutput::Equilibrium(st) => c.state(page, "", col, st),
@@ -388,8 +420,21 @@ fn compare(results: &[DeckResult], pages: &[Page]) -> Comparison {
                             }
                         }
                         CaseOutput::Shock(s) => {
-                            c.state(page, "1.", col, &s.station1.state);
-                            c.state(page, "2.", col, &s.station2.state);
+                            for (index, (prefix, station)) in [
+                                ("1.", Some(&s.station1)),
+                                ("2.", Some(&s.station2)),
+                                ("5.", s.station5.as_ref()),
+                            ]
+                            .into_iter()
+                            .enumerate()
+                            {
+                                if page.rows.contains_key(&format!("{prefix}t")) {
+                                    c.state(page, prefix, col, &station.unwrap().state);
+                                }
+                                if page.rows.contains_key(&format!("{prefix}viscosity")) {
+                                    c.transport(page, prefix, col, &r.transport[index]);
+                                }
+                            }
                             for (key, actual) in [
                                 ("1.mach", s.station1.mach),
                                 ("1.u1", s.station1.velocity_m_s),
@@ -400,18 +445,36 @@ fn compare(results: &[DeckResult], pages: &[Page]) -> Comparison {
                                 ("2.molecular_weight_ratio", s.m2_m1),
                                 ("2.density_ratio", s.rho2_rho1),
                             ] {
-                                c.row(page, key, col, actual);
+                                if page.rows.contains_key(key) {
+                                    c.row(page, key, col, actual);
+                                }
+                            }
+                            if let Some(station5) = &s.station5 {
+                                for (key, actual) in [
+                                    ("5.u5", station5.velocity_m_s),
+                                    ("5.u5_plus_v2", s.u5_plus_v2_m_s.unwrap()),
+                                    ("5.pressure_ratio", s.p5_p2.unwrap()),
+                                    ("5.temperature_ratio", s.t5_t2.unwrap()),
+                                    ("5.molecular_weight_ratio", s.m5_m2.unwrap()),
+                                    ("5.density_ratio", s.rho5_rho2.unwrap()),
+                                ] {
+                                    c.row(page, key, col, actual);
+                                }
                             }
                         }
                         _ => unreachable!(),
                     }
-                    if let Some(t) = r.transport.first() {
-                        c.transport(page, col, t);
+                    if !matches!(r.output, CaseOutput::Shock(_))
+                        && page.rows.contains_key("viscosity")
+                    {
+                        assert_eq!(r.transport.len(), 1);
+                        c.transport(page, "", col, &r.transport[0]);
                     }
                 }
                 offset += count;
             }
             CaseOutput::Rocket(_) => {
+                let results: Vec<_> = results.iter().map(|r| r.as_ref().unwrap()).collect();
                 let rocket_case = results.iter().position(|r| matches!(r.input, CaseInput::Rocket { freeze_station, .. } if (freeze_station > 0) == page.frozen)).unwrap();
                 let CaseOutput::Rocket(r) = &results[rocket_case].output else {
                     unreachable!()
@@ -465,16 +528,16 @@ fn compare(results: &[DeckResult], pages: &[Page]) -> Comparison {
                         }
                     }
                     if let Some(t) = &st.transport {
-                        c.transport(page, col, t);
+                        c.transport(page, "", col, t);
                     }
                 }
             }
         }
     }
-    if !matches!(results[0].output, CaseOutput::Rocket(_)) {
+    if !matches!(first.output, CaseOutput::Rocket(_)) {
         assert_eq!(offset, results.len(), "Uncompared cases");
     } else {
-        for (case, result) in results.iter().enumerate() {
+        for (case, result) in results.iter().flatten().enumerate() {
             let CaseOutput::Rocket(r) = &result.output else {
                 unreachable!()
             };
@@ -497,15 +560,9 @@ fn nasa_sample_decks_against_reference_reports() {
         let cases = deck.cases().unwrap();
         let mut results = vec![];
         for case in &cases {
-            match case.run() {
-                Ok(r) => results.push(r),
-                Err(e) => println!("example{i} case {} ERROR {e}", case.index),
-            }
+            results.push(Some(case.run().unwrap()));
         }
         println!("example{i}: {}/{} solved", results.len(), cases.len());
-        if results.len() != cases.len() {
-            continue;
-        }
         for source in ["", "native-3.3.4/"] {
             if i == 6 && !source.is_empty() {
                 continue;
@@ -515,6 +572,11 @@ fn nasa_sample_decks_against_reference_reports() {
             let pages = reference(&text);
             let c = compare(&results, &pages);
             if i == 12 && !source.is_empty() {
+                let result = results[0].as_ref().unwrap();
+                let CaseOutput::Rocket(r) = &result.output else {
+                    unreachable!()
+                };
+                assert!((r.stations[7].area_ratio.unwrap() - 75.0).abs() < 1e-8);
                 // The strict composition mismatch is a nozzle stopping difference:
                 // the same public TP solver matches at NASA's reported state.
                 let solver = cea_rs::solver::Solver::new(
@@ -529,7 +591,7 @@ fn nasa_sample_decks_against_reference_reports() {
                 let st = solver
                     .solve(
                         cea_rs::solver::Mode::TP(page.rows["t"][7], page.rows["p"][7]),
-                        &results[0].weights,
+                        &result.weights,
                     )
                     .unwrap();
                 let mut at_same_tp = Comparison::default();
@@ -586,7 +648,7 @@ fn known_difference(example: usize, source: &str, failure: &str) -> bool {
                     || key.ends_with(" 2.p")
                     || matches!(
                         key,
-                        "case 3 x.H" | "case 4 x.H" | "case 5 x.H" | "case 6 x.H"
+                        "case 3 2.x.H" | "case 4 2.x.H" | "case 5 2.x.H" | "case 6 2.x.H"
                     ) =>
             {
                 1.7e-4
@@ -635,6 +697,52 @@ fn known_difference(example: usize, source: &str, failure: &str) -> bool {
 }
 
 #[test]
+fn nasa_reflected_shock_and_transport_report() {
+    let input = std::fs::read_to_string(data_dir().join("shock-reflected-transport.inp")).unwrap();
+    let results: Vec<_> = parse_deck(&input).unwrap()[0]
+        .cases()
+        .unwrap()
+        .iter()
+        .map(|case| Some(case.run().unwrap()))
+        .collect();
+    let pages = reference(
+        &std::fs::read_to_string(data_dir().join("native-3.3.4/shock-reflected-transport.out"))
+            .unwrap(),
+    );
+    assert_eq!(results.len(), 4);
+    assert_eq!(pages.len(), 4);
+    assert!(pages.iter().all(|page| page.rows.contains_key("5.t")));
+    let c = compare(&results, &pages);
+    println!(
+        "reflected transport checked={} worst={:.9e} {} failures={}",
+        c.checked,
+        c.worst,
+        c.worst_detail,
+        c.failures.len()
+    );
+    assert_eq!(c.checked, 187);
+    assert_eq!(c.failures.len(), 2);
+    for failure in &c.failures {
+        println!("{failure}");
+        // NASA's frozen reflected header retains incident Cp; transport Cp uses T5.
+        let bound = match failure.split(": Rust=").next().unwrap() {
+            "case 1 5.cp" => 1.64e-2,
+            "case 3 5.cp" => 2.07e-2,
+            _ => panic!("New reflected-shock discrepancy: {failure}"),
+        };
+        assert!(
+            failure
+                .rsplit("relative=")
+                .next()
+                .unwrap()
+                .parse::<f64>()
+                .unwrap()
+                <= bound
+        );
+    }
+}
+
+#[test]
 fn nasa_combined_and_standalone_sample_inputs() {
     let standalone =
         parse_deck(&std::fs::read_to_string(data_dir().join("sample-example1.inp")).unwrap())
@@ -645,7 +753,7 @@ fn nasa_combined_and_standalone_sample_inputs() {
         .cases()
         .unwrap()
         .iter()
-        .map(|c| c.run().unwrap())
+        .map(|c| Some(c.run().unwrap()))
         .collect::<Vec<_>>();
     assert!(compare(&states, &reference_pages).failures.is_empty());
     let decks =
@@ -660,13 +768,18 @@ fn nasa_combined_and_standalone_sample_inputs() {
             match case.run() {
                 Ok(result) => {
                     solved += 1;
-                    results.push(result);
+                    results.push(Some(result));
                 }
                 Err(e) => {
                     println!("combined example{} case{} {e}", index + 1, case.index);
                     assert_eq!(index + 1, 7);
                     assert_eq!(case.index, 1);
                     assert!(matches!(e, cea_rs::Error::Convergence(_)));
+                    assert_eq!(
+                        e.to_string(),
+                        "not_converged: case \"7\" #1: Shock exceeded 60 iterations"
+                    );
+                    results.push(None);
                     failed += 1;
                 }
             }
@@ -679,16 +792,19 @@ fn nasa_combined_and_standalone_sample_inputs() {
             _ => format!("native-3.3.4/example{example}.out"),
         };
         let text = std::fs::read_to_string(data_dir().join(report)).unwrap();
-        let mut pages = reference(&text);
+        let pages = reference(&text);
         if example == 7 {
             assert!(text.contains("WARNING: No convergence for u1="));
             assert!(text.contains("ANSWERS NOT RELIABLE"));
-            // NASA prints a retained, nonconverged state in column 1. Only that
-            // column is excluded; all 13 successful shock cases are compared.
-            for values in pages[0].rows.values_mut() {
-                assert_eq!(values.len(), 7);
-                values.remove(0);
-            }
+            assert_eq!(results.len(), 14);
+            assert!(results[0].is_none());
+            assert!(results[1..].iter().all(Option::is_some));
+        }
+        if example == 12 {
+            let CaseOutput::Rocket(r) = &results[0].as_ref().unwrap().output else {
+                unreachable!()
+            };
+            assert!((r.stations[7].area_ratio.unwrap() - 75.0).abs() < 1e-8);
         }
         let c = compare(&results, &pages);
         println!(

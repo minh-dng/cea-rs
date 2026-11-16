@@ -205,6 +205,16 @@ fn temperature(value: f64, units: &str) -> Result<f64> {
     positive(t, "temperature")
 }
 
+fn temperature_units<'a>(key: &str, units: &'a str) -> &'a str {
+    if !units.is_empty() {
+        return units;
+    }
+    ["f", "c", "r"]
+        .into_iter()
+        .find(|unit| key[1..].contains(unit))
+        .unwrap_or("k")
+}
+
 fn positive(value: f64, key: &str) -> Result<f64> {
     if !value.is_finite() || value <= 0.0 {
         return Err(invalid(format!("{key} must be positive and finite")));
@@ -398,17 +408,26 @@ fn parse_problem(text: &str) -> Result<Deck> {
     let mut problem = None;
     let mut words = Words::new(text);
     while let Some(keyword) = words.next() {
-        let (key, units) = key_units(&keyword);
+        let (literal, units) = key_units(&keyword);
+        // NASA input.f90 tries fixed prefixes in descending length.
+        let key = [
+            "ions", "tces", "case", "mach", "mdot", "det", "f/o", "f/a", "fac", "iac", "h/r",
+            "inc", "nfz", "nfr", "o/f", "phi", "ref", "rho", "rkt", "sub", "sup", "s/r", "u/r",
+            "%f", "ac", "eq", "fr", "fz", "hp", "ph", "pc", "pi", "ro", "sh", "sp", "ps", "sv",
+            "vs", "tp", "pt", "tv", "vt", "uv", "vu", "u1", "ma", "t", "p", "v", "r",
+        ]
+        .into_iter()
+        .find(|prefix| literal.starts_with(prefix))
+        .ok_or_else(|| unknown("problem", &keyword))?;
         if !units.is_empty()
             && !matches!(
-                key.as_str(),
+                key,
                 "p" | "t"
                     | "rho"
                     | "v"
                     | "o/f"
                     | "f/o"
                     | "f/a"
-                    | "%fuel"
                     | "%f"
                     | "phi"
                     | "r"
@@ -416,28 +435,25 @@ fn parse_problem(text: &str) -> Result<Deck> {
                     | "sup"
                     | "ma"
                     | "mdot"
-                    | "tces"
-                    | "tcest"
                     | "u1"
                     | "mach"
-                    | "mach1"
             )
         {
             return Err(unknown("problem", &keyword));
         }
-        if matches!(key.as_str(), "sub" | "sup") && !matches!(units.as_str(), "" | "ae/at") {
+        if matches!(key, "sub" | "sup") && !matches!(units.as_str(), "" | "ae/at") {
             return Err(unknown("area ratio unit", &units));
         }
-        let kind = match key.as_str() {
+        let kind = match key {
             "tp" | "pt" => Some(Problem::TP),
             "hp" | "ph" => Some(Problem::HP),
             "sp" | "ps" => Some(Problem::SP),
             "tv" | "vt" => Some(Problem::TV),
             "uv" | "vu" => Some(Problem::UV),
             "sv" | "vs" => Some(Problem::SV),
-            "rocket" | "rkt" | "ro" => Some(Problem::Rocket),
-            "shock" | "sh" => Some(Problem::Shock),
-            "detonation" | "det" => Some(Problem::Detonation),
+            "rkt" | "ro" => Some(Problem::Rocket),
+            "sh" => Some(Problem::Shock),
+            "det" => Some(Problem::Detonation),
             _ => None,
         };
         if let Some(kind) = kind {
@@ -446,17 +462,27 @@ fn parse_problem(text: &str) -> Result<Deck> {
             }
             continue;
         }
-        match key.as_str() {
-            "case" => d.name = words.value(&key)?,
+        match key {
+            "case" => d.name = words.value(key)?,
             "ions" => d.ions = true,
-            "equilibrium" | "equil" | "eql" | "eq" => d.equilibrium = true,
-            "frozen" | "froz" | "fr" | "fz" => d.frozen = true,
+            "eq" => d.equilibrium = true,
+            "fr" | "fz" => d.frozen = true,
             "iac" => d.rocket.finite_area = false,
             "fac" => d.rocket.finite_area = true,
-            "incd" | "incident" | "inc" => d.incident = true,
-            "refl" | "reflected" | "ref" => d.reflected = true,
-            "p" | "pbar" | "patm" | "ppsi" | "ppsia" | "pmmhg" => {
-                let unit = if key == "p" { &units } else { &key[1..] };
+            "inc" => d.incident = true,
+            "ref" => d.reflected = true,
+            "p" => {
+                let unit = if !units.is_empty() {
+                    units.as_str()
+                } else if literal[1..].contains("mmh") {
+                    "mmhg"
+                } else if literal[1..].contains("psi") {
+                    "psi"
+                } else if literal[1..].contains("atm") {
+                    "atm"
+                } else {
+                    "bar"
+                };
                 let v = words
                     .numbers(&keyword)?
                     .into_iter()
@@ -464,8 +490,8 @@ fn parse_problem(text: &str) -> Result<Deck> {
                     .collect::<Result<_>>()?;
                 set_schedule(&mut d.pressures_pa, v, &keyword)?;
             }
-            "t" | "tk" | "tc" | "tr" | "tf" => {
-                let unit = if key == "t" { &units } else { &key[1..] };
+            "t" => {
+                let unit = temperature_units(&literal, &units);
                 let v = words
                     .numbers(&keyword)?
                     .into_iter()
@@ -482,7 +508,7 @@ fn parse_problem(text: &str) -> Result<Deck> {
                             return Ok(1.0 / density(n, &units)?);
                         }
                         let factor = match units.as_str() {
-                            "" | "cc/g" | "cm**3/g" => 1e-3,
+                            "cc/g" | "cm**3/g" => 1e-3,
                             "m**3/kg" => 1.0,
                             _ => return Err(unknown("volume unit", &units)),
                         };
@@ -503,21 +529,21 @@ fn parse_problem(text: &str) -> Result<Deck> {
                 if v.iter().any(|n| !n.is_finite()) {
                     return Err(invalid(format!("Nonfinite {key}")));
                 }
-                let target = match key.as_str() {
+                let target = match key {
                     "h/r" => &mut d.enthalpies_j_kg,
                     "u/r" => &mut d.energies_j_kg,
                     _ => &mut d.entropies_j_kg_k,
                 };
                 set_schedule(target, v, &keyword)?;
             }
-            "o/f" | "f/o" | "f/a" | "%fuel" | "%f" | "phi" | "r" => {
+            "o/f" | "f/o" | "f/a" | "%f" | "phi" | "r" => {
                 if !matches!(units.as_str(), "" | "e" | "eq" | "eq.ratio") {
                     return Err(unknown("mixture ratio unit", &units));
                 }
-                let ratio = match key.as_str() {
+                let ratio = match key {
                     "o/f" => Ratio::OxidantFuel,
                     "f/o" | "f/a" => Ratio::FuelOxidant,
-                    "%fuel" | "%f" => Ratio::PercentFuel,
+                    "%f" => Ratio::PercentFuel,
                     "phi" => Ratio::Phi,
                     _ => Ratio::Chemical,
                 };
@@ -528,46 +554,47 @@ fn parse_problem(text: &str) -> Result<Deck> {
                     return Err(invalid("Multiple mixture ratio schedules"));
                 }
             }
-            "pi/p" | "pc/p" | "pip" | "pcp" => {
+            "pi" | "pc" => {
                 set_schedule(
                     &mut d.rocket.pressure_ratios,
                     words.numbers(&keyword)?,
                     &keyword,
                 )?;
             }
-            "subar" | "sub" | "subsonic" | "sub-ae/at" => {
+            "sub" => {
                 set_schedule(
                     &mut d.rocket.subsonic_area_ratios,
                     words.numbers(&keyword)?,
                     &keyword,
                 )?;
             }
-            "supar" | "sup" | "supersonic" | "sup-ae/at" => {
+            "sup" => {
                 set_schedule(
                     &mut d.rocket.supersonic_area_ratios,
                     words.numbers(&keyword)?,
                     &keyword,
                 )?;
             }
-            "acat" | "ac/at" | "ac" => d.rocket.ac_at = Some(words.scalar(&keyword)?),
+            "ac" => d.rocket.ac_at = Some(words.scalar(&keyword)?),
             "ma" | "mdot" => {
                 if !matches!(units.as_str(), "" | "kg/s/m**2") {
                     return Err(unknown("mass flux unit", &units));
                 }
                 d.rocket.mass_flux_kg_s_m2 = Some(words.scalar(&keyword)?);
             }
-            "nfz" | "nfr" | "nfrz" => {
+            "nfz" | "nfr" => {
                 let n = positive(words.scalar(&keyword)?, &keyword)?;
                 if n.fract() != 0.0 || n > usize::MAX as f64 {
                     return Err(invalid("nfz must be a positive integer"));
                 }
                 d.rocket.freeze_station = n as usize;
             }
-            "tces" | "tcest" | "tcestk" => {
+            "tces" => {
+                // Pinned parse_prob reads this scalar directly, bypassing unit conversion.
                 d.rocket.temperature_estimate_k =
-                    Some(temperature(words.scalar(&keyword)?, &units)?)
+                    Some(positive(words.scalar(&keyword)?, "temperature")?)
             }
-            "u1" | "mach" | "mach1" => {
+            "u1" | "mach" => {
                 if !d.shock_speeds.is_empty() {
                     return Err(invalid("Specify only one u1/mach1 schedule"));
                 }
@@ -687,10 +714,10 @@ fn parse_reactants(text: &str, needs_enthalpy: bool) -> Result<Vec<DeckReactant>
     let mut basis = None;
     while let Some(keyword) = words.next() {
         let (key, units) = key_units(&keyword);
-        let role = match key.as_str() {
-            "fuel" | "fu" => Some(Role::Fuel),
-            "oxid" | "oxidant" | "ox" => Some(Role::Oxidant),
-            "name" | "na" => Some(Role::Name),
+        let role = match key.get(..2) {
+            Some("fu") => Some(Role::Fuel),
+            Some("ox") => Some(Role::Oxidant),
+            Some("na") => Some(Role::Name),
             _ => None,
         };
         if let Some(role) = role {
@@ -711,12 +738,35 @@ fn parse_reactants(text: &str, needs_enthalpy: bool) -> Result<Vec<DeckReactant>
             && keyword.starts_with(|c: char| c.is_ascii_uppercase())
             && keyword.chars().all(|c| c.is_ascii_alphabetic())
         {
-            let n = words.scalar(&keyword)?;
+            let n = if words
+                .words
+                .as_slice()
+                .first()
+                .and_then(|w| number(w))
+                .is_some()
+            {
+                words.scalar(&keyword)?
+            } else {
+                1.0
+            };
             *r.formula.entry(keyword.to_ascii_uppercase()).or_default() += n;
             continue;
         }
-        match key.as_str() {
-            "moles" | "mole" | "mol" | "mole%" | "mol%" | "wt%" | "wtfrac" | "weight" | "wt" => {
+        let field = if matches!(key.as_str(), "mw" | "mwt" | "molwt" | "wt/mol" | "wt/mole") {
+            "mw"
+        } else if key.starts_with("den") {
+            "rho"
+        } else {
+            match key.get(..1) {
+                Some("m" | "w") => "amount",
+                Some("t") => "t",
+                Some("h" | "u") => "h",
+                Some("r") => "rho",
+                _ => return Err(unknown("reactants", &keyword)),
+            }
+        };
+        match field {
+            "amount" => {
                 if !matches!(units.as_str(), "" | "%") {
                     return Err(unknown("reactant amount unit", &units));
                 }
@@ -734,15 +784,15 @@ fn parse_reactants(text: &str, needs_enthalpy: bool) -> Result<Vec<DeckReactant>
                 }
                 r.amount = Some((n, b));
             }
-            "t" | "tk" | "tc" | "tr" | "tf" => {
+            "t" => {
                 r.temperature = Some(temperature(
                     words.scalar(&keyword)?,
-                    if key == "t" { &units } else { &key[1..] },
+                    temperature_units(&key, &units),
                 )?);
             }
-            "h" | "u" => r.enthalpy = Some(molar_energy(words.scalar(&keyword)?, &units)?),
-            "rho" | "density" => r.density = Some(density(words.scalar(&keyword)?, &units)?),
-            "mw" | "mwt" | "molwt" => {
+            "h" => r.enthalpy = Some(molar_energy(words.scalar(&keyword)?, &units)?),
+            "rho" => r.density = Some(density(words.scalar(&keyword)?, &units)?),
+            "mw" => {
                 let factor = match units.as_str() {
                     "" | "g/mol" | "g/mole" | "kg/kmol" => 1.0,
                     "kg/mol" | "kg/mole" => 1000.0,
@@ -753,7 +803,7 @@ fn parse_reactants(text: &str, needs_enthalpy: bool) -> Result<Vec<DeckReactant>
                     "molecular weight",
                 )?);
             }
-            _ => return Err(unknown("reactants", &keyword)),
+            _ => unreachable!(),
         }
     }
     if let Some(input) = current {
@@ -777,15 +827,20 @@ fn parse_reactants(text: &str, needs_enthalpy: bool) -> Result<Vec<DeckReactant>
 fn parse_output(text: &str, o: &mut OutputOptions) -> Result<()> {
     let mut words = Words::new(text);
     while let Some(key) = words.next() {
-        match key.to_ascii_lowercase().as_str() {
-            "transport" | "tran" => o.transport = true,
-            "trace" | "trac" => o.trace = words.scalar(&key)?,
+        let literal = key.to_ascii_lowercase();
+        let prefix = ["massf", "long", "tran", "trac", "deb", "dbg", "cal"]
+            .into_iter()
+            .find(|prefix| literal.starts_with(prefix))
+            .unwrap_or(&literal);
+        match prefix {
+            "tran" => o.transport = true,
+            "trac" => o.trace = words.scalar(&key)?,
             "massf" => o.mass_fractions = true,
             "siunits" | "siunit" => o.calories = false,
-            "calories" | "cal" => o.calories = true,
+            "cal" => o.calories = true,
             "long" => o.long = true,
             "short" => o.short = true,
-            "debug" | "dbg" => o.debug = words.numbers(&key)?,
+            "deb" | "dbg" => o.debug = words.numbers(&key)?,
             "plot" => {
                 while let Some(column) = words.words.as_slice().first() {
                     if !matches!(
@@ -807,14 +862,17 @@ fn parse_output(text: &str, o: &mut OutputOptions) -> Result<()> {
 }
 
 fn dataset(word: &str) -> Option<&'static str> {
-    match word.to_ascii_lowercase().as_str() {
-        "problem" | "prob" => Some("problem"),
-        "reactants" | "reactant" | "react" | "reac" => Some("reactants"),
+    let word = word.to_ascii_lowercase();
+    if word.starts_with("end") {
+        return Some("end");
+    }
+    match word.get(..4)? {
+        "prob" => Some("problem"),
+        "reac" => Some("reactants"),
         "only" => Some("only"),
         "omit" => Some("omit"),
-        "insert" | "inse" => Some("insert"),
-        "output" | "outp" => Some("output"),
-        "end" => Some("end"),
+        "inse" => Some("insert"),
+        "outp" => Some("output"),
         _ => None,
     }
 }
