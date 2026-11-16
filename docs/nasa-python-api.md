@@ -589,6 +589,7 @@ Its printed report, CLI, sample plotting and file outputs are not reproduced.
   converged=False. Rust raises ConvergenceError, leaving no readable stale state.
 - Reflected-frozen station 5: native Cp/Cv fields are uninitialized. Rust uses
   current frozen composition/temperature for Cp and Cv, checked independently.
+  With transport enabled, native cp_fr is populated and compares normally.
   Native gamma and sound speed retain the station-2 Cp basis in both backends.
   Shock cv_eq is zero at initial/frozen stations, following the native sentinel.
   Transport is zero at station 1; equilibrium conductivity/Prandtl are zero
@@ -641,3 +642,47 @@ allowances. Derivative near-zero noise has separate absolute bounds. Exceptions
 are restricted to named inputs/fields with independent identities or exact
 failure codes; no test is skipped. All helper calls are identical for both
 backends; the adapter never imports the native package.
+
+## Validation on 2026-11-17
+
+macOS arm64; Rust 1.99.1, maturin 1.16.0, NumPy 2.5.5. The installed wheel
+was tested outside the source tree with isolated Python imports.
+
+| Problem type | Worst relative difference | Member |
+|---|---:|---|
+| TP | 3.7932151e-10 | cv_eq |
+| HP | 3.560231e-11 | cv_eq |
+| SP | 3.6130657e-11 | cv_eq |
+| TV | 2.1268467e-09 | cv_fr |
+| UV | 3.5188364e-11 | cv_eq |
+| SV | 3.5204482e-11 | cv_eq |
+| IAC equilibrium | 7.0467525e-05 | mass_fractions.NO |
+| IAC frozen | 1.5181817e-05 | P |
+| FAC equilibrium | 6.8592549e-05 | mass_fractions.H |
+| FAC frozen | 3.1813676e-05 | P |
+| shock | 1.8963376e-06 | cv_fr |
+| detonation | 4.1122016e-05 | energy |
+| condensed TP | 2.0456017e-09 | nj |
+| mixture | 7.5634463e-16 | calc_property 7 ndarray |
+| derivatives | 2.2131531e-12 | TV.dnj_dstate2 |
+| native derivative FD | 3.7132636e-07 | UV.dH_dstate2_fd |
+
+The separate RP12 exception is 1.73451869e-4 relative (CO mass fraction at
+area75), below its named 1.8e-4 bound. All other table rows meet 1e-4.
+Fixed-constraint FD noise and invalid native states are bounded separately
+as described above; the table does not claim parity for those values.
+
+| Check | Result |
+|---|---|
+| cargo test --release | 70 passed, 0 failed, 1 ignored (existing diagnostic) |
+| Clippy, default, --release --all-targets -- -D warnings | Passed |
+| Clippy, --features python, same options | Passed |
+| cargo fmt --check | Passed |
+| uvx maturin build --release | Passed; cp312-abi3 macosx_11_0_arm64 |
+| Wheel contents | Python adapter, stubs, py.typed and NumPy dependency verified |
+| Python 3.12.14, with cea==3.3.4 | test_wheel: 6 passed; test_nasa_api: 8 passed; 0 failures/skips |
+| Python 3.15.1, cea confirmed absent | test_wheel: 6 passed; test_nasa_api: 8 passed; 0 failures/skips |
+
+[Raw results, named exceptions and exact check commands](nasa-python-api-results.json).
+CI runs the installed-wheel tests without NASA on Python 3.12 and 3.15.
+Linux/Windows wheels and production consumers were not tested locally.
