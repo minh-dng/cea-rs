@@ -315,6 +315,8 @@ fn check_condensed_phases(
             let tb = b.data().valid_temperature_range().1;
             ta.partial_cmp(&tb).unwrap()
         });
+        // Ranks count siblings left out of a restricted pool, so two phases
+        // on either side of an absent one stay non-adjacent, as in NASA.
         let phase_rank = siblings.iter().position(|&sp| sp == species[sc_i]).unwrap();
         let max_t_sibling = siblings
             .iter()
