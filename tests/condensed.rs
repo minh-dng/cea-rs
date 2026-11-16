@@ -146,3 +146,11 @@ fn unseeded_cold_enthalpy_and_entropy_find_condensed_equilibrium() {
     }
 }
 
+#[test]
+fn reversed_condensed_interval_does_not_hide_supersaturated_bromine() {
+    let solver = model("Br2(L)");
+    let state = solver.solve(Mode::TP(262.0, 1e5), &[1.0, 20.0]).unwrap();
+    assert_eq!(state.temperature_k, 262.0);
+    check(&state, &solver, &[1.0, 20.0], "Br2", &["Br2(cr)", "Br2(L)"]);
+    assert!(state.mass_fractions["Br2(cr)"] > 0.1);
+}

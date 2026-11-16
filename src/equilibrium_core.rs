@@ -1574,7 +1574,9 @@ pub(crate) fn solve_for_products_debug_with_start(
                 }
                 let sc = ng + c;
                 let (t_low, t_high) = species[sc].data().valid_temperature_range();
-                let allowed = (temperature_k >= t_low || t_low == 200.0) && temperature_k <= t_high;
+                // An inverted interval has no usable lower bound; retain its upper phase limit.
+                let allowed = (temperature_k >= t_low || t_low == 200.0 || t_low > t_high)
+                    && temperature_k <= t_high;
                 if !allowed {
                     continue;
                 }
