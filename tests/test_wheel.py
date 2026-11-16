@@ -18,6 +18,29 @@ import cea_rs
 class InstalledWheelTests(unittest.TestCase):
     """Check public failures, invariants and repeated mixed workloads."""
 
+    def test_run_deck(self) -> None:
+        """Expose structured deck cases and the existing typed failures."""
+        cases = cea_rs.run_deck("""
+problem tp case=wheel t=3000 p,bar=1,10
+reactants fuel H2 oxid O2
+output transport
+end
+""")
+        self.assertEqual(len(cases), 2)
+        for i, case in enumerate(cases):
+            self.assertIsInstance(case, cea_rs.DeckResult)
+            self.assertEqual(case.case_name, "wheel")
+            self.assertEqual(case.case_index, i + 1)
+            self.assertEqual(case.kind, "equilibrium")
+            self.assertIsInstance(case.result, cea_rs.State)
+            self.assertEqual(case.result.temperature_k, 3000)
+            self.assertEqual(len(case.transport), 1)
+            self.assertGreater(case.transport[0].viscosity_pa_s, 0)
+        with self.assertRaisesRegex(ValueError, "mystery"):
+            cea_rs.run_deck("problem tp t=300 p=1 mystery\nreac name H2\nend")
+        with self.assertRaisesRegex(NotImplementedError, "Frozen Detonation"):
+            cea_rs.run_deck("problem detonation frozen t=300 p=1\nreac fuel H2 oxid O2\nend")
+
     def test_install_and_bad_inputs(self) -> None:
         """Verify the import path and ensure failed solves expose no state."""
         self.assertTrue(Path(cea_rs.__file__).is_relative_to(args.installed.resolve()))

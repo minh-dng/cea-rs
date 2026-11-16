@@ -1,6 +1,7 @@
 //! Python boundary: SI units, typed failures and a distinct import namespace.
 use crate::{
     Error,
+    deck::{CaseOutput, DeckResult},
     detonation::{DetonationResult, UnburnedState},
     rocket::{RocketOptions, RocketResult, Station},
     solver::{Mode, Solver, State},
@@ -19,6 +20,53 @@ impl From<Error> for PyErr {
             Error::Convergence(_) => ConvergenceError::new_err(e.to_string()),
             Error::Unsupported(_) => PyNotImplementedError::new_err(e.to_string()),
         }
+    }
+}
+
+#[pyfunction]
+fn run_deck(py: Python<'_>, text: &str) -> PyResult<Vec<DeckResult>> {
+    Ok(py.detach(|| crate::deck::run_deck(text))?)
+}
+
+#[pymethods]
+impl DeckResult {
+    #[getter]
+    fn case_name(&self) -> &str {
+        &self.case_name
+    }
+    #[getter]
+    fn case_index(&self) -> usize {
+        self.case_index
+    }
+    #[getter]
+    fn weights(&self) -> Vec<f64> {
+        self.weights.clone()
+    }
+    #[getter]
+    fn kind(&self) -> &'static str {
+        match self.output {
+            CaseOutput::Equilibrium(_) => "equilibrium",
+            CaseOutput::Rocket(_) => "rocket",
+            CaseOutput::Shock(_) => "shock",
+            CaseOutput::Detonation(_) => "detonation",
+        }
+    }
+    #[getter]
+    fn result(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(match &self.output {
+            CaseOutput::Equilibrium(r) => Py::new(py, r.as_ref().clone())?.into_any(),
+            CaseOutput::Rocket(r) => Py::new(py, r.as_ref().clone())?.into_any(),
+            CaseOutput::Shock(r) => Py::new(py, r.as_ref().clone())?.into_any(),
+            CaseOutput::Detonation(r) => Py::new(py, r.as_ref().clone())?.into_any(),
+        })
+    }
+    #[getter]
+    fn transport(&self) -> Vec<crate::transport::Transport> {
+        self.transport.clone()
+    }
+    #[getter]
+    fn reactant_density_kg_m3(&self) -> Option<f64> {
+        self.reactant_density_kg_m3
     }
 }
 #[pymethods]
@@ -567,6 +615,8 @@ impl RocketResult {
 }
 #[pymodule]
 fn _cea_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<DeckResult>()?;
+    m.add_function(wrap_pyfunction!(run_deck, m)?)?;
     m.add_class::<crate::derivatives::EqDerivatives>()?;
     m.add_class::<Reactant>()?;
     m.add_class::<PySolver>()?;
