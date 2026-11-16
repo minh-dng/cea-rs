@@ -1635,6 +1635,49 @@ pub(crate) fn solve_for_products_debug_with_start(
         converged = false;
     }
 
+    // A cold energy/entropy target may have no gas-only solution; obtain a
+    // converged condensed seed at NASA's lower bound, then retry once.
+    if !converged
+        && !const_t
+        && nc > 0
+        && (times_converged == 0 || temperature_k < 160.0)
+        && active_ranked.is_empty()
+        && start.is_none()
+    {
+        let cold = solve_for_products_debug_with_start(
+            reactants,
+            true,
+            false,
+            const_p,
+            160.0,
+            state2,
+            include_condensed,
+            include_ions,
+            only,
+            insert,
+            trace,
+            None,
+        );
+        if cold.converged && cold.condensed_active.iter().any(|active| *active) {
+            let mut retry = solve_for_products_debug_with_start(
+                reactants,
+                const_t,
+                const_s,
+                const_p,
+                state1,
+                state2,
+                include_condensed,
+                include_ions,
+                only,
+                insert,
+                trace,
+                Some(&cold.seed),
+            );
+            retry.iterations_used += iterations_used + cold.iterations_used;
+            return retry;
+        }
+    }
+
     // Section I: post-processing & thermodynamic derivatives. Runs once, at
     // the final state, independent of the main loop's per-iteration scoping.
     let active_condensed: Vec<usize> = (0..nc).filter(|&c| is_active[c]).collect();
