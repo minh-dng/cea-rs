@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import sys
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -17,6 +18,27 @@ import cea_rs
 
 class InstalledWheelTests(unittest.TestCase):
     """Check public failures, invariants and repeated mixed workloads."""
+
+    def test_reactant_phases(self) -> None:
+        """Use compiled phases, including duplicate names and reference fuels."""
+        from cea_rs._cea_rs import _nasa_species
+
+        self.assertEqual(cea_rs.Reactant("Co(b)")._nasa_phase, 6)
+        for name, _, phase, _ in _nasa_species():
+            with self.subTest(name=name):
+                self.assertEqual(cea_rs.Reactant(name)._nasa_phase, phase)
+        for name, phase in (("Air", 0), ("RP-1", 1), ("Jet-A(L)", 1)):
+            self.assertEqual(cea_rs.Reactant(name)._nasa_phase, phase)
+        custom = cea_rs.Reactant(
+            "Co(b)", formula={"H": 2}, molecular_weight=2.01588, enthalpy_j_mol=0
+        )
+        self.assertEqual(custom._nasa_phase, 0)
+
+    def test_optional_numpy(self) -> None:
+        """Keep the base API usable and name the extra if NumPy is absent."""
+        if importlib.util.find_spec("numpy") is None:
+            with self.assertRaisesRegex(ImportError, r"cea-keplr-rs\[nasa\]"):
+                from cea_rs import nasa
 
     def test_run_deck(self) -> None:
         """Expose structured deck cases and the existing typed failures."""

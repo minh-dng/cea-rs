@@ -126,7 +126,9 @@ records NASA's notice, hashes and regeneration steps.
 
 ## NASA Python API
 
-For supported NASA `cea==3.3.4` calling code, change the import to:
+Install the optional adapter dependencies with
+`pip install 'cea-keplr-rs[nasa]'`. For supported NASA `cea==3.3.4` calling
+code, change the import to:
 
 ```python
 from cea_rs import nasa as cea
@@ -143,8 +145,8 @@ print(solution.T, solution.P, solution.enthalpy)  # K, bar, kJ/kg
 The submodule provides `Reactant`, `Mixture`, `EqSolver`/`EqSolution`,
 `EqDerivatives`, `RocketSolver`/`RocketSolution`, `ShockSolver`/`ShockSolution`
 and `DetonationSolver`/`DetonationSolution`, with NASA's defaults and NumPy
-array shapes. NumPy is installed with the wheel. The existing `cea_rs` API
-continues to use SI. NASA itself is not a runtime dependency.
+array shapes. Only this submodule requires NumPy; the base `cea_rs` package
+works without it and continues to use SI. NASA itself is not a runtime dependency.
 
 The [complete member inventory and status](docs/nasa-python-api.md) records
 units, unsupported options and numerical limits. Smoothing, arbitrary initial
@@ -152,6 +154,9 @@ guesses, custom binary databases, frozen detonation and MATLAB wrappers raise
 named `NotImplementedError`s. Failed verification raises a typed error and
 clears the solution. Native retained/invalid states are not returned. The
 known nozzle, frozen-Cv and condensed-phase differences remain explicit.
+The worst compared difference, including the named RP-1311 example 12
+exception, is 1.73451869e-4 (CO mass fraction at area 75, bounded at 1.8e-4).
+Other valid compared outputs meet 1e-4; their worst difference is 7.0467525e-5.
 
 `tests/test_nasa_api.py` uses the same calls for both implementations when
 NASA 3.3.4 is installed. Without it, stored native values and independent

@@ -15,11 +15,29 @@ See the repository's root LICENSE, NOTICE and `docs/provenance.md`.
 | `native-3.3.4/sample-12.out` | Combined sample's twelfth block (additional HNO2 product), with `output long` added |
 | `shock-reflected-transport.inp` | Additional regression: example 7 mixture at 1400 m/s, incident/reflected equilibrium/frozen modes and transport |
 | `native-3.3.4/shock-reflected-transport.out` | Unmodified pinned NASA executable, run on that regression deck |
+| `python-api-3.3.4.json` | Successful calls to PyPI cea==3.3.4 through the Python test helpers; no Rust-generated expected values |
 
 Original decks/reports are copied byte-for-byte, including trailing spaces,
 missing final newlines and line endings. `.gitattributes` preserves those bytes.
 `SHA256SUMS` covers all `.inp`, `.out` and the NASA notice.
 No NASA runtime or network is needed to run the Rust tests.
+
+The Python snapshot was captured on 2026-11-17 with CPython 3.12.14, NumPy
+2.5.5 and macOS arm64. Its metadata includes the NASA source-distribution hash.
+It contains the 11 successful compared `test_rocket_schedules` inputs through
+`rp_rocket(native, ...)`,
+all 16 `test_shock_and_detonation` flag combinations through `shock(native, ...)`,
+and that test's four `(temperature, pressure)` detonation inputs through
+`detonation(native, ...)`. The remaining ten cases are the explicit RP1 TP/RP2
+TV inputs and eight RP14 temperatures in
+`test_rp_equilibrium_and_condensed_exceptions` in `tests/test_nasa_api.py`.
+Each snapshot records the native solution's THERMO fields and application/
+transport fields used by that test. Frozen rocket Cv and reflected-frozen
+shock Cp/Cv are omitted because NASA retains or leaves those fields
+uninitialized; they are never replaced by Rust values. All native calls
+converged with `last_error == 0`. Regenerate only by rerunning those same
+helpers and inputs against NASA 3.3.4 and serializing its numeric properties.
+Both live-native and NASA-free test runs compare these stored values.
 
 The historical reports identify CEA2 (2004). They differ from the modern
 executable in a few cells. Example 12's historical report echoes a frozen-only

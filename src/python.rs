@@ -104,13 +104,7 @@ impl Reactant {
     }
     #[getter]
     fn _nasa_phase(&self) -> i32 {
-        include_str!("../vendor/thermo-species/data/thermo.inp")
-            .lines()
-            .skip_while(|line| line.get(..18).is_none_or(|s| s.trim() != self.name))
-            .nth(1)
-            .and_then(|line| line.get(50..52))
-            .and_then(|phase| phase.trim().parse().ok())
-            .unwrap_or(0)
+        self.phase.into()
     }
     #[pyo3(name = "get_valid_temperature_range")]
     fn py_valid_temperature_range(&self) -> (f64, f64) {
@@ -470,11 +464,12 @@ impl State {
     #[getter]
     fn _nasa_ln_nj(&self) -> Option<BTreeMap<String, f64>> {
         self.equilibrium_seed.as_ref().map(|seed| {
-            self.amounts
+            assert_eq!(seed.species.len(), seed.ln_nj.len());
+            seed.species
                 .iter()
-                .filter(|(_, sp)| sp.data().phase() == 0)
                 .zip(&seed.ln_nj)
-                .map(|((_, sp), ln_n)| (sp.data().symbol().into(), *ln_n))
+                .filter(|(sp, _)| sp.data().phase() == 0)
+                .map(|(sp, ln_n)| (sp.data().symbol().into(), *ln_n))
                 .collect()
         })
     }

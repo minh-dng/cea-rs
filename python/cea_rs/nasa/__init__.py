@@ -9,7 +9,14 @@ from __future__ import annotations
 
 import warnings as _warnings
 
-import numpy as _np
+try:
+    import numpy as _np
+except ModuleNotFoundError as exc:
+    if exc.name != "numpy":
+        raise
+    raise ImportError(
+        "cea_rs.nasa requires NumPy; install 'cea-keplr-rs[nasa]'"
+    ) from exc
 
 import cea_rs as _rs
 from cea_rs._cea_rs import _nasa_species
@@ -847,6 +854,14 @@ class EqDerivatives:
         self._results.clear()
         self.last_error = NOT_CONVERGED
         d = self._solver._inner.derivatives(mode, a, b, w.tolist())
+        if check_closure_defect and (
+            d.closure_defect is None
+            or not _np.isfinite(d.closure_defect)
+            or d.closure_defect > 1e-10
+        ):
+            raise _rs.ConvergenceError(
+                f"Equilibrium derivative closure defect {d.closure_defect}"
+            )
         scale = _np.array(
             [
                 1 if mode.startswith("T") else R,

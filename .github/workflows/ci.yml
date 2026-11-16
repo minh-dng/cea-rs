@@ -61,9 +61,13 @@ jobs:
           cd "$RUNNER_TEMP"
           for py in python3.12 python3.15; do
             wheel_site="$RUNNER_TEMP/cea-wheel-$py"
-            "$py" -m pip install --target "$wheel_site" "$GITHUB_WORKSPACE"/dist/*.whl
+            "$py" -m pip install --no-deps --target "$wheel_site" "$GITHUB_WORKSPACE"/dist/*.whl
             "$py" -I "$GITHUB_WORKSPACE/tests/test_wheel.py" --installed "$wheel_site"
-            "$py" -I "$GITHUB_WORKSPACE/tests/test_nasa_api.py" --installed "$wheel_site"
+            nasa_site="$RUNNER_TEMP/cea-nasa-$py"
+            for wheel in "$GITHUB_WORKSPACE"/dist/*.whl; do
+              "$py" -m pip install --target "$nasa_site" "${wheel}[nasa]"
+            done
+            "$py" -I "$GITHUB_WORKSPACE/tests/test_nasa_api.py" --installed "$nasa_site"
           done
       - name: Build source distribution
         if: matrix.target == 'x86_64-unknown-linux-gnu'

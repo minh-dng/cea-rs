@@ -11,7 +11,9 @@ import json
 from itertools import product
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 import warnings
 
 parser = argparse.ArgumentParser()
@@ -41,6 +43,9 @@ REPORT = {
     "exceptions": [],
 }
 HERE = Path(__file__).parent
+NATIVE_VALUES = json.loads(
+    (HERE / "data" / "nasa" / "python-api-3.3.4.json").read_text()
+)["cases"]
 THERMO = (
     "T",
     "P",
@@ -213,6 +218,31 @@ def air_jet_a(api):
 
 
 class NasaApiTests(unittest.TestCase):
+    def test_derivative_closure_check(self):
+        solution, _, solver = equilibrium(rust)
+        derivatives = rust.EqDerivatives(solver, solution)
+        derivatives.compute_derivatives()
+        expected = derivatives.dnj_dw0
+        derivatives.compute_derivatives(check_closure_defect=True)
+        np.testing.assert_array_equal(derivatives.dnj_dw0, expected)
+        core = solver._inner.derivatives("TP", 2500.0, 1e6, [1.0, 8.0])
+        rows = {
+            name: getattr(core, name)
+            for name in (
+                "temperature", "total_moles", "enthalpy", "energy",
+                "gibbs_energy", "entropy", "species_amounts",
+            )
+        }
+        for defect in (None, float("nan"), 1e-4):
+            with self.subTest(defect=defect):
+                with patch.object(
+                    solver._inner,
+                    "derivatives",
+                    return_value=SimpleNamespace(**rows, closure_defect=defect),
+                ):
+                    with self.assertRaisesRegex(cea_rs.ConvergenceError, "closure defect"):
+                        derivatives.compute_derivatives(check_closure_defect=True)
+
     def close(self, group, label, actual, expected, tolerance=1e-4, atol=0):
         a, b = np.asarray(actual), np.asarray(expected)
         self.assertEqual(a.shape, b.shape, label)
@@ -223,6 +253,18 @@ class NasaApiTests(unittest.TestCase):
         if worst > REPORT["worst_relative"].get(group, {}).get("difference", -1):
             REPORT["worst_relative"][group] = {"difference": worst, "member": label}
         np.testing.assert_allclose(a, b, rtol=tolerance, atol=atol, err_msg=label)
+
+    def stored(self, key, solution):
+        self.assertTrue(solution.converged)
+        self.assertEqual(solution.last_error, 0)
+        for name, expected in NATIVE_VALUES[key].items():
+            self.close(
+                "stored NASA " + key,
+                name,
+                getattr(solution, name),
+                expected,
+                atol=1e-10 if name in ("enthalpy", "energy") else 0,
+            )
 
     def compare(
         self,
@@ -559,6 +601,7 @@ class NasaApiTests(unittest.TestCase):
                 ),
             )
             a = rp(rust, mode, t, second, ["H2", "Air"], weights, RP1_PRODUCTS)
+            self.stored(f"rp-{mode}", a[0])
             if native:
                 self.compare(
                     mode,
@@ -573,6 +616,7 @@ class NasaApiTests(unittest.TestCase):
             a = rp(
                 rust, "TP", t, rust.units.atm_to_bar(0.05), ["H2(L)", "O2(L)"], weights
             )
+            self.stored(f"rp14-{t}", a[0])
             if native:
                 self.compare(
                     "condensed TP",
@@ -586,8 +630,6 @@ class NasaApiTests(unittest.TestCase):
                         weights,
                     ),
                 )
-            else:
-                self.assertTrue(a[0].converged)
         for name, mode, first, w, temperature, phase, fraction in (
             (
                 "Hg",
@@ -680,6 +722,7 @@ class NasaApiTests(unittest.TestCase):
         ):
             with self.subTest(example=example, n_frz=nf):
                 actual = rp_rocket(rust, example, nf, transport=transport)
+                self.stored(f"rocket-{example}-{nf or 0}", actual[0])
                 if native:
                     self.compare(
                         ("FAC frozen" if nf else "FAC equilibrium")
@@ -693,18 +736,6 @@ class NasaApiTests(unittest.TestCase):
                         frozen=nf is not None,
                         example12=example == 12,
                     )
-                else:
-                    self.assertTrue(actual[0].converged)
-                    self.assertGreater(actual[0].c_star[-1], 1000)
-        # Independent native values, not generated from the adapter.
-        r = rp_rocket(rust)[0]
-        self.close(
-            "IAC stored",
-            "T",
-            r.T[[0, 1, -1]],
-            [3383.844625410914, 3185.6731645532514, 1088.6397267403452],
-        )
-        self.close("IAC stored", "c_star", r.c_star[-1], 2332.335800009469)
         # Native's early FAC freeze fails and retains seven stations; accept
         # only this exact failure and verify the complete Rust solution's energy.
         a = rp_rocket(rust, 9, 3)[0]
@@ -745,6 +776,10 @@ class NasaApiTests(unittest.TestCase):
                     transport=transport,
                 )
                 a = shock(rust, **kw)
+                self.stored(
+                    f"shock-{int(reflected)}{int(incident)}{int(reflection)}{int(transport)}",
+                    a[0],
+                )
                 if native:
                     self.compare(
                         "shock",
@@ -769,10 +804,9 @@ class NasaApiTests(unittest.TestCase):
                         ),
                         reflected_frozen=reflected and reflection,
                     )
-                else:
-                    self.assertTrue(a[0].converged)
         for t, p in ((298.15, 1.0), (298.15, 20.0), (500.0, 1.0), (500.0, 20.0)):
             a = detonation(rust, t, p, transport=True)
+            self.stored(f"detonation-{t}-{p}", a[0])
             if native:
                 self.compare(
                     "detonation",
@@ -796,14 +830,6 @@ class NasaApiTests(unittest.TestCase):
                         "rho_rho1",
                     ),
                 )
-            else:
-                self.assertTrue(a[0].converged)
-        s = shock(rust)[0]
-        self.close("shock stored", "T", s.T, [300.0, 2249.0579591852456])
-        self.close("shock stored", "velocity", s.velocity, [1400.0, 527.8314738812927])
-        d = detonation(rust)[0]
-        self.close("detonation stored", "T", d.T, 3674.2808344247833)
-        self.close("detonation stored", "velocity", d.velocity, 2835.5301144596524)
 
     def test_failures_reuse_and_unsupported(self):
         s, _, solver = equilibrium(rust)

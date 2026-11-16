@@ -68,9 +68,10 @@ pub enum EquilibriumMode {
 /// Private continuation data for the same reactant and product pool.
 #[derive(Debug, Clone)]
 pub(crate) struct EquilibriumSeed {
-    species: Vec<Species>,
+    pub(crate) species: Vec<Species>,
     temperature_k: f64,
     n: f64,
+    /// Gas logs followed by unused condensed slots, in species order.
     pub(crate) ln_nj: Vec<f64>,
     nj_stored: Vec<f64>,
     condensed_nj: Vec<f64>,

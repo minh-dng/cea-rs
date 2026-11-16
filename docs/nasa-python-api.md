@@ -5,6 +5,16 @@ Inspected the PyPI wheel and Python/Cython sources at NASA commit
 on 2026-11-17. This inventory records public API facts, not copied implementation.
 NASA is Apache-2.0; see [provenance](provenance.md) and the root NOTICE.
 
+Install `cea-keplr-rs[nasa]` to use this adapter. NumPy is optional for the
+base package: `import cea_rs` and its SI API work without it. Importing
+`cea_rs.nasa` without NumPy raises ImportError naming that extra.
+
+The largest compared relative difference, including named exceptions, is
+**1.73451869e-4**: RP-1311 example 12's CO mass fraction at area 75, within
+its 1.8e-4 bound. The worst other valid compared output is 7.0467525e-5.
+Fixed-constraint finite-difference noise and invalid native states have the
+separate bounds described below.
+
 ## Conventions
 
 - Solver pressure inputs and solution pressures: bar. Temperatures: K.
@@ -45,6 +55,12 @@ Public signatures below omit Cython implementation types.
 
 Constructor: `Reactant(name, formula=None, molecular_weight=None, enthalpy=None, enthalpy_units=None, temperature=None)`. Default constructor implemented. Overrides of fitted named reactants raise NotImplementedError; custom reference reactants and reference-only overrides are supported.
 
+NASA does not expose a public Python phase property. Internally, the adapter
+uses compiled species phases and retains parsed reference-reactant phases.
+For example, NASA 3.3.4's bundled thermo.lib has Co(b) interval phases 3–6;
+its ThermoDB loader retains the final value, 6, matching thermo_species.
+The adapter no longer scans thermo.inp on each phase query.
+
 | Member | Signature / return convention | Status |
 |---|---|---|
 | enthalpy | See conventions above | Implemented |
@@ -58,6 +74,9 @@ Constructor: `Reactant(name, formula=None, molecular_weight=None, enthalpy=None,
 ### Mixture
 
 Constructor: `Mixture(species=None, products_from_reactants=False, omit=[], ions=False)`. Default constructor implemented.
+
+NASA accepts `omit=None` as an empty omission list. The adapter keeps NASA's
+visible `omit=[]` default and never mutates that list.
 
 | Member | Signature / return convention | Status |
 |---|---|---|
@@ -123,6 +142,15 @@ Constructor: `EqSolution(solver, T_init=None, nj_init=None)`. Default constructo
 ### EqDerivatives
 
 Constructor: `EqDerivatives(solver, solution)`. Default constructor implemented.
+
+NASA's `check_closure_defect=True` evaluates the internal residual
+`J * du/dx + Rx`; it does not change the returned derivatives. Its Python
+docstring mentions logging, but the Fortran check stores the residual without
+printing unless verbose output is requested separately. Rust already evaluates
+the same residual and rejects a scaled defect above 1e-10 on every analytic
+solve. The adapter's explicit flag verifies that the core supplied a finite
+defect within that bound, raising ConvergenceError otherwise. The default
+retains the core's existing validation.
 
 | Member | Signature / return convention | Status |
 |---|---|---|
@@ -679,10 +707,20 @@ as described above; the table does not claim parity for those values.
 | Clippy, --features python, same options | Passed |
 | cargo fmt --check | Passed |
 | uvx maturin build --release | Passed; cp312-abi3 macosx_11_0_arm64 |
-| Wheel contents | Python adapter, stubs, py.typed and NumPy dependency verified |
-| Python 3.12.14, with cea==3.3.4 | test_wheel: 6 passed; test_nasa_api: 8 passed; 0 failures/skips |
-| Python 3.15.1, cea confirmed absent | test_wheel: 6 passed; test_nasa_api: 8 passed; 0 failures/skips |
+| Wheel contents | Python adapter, stubs, py.typed and optional nasa/NumPy extra verified |
+| Python 3.12.14, neither NumPy nor cea installed | test_wheel: 8 passed; 0 failures/skips |
+| Python 3.15.1, neither NumPy nor cea installed | test_wheel: 8 passed; 0 failures/skips |
+| Python 3.12.14, with cea==3.3.4 and NumPy | test_nasa_api: 9 passed; 0 failures/skips |
+| Python 3.15.1, with NumPy, cea confirmed absent | test_nasa_api: 9 passed; 0 failures/skips |
 
 [Raw results, named exceptions and exact check commands](nasa-python-api-results.json).
-CI runs the installed-wheel tests without NASA on Python 3.12 and 3.15.
+The fallback suite checks 41 stored NASA-only snapshots, covering all successful
+compared rocket schedules, shock flag combinations, detonation cases and RP14
+condensation points.
+Known stale/uninitialized native heat capacities are excluded from snapshots;
+their independent identities and live-native exception checks remain in place.
+[Snapshot provenance](../tests/data/nasa/README.md) records the source and inputs.
+CI installs the base wheel with `--no-deps`, runs its tests, then installs the
+`nasa` extra into a separate directory for adapter tests without NASA itself
+on Python 3.12 and 3.15.
 Linux/Windows wheels and production consumers were not tested locally.
