@@ -22,10 +22,19 @@ convergence tolerance changed.
    polynomial by extrapolation; the State still reports that extrapolation.
 3. Sibling condensates have identical element columns. Without a temperature
    unknown their joint Newton matrix is singular. For TP/TV, choose the
-   lower-Gibbs sibling in the existing 50 K phase-change neighborhood,
-   transferring the amount instead of creating a coexistence pair. Equal
-   Gibbs energies keep one phase; a fixed-T phase split is undetermined.
-   HP/SP phase coexistence and its temperature equation stay unchanged.
+   lower-Gibbs sibling, transferring the amount instead of creating a
+   coexistence pair. A sibling is compared only inside its own fit range:
+   extrapolated fits can look falsely stable. Without that limit NaCN(III)
+   replaced the stable NaCN(II) at 240 to 288 K, and Cr2O3(I) replaced
+   Cr2O3(I') at 304 K; a scan of the database found ten such sibling pairs.
+   Equal Gibbs energies keep one phase; a fixed-T phase split is
+   undetermined. HP/SP phase coexistence and its temperature equation stay
+   unchanged.
+
+   Known limit: a fixed-T solve started from a converged state of the other
+   phase (for example ice at 270 K, re-solved at 274 K) can fail, because the
+   singular-matrix recovery removes the only condensed phase. No public entry
+   point starts a fixed-T solve from a state; rocket continuation uses SP.
 
 ## NASA source and native behavior
 
