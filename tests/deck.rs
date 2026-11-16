@@ -1,6 +1,8 @@
 use cea_rs::{
     R,
-    deck::{AmountBasis, Problem, Ratio, parse_deck},
+    deck::{AmountBasis, CaseInput, CaseOutput, Problem, Ratio, parse_deck, run_deck},
+    solver::{Mode, Solver},
+    thermo::Reactant,
 };
 
 #[test]
@@ -41,6 +43,102 @@ end
     assert_eq!(decks[2].pressures_pa, [1333.0]);
     assert_eq!(decks[3].temperatures_k, [300.0]);
     assert_eq!(decks[3].pressures_pa, [101325.0]);
+}
+
+#[test]
+fn runs_six_modes_with_si_constraints_and_stream_enthalpy() {
+    let solver = Solver::new(
+        ["H2", "O2"].map(|n| Reactant::named(n).unwrap()).to_vec(),
+        true,
+        false,
+        None,
+        vec![],
+    )
+    .unwrap();
+    let reference = solver.solve(Mode::TP(3000.0, 1e6), &[1.0, 8.0]).unwrap();
+    let h = reference.enthalpy_j_kg / R;
+    let u = reference.energy_j_kg / R;
+    let s = reference.entropy_j_kg_k / R;
+    let v = 1.0 / reference.density_kg_m3;
+    for constraint in [
+        "tp t=3000 p=10".to_string(),
+        format!("hp h/r={h} p=10"),
+        format!("sp s/r={s} p=10"),
+        format!("tv t=3000 v,m**3/kg={v}"),
+        format!("uv u/r={u} v,m**3/kg={v}"),
+        format!("sv s/r={s} v,m**3/kg={v}"),
+    ] {
+        let results = run_deck(&format!(
+            "problem {constraint}\nreac name H2 wt%=1 name O2 wt%=8\noutput transport\nend"
+        ))
+        .unwrap();
+        let CaseOutput::Equilibrium(actual) = &results[0].output else {
+            panic!("wrong result type")
+        };
+        assert!(
+            (actual.temperature_k / 3000.0 - 1.0).abs() < 1e-7,
+            "{constraint}"
+        );
+        assert!(
+            (actual.pressure_pa / 1e6 - 1.0).abs() < 1e-7,
+            "{constraint}"
+        );
+        assert_eq!(results[0].transport.len(), 1);
+    }
+    let deck = parse_deck("reac name Fuel C 1 H 4 wt%=1 h,j=-74873 t=298.15\nproblem hp p=10\nend")
+        .unwrap();
+    let cases = deck[0].cases().unwrap();
+    let CaseInput::Equilibrium(Mode::HP(h, _)) = cases[0].input else {
+        panic!("wrong mode")
+    };
+    assert!((h + 74873.0 * 1000.0 / 16.04246).abs() < 1e-8);
+}
+
+#[test]
+fn mixture_ratios_shock_schedules_and_unsupported_modes_are_explicit() {
+    let reference =
+        run_deck("problem tp t=3000 p=10 o/f=7.93668273905193\nreac fuel H2 oxid O2\nend").unwrap();
+    let of = reference[0].weights[1] / reference[0].weights[0];
+    for ratio in [
+        "r=1".into(),
+        "phi=1".into(),
+        format!("%fuel={}", 100.0 / (1.0 + of)),
+        format!("f/o={}", 1.0 / of),
+    ] {
+        let deck = parse_deck(&format!(
+            "problem tp t=3000 p=10 {ratio}\nreac fuel H2 oxid O2\nend"
+        ))
+        .unwrap();
+        let weights = &deck[0].cases().unwrap()[0].weights;
+        assert!(
+            (weights[1] / weights[0] / (reference[0].weights[1] / reference[0].weights[0]) - 1.0)
+                .abs()
+                < 1e-10,
+            "{ratio}: {weights:?}"
+        );
+    }
+    let deck = parse_deck("problem shock p=1,2 t=300 u1=1100,1200,1300 incd refl eql froz\nreac name H2 moles=.05 name O2 moles=.05 name Ar moles=.9\nend").unwrap();
+    let cases = deck[0].cases().unwrap();
+    assert_eq!(cases.len(), 12);
+    for (i, case) in cases.iter().enumerate() {
+        let CaseInput::Shock {
+            pressure_pa,
+            incident_frozen,
+            reflected_frozen,
+            ..
+        } = case.input
+        else {
+            panic!("wrong mode")
+        };
+        assert_eq!(pressure_pa, if i % 3 == 0 { 1e5 } else { 2e5 });
+        assert_eq!(incident_frozen, i >= 6);
+        assert_eq!(reflected_frozen, (i / 3) % 2 == 0);
+        assert!(matches!(case.run().unwrap().output, CaseOutput::Shock(_)));
+    }
+    let error =
+        run_deck("problem detonation frozen p=1 t=300\nreac fuel H2 oxid O2\nend").unwrap_err();
+    assert!(matches!(error, cea_rs::Error::Unsupported(_)));
+    assert!(error.to_string().contains("Detonation"));
 }
 
 #[test]

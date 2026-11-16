@@ -5,6 +5,8 @@
 use crate::{Error, R, Result, thermo::Reactant};
 use std::collections::BTreeMap;
 use thermo_species::Species;
+mod run;
+pub use run::{Case, CaseInput, CaseOutput, DeckResult, run_deck};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Problem {
