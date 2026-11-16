@@ -31,10 +31,9 @@ convergence tolerance changed.
    undetermined. HP/SP phase coexistence and its temperature equation stay
    unchanged.
 
-   Known limit: a fixed-T solve started from a converged state of the other
-   phase (for example ice at 270 K, re-solved at 274 K) can fail, because the
-   singular-matrix recovery removes the only condensed phase. No public entry
-   point starts a fixed-T solve from a state; rocket continuation uses SP.
+   Fixed-T continuation from the other phase and invalid inserted phases are
+   covered by the recovery audit below. No public entry point starts a fixed-T
+   solve from a state; rocket continuation uses SP.
 
 ## NASA source and native behavior
 
@@ -177,3 +176,135 @@ The verification environment also overrode `UV_CACHE_DIR` for native CEA,
 numpy and maturin. Native CEA never supplied a seed or fallback result to Rust.
 This audit covers these mixtures and sweeps; it does not establish validity of
 extrapolated Br2 fits or broad metal-system parity.
+
+## Fixed-temperature recovery audit against f873de1
+
+Checked on 2026-11-17 with Rust 1.99.1, Python 3.12.15, numpy 2.5.5 and an
+independent `cea==3.3.4` wheel. All inputs below use Ar plus the named reactant,
+weights [1,1], 100000 Pa, full products, condensed enabled, ions disabled and
+default trace. No database coefficient, convergence tolerance or public API
+changed.
+
+The original numerical path runs first. Only a failed TP/TV solve retries
+once with these corrections; the retry must pass the same Newton and public
+residual checks. Its reported iteration count includes both attempts.
+
+1. **Unseeded NaCN at 300 K:** after forming NaCN(III), a tiny negative graphite
+   amount is removed. The remaining matrix has a nonzero trace-element pivot,
+   but its pivot ratio exceeds the Gaussian solver's `1e25` sentinel. Treating
+   that pivot as singular lets G.2 remove the valid NaCN phase. The retry
+   accepts finite nonzero pivots without that arbitrary ratio limit, in both
+   Newton and the final property partials. Zero/nonfinite pivots still fail.
+2. **Inserted NaCN(II) at 300 and 835 K:** the seed reaches Newton before its
+   fit is checked. At 300 K its extrapolated Cp is negative, so F.3.1 removes
+   it despite its positive amount. At 835 K the far-extrapolated fit prevents
+   convergence. F.4 also lets an invalid incumbent's lower extrapolated Gibbs
+   energy veto its valid sibling. On the retry, validate inserted phases
+   before matrix assembly; an invalid incumbent cannot veto an allowed phase.
+   Compare Gibbs energies when both phases are allowed.
+3. **Ice at 270 K continued to 274 K:** F.4 correctly transfers ice to liquid,
+   but the carried gas is truncated to Ar and H2O. Its H and O rows are
+   dependent. G.2 disables truncation and immediately removes/blocklists the
+   only condensate, before trying the restored gas. The retry rebuilds once
+   without truncation before any phase removal. The liquid then converges.
+
+NASA's [insertion rule](https://github.com/nasa/cea/blob/2f79a647e85737742fb08a127da00d1ea1d069da/source/equilibrium.f90#L1912)
+requires T at or below the upper fit bound and at or above the lower bound,
+except that a 200 K lower bound permits lower temperatures. The port's existing
+reversed-interval exception is unchanged. NaCN(II) declares 197.7–288.5 K,
+NaCN(III) 288.5–835 K, and NaCN(L) 835–6000 K. Thus **only NaCN(III) is allowed
+at 300 K**. Independently evaluated G/(RT) is -50.727820314964 for II and
+-50.612971708236 for III: II's apparent 286.472966736 J/mol advantage is an
+out-of-range extrapolation, not a competing allowed phase. NASA's 50 K phase
+switch neighborhood is not an extension of the insertion fit range.
+
+At 835 K, III and liquid are both allowed. Liquid is lower by
+0.0000135313570499 J/mol. At 274 K only liquid water is allowed among the water
+condensates; its range is 273.15–600 K. Extrapolated ice also has higher G by
+19.3714066682 J/mol, but does not enter the allowed-phase comparison.
+
+Independent checks use the raw `thermo.inp` parser and polynomial sums above,
+not the solver's reported residuals or its thermo evaluation functions.
+Every assigned T and P is retained exactly. Every positive condensate is
+inside its own fit: NaCN(III), NaCN(L), H2O(L), and graphite (300–6000 K).
+
+| Case | Iterations, original + retry | Positive condensed mass fractions | p_vapour, Pa | p/p_sat, present NaCN/water phase |
+|---|---:|---|---:|---:|
+| NaCN(II) or NaCN reactant, unseeded, 300 K | 114 + 55 | NaCN(III): 0.499999999999995 | 2.08162731570701e-21 | 0.999999999999957 |
+| NaCN reactant, insert NaCN(II), 300 K | 96 + 32 | NaCN(III): 0.499999994787154; C(gr): 1.38433917840e-25 | 2.08162725381046e-21 | 0.999999970265262 |
+| NaCN reactant, insert NaCN(II), 835 K | 75 + 28 | NaCN(L): 0.499869326615283; C(gr): 3.14030871179e-05 | 0.413864818234227 | 0.999999998771369 |
+| H2O(L) reactant, 270 K seed → 274 K | 9 + 4 | H2O(L): 0.498523671941702 | 650.478058624024 | 0.999999999426575 |
+
+The absent allowed NaCN(III) at 835 K has p/p_sat=0.999999996822341 and the
+positive Gibbs gap given above. At 300 and 274 K there is no absent allowed
+sibling. None of these vapours is supersaturated.
+
+| Case | Signed element residuals, (product/feed)-1 |
+|---|---|
+| Unseeded NaCN, 300 K, either reactant | AR: -9.32587e-15; NA: +3.08642e-14; C: -9.32587e-15; N: -9.32587e-15 |
+| Insert NaCN(II), 300 K | AR: -1.04257e-08; NA: -1.04257e-08; C: -1.04257e-08; N: +6.25299e-08 |
+| Insert NaCN(II), 835 K | AR: -4.05665e-10; NA: +9.79736e-11; C: -4.05666e-10; N: +1.60641e-09 |
+| Water continuation, 274 K | AR: -1.62315e-10; H: -1.62316e-10; O: +2.03218e-10 |
+
+Native CEA was installed with `uv venv` and `uv pip install cea==3.3.4`, with
+`UV_CACHE_DIR` and `TMPDIR` redirected to a temporary directory. Fresh native
+reactant/product mixtures, solvers and solutions were used for each input.
+All requested native NaCN cases report `converged=True`, `last_error=0`:
+
+| Native case | NaCN condensed mass fraction | p_NaCN, Pa | p/p_sat of that phase |
+|---|---:|---:|---:|
+| Unseeded, either reactant, 300 K | III: 0.499999999999998 | 2.08162731570703e-21 | 0.999999999999968 |
+| Insert II or III, 300 K | III: 0.499999961481994 | 2.08162685834947e-21 | 0.999999780288418 |
+| Insert II or III, 835 K | liquid: 0.499869326314486 | 0.413864818742703 | 0.999999999999975 |
+
+Native's largest independent element residual in these rows is +4.62037e-07
+for nitrogen in seeded 300 K runs. Native output was never a seed or fallback
+for the Rust solver.
+
+### Regression and unchanged-output checks
+
+- One regression per failure: two public tests in `tests/condensed.rs` and one
+  crate-internal continuation test in `src/solver.rs`. All three fail at the
+  original solve on `f873de1`; the seeded 835 K failure was also reproduced
+  independently (75 iterations). The tests check the assigned T, phase,
+  balances and vapour chemical potential.
+- All 358 previously successful complete snapshots are bit for bit identical:
+  111 equilibrium fixture inputs, 120 H2/O2 nozzle runs described above, and
+  127 TP phase/seed boundary cases for NaCN, water, Hg and Br2. Compare all
+  state fields, both compositions, iteration counts, residuals, extrapolation
+  lists and nozzle station fields. No fixture changed.
+  The canonical JSON SHA-256 of these 358 snapshots is identical before/after:
+  `c16b1570848d856e23fb70fb5d892a40872a1292f964f4fbf5dce88be71dff36`.
+- All 90 Air/Jet-A fingerprints in `scripts/check_air_jet_a_nozzle.py` remain
+  identical. Its entire JSON report, including the phase exit and standalone
+  SP rows, is identical too.
+  Report SHA-256:
+  `a103f237e2187b43ea88856a227de63e24f71e2549fe331aca1775f5d8fcd0c7`.
+- Of 17 failing boundary controls, 12 NaCN cases now converge: 300 K with no
+  seed or insert II/III/liquid; 310 K with II; 338.5 K with II/III/liquid; and
+  785, 834, 835 and 836 K with II. Every new result passed the independent
+  fit, Gibbs, element and no-supersaturation checks. Maximum element residual
+  is 4.59784e-07 and maximum allowed-phase saturation ratio is below 1.
+- Five unseeded Ar/Cr2O3(I') controls at 300, 304, 305, 320 and 330 K still
+  fail. Their error messages now count both attempts: 46→112, 46→112, 50→116,
+  49→115 and 49→115 iterations. No successful result elsewhere changed.
+
+The baseline release suite passed 70 tests with 1 ignored. The final release
+suite passes 73 tests with 1 ignored. The deck tests pass 3/3 and condensed
+tests 5/5; the continuation regression also passes. Both release Clippy runs
+(`--all-targets`, default and `--features python`) pass with `-D warnings`, and
+`cargo fmt --check` passes. The rebuilt installed-wheel tests pass 8/8 and the
+NASA API tests with independent native CEA pass 9/9. Build output and temporary
+files use a temporary directory; `mise.toml` is unchanged.
+
+```sh
+S=$(mktemp -d)
+mise exec -- env CARGO_TARGET_DIR="$S/target" TMPDIR="$S" cargo test --release
+mise exec -- env CARGO_TARGET_DIR="$S/target" TMPDIR="$S" \
+  cargo test --release --test nasa_decks --test condensed
+mise exec -- env CARGO_TARGET_DIR="$S/target" TMPDIR="$S" \
+  cargo clippy --release --all-targets -- -D warnings
+mise exec -- env CARGO_TARGET_DIR="$S/target" TMPDIR="$S" \
+  cargo clippy --release --all-targets --features python -- -D warnings
+mise exec -- env CARGO_TARGET_DIR="$S/target" TMPDIR="$S" cargo fmt --check
+```
