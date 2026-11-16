@@ -194,3 +194,16 @@ fn fixed_temperature_selects_the_lower_gibbs_phase_without_coexistence() {
         );
     }
 }
+
+#[test]
+fn nacn_at_300_k_selects_the_phase_inside_its_fit() {
+    for reactant in ["NaCN(II)", "NaCN"] {
+        let solver = model(reactant);
+        let state = solver.solve(Mode::TP(300.0, 1e5), &[1.0, 1.0]).unwrap();
+        assert_eq!(state.temperature_k, 300.0);
+        check(&state, &solver, &[1.0, 1.0], "NaCN", &["NaCN(III)"]);
+        assert!(state.mass_fractions["NaCN(III)"] > 0.49);
+        assert!(!state.mass_fractions.contains_key("NaCN(II)"));
+        assert!(!state.mass_fractions.contains_key("NaCN(L)"));
+    }
+}

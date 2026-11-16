@@ -167,12 +167,12 @@ impl MixtureThermo {
 
 // Solve G*x = rhs in place. G is (n, n+1) augmented. Returns Err(k)
 // with the 0-based column index that could not be pivoted.
-fn gauss(g: &mut DMatrix<f64>) -> Result<(), usize> {
+fn gauss(g: &mut DMatrix<f64>, pivot_limit: f64) -> Result<(), usize> {
     let n = g.nrows();
     for k in 0..(n - 1) {
         //  Custom pivot search
         let mut pivot = None;
-        let mut min_ratio = 1e25;
+        let mut min_ratio = pivot_limit;
         for i in k..n {
             let gk = g[(i, k)].abs();
             let ratio = if gk != 0.0 {
@@ -182,7 +182,7 @@ fn gauss(g: &mut DMatrix<f64>) -> Result<(), usize> {
                 }
                 m / gk
             } else {
-                1e25
+                pivot_limit
             };
             if ratio < min_ratio {
                 min_ratio = ratio;
@@ -191,7 +191,7 @@ fn gauss(g: &mut DMatrix<f64>) -> Result<(), usize> {
         }
 
         let Some(p) = pivot else { return Err(k) };
-        if min_ratio >= 1e25 {
+        if min_ratio >= pivot_limit {
             return Err(k);
         }
         g.swap_rows(p, k);
@@ -478,6 +478,49 @@ pub(crate) fn solve_for_products_debug_seeded(
 #[allow(unused_assignments, clippy::too_many_arguments)]
 pub(crate) fn solve_for_products_debug_with_start(
     reactants: &[crate::thermo::Feed],
+    const_t: bool,
+    const_s: bool,
+    const_p: bool,
+    state1: f64,
+    state2: f64,
+    include_condensed: bool,
+    include_ions: bool,
+    only: Option<&[Species]>,
+    insert: Option<&[Species]>,
+    trace: f64,
+    start: Option<&EquilibriumSeed>,
+) -> EquilibriumDebug {
+    let solve = |recover_fixed_t| {
+        solve_equilibrium(
+            reactants,
+            const_t,
+            const_s,
+            const_p,
+            state1,
+            state2,
+            include_condensed,
+            include_ions,
+            only,
+            insert,
+            trace,
+            start,
+            recover_fixed_t,
+        )
+    };
+    let original = solve(false);
+    if const_t && include_condensed && !original.converged {
+        // Keep every already-converged result on its original numerical path.
+        let mut retry = solve(true);
+        retry.iterations_used += original.iterations_used;
+        retry
+    } else {
+        original
+    }
+}
+
+#[allow(unused_assignments, clippy::too_many_arguments)]
+fn solve_equilibrium(
+    reactants: &[crate::thermo::Feed],
     // Select fixed temperature vs variable-temperature energy/entropy modes.
     const_t: bool,
     // Only meaningful when !const_t: true = SP (state1 = S⁰/R), false = HP
@@ -506,6 +549,7 @@ pub(crate) fn solve_for_products_debug_with_start(
     insert: Option<&[Species]>,
     trace: f64,
     start: Option<&EquilibriumSeed>,
+    recover_fixed_t: bool,
 ) -> EquilibriumDebug {
     let mut constituent_set: HashSet<Constituent> = HashSet::new();
     reactants.iter().for_each(|feed| {
@@ -761,6 +805,8 @@ pub(crate) fn solve_for_products_debug_with_start(
     // problem type among TP/HP/SP/TV/UV/SV that matches that combination).
     let is_hp = !const_t && const_p && !const_s;
 
+    // Trace-only element rows need not be singular when their pivot ratio exceeds 1e25.
+    let pivot_limit = if recover_fixed_t { f64::INFINITY } else { 1e25 };
     for total_iteration in 0..max_total_iterations {
         if iteration >= max_iterations {
             // G.3: max-iteration high-T condensed fallback. If the iterate
@@ -1094,7 +1140,7 @@ pub(crate) fn solve_for_products_debug_with_start(
         // Solve for [pi_0..pi_{ne-1}, Δn_c, dln_n, (dlnT)], then recover
         // dln_nj (Eq. 2.18, gaining the ΔlnT*h_j term for variable-T
         // problems, E.3).
-        if let Err(ierr) = gauss(&mut g) {
+        if let Err(ierr) = gauss(&mut g, pivot_limit) {
             // G.2 correct_singular(ierr): "first action always" is to
             // disable truncation, then try recovery branches in order,
             // first match wins.
@@ -1852,7 +1898,7 @@ pub(crate) fn solve_for_products_debug_with_start(
         for i in 0..neq2 {
             g[(i, neq2)] = rhs[i];
         }
-        gauss(&mut g).ok()?;
+        gauss(&mut g, pivot_limit).ok()?;
         Some(DVector::from_fn(neq2, |i, _| g[(i, neq2)]))
     };
 
@@ -2121,7 +2167,7 @@ mod gauss_validation {
         let (a, b) = split_augmented(&g);
         let expected = a.lu().solve(&b).expect("nalgebra solve failed");
 
-        gauss(&mut g).expect("gauss reported singular on a well-posed system");
+        gauss(&mut g, 1e25).expect("gauss reported singular on a well-posed system");
         for i in 0..4 {
             let got = g[(i, 4)];
             assert!(
@@ -2155,7 +2201,7 @@ mod gauss_validation {
         g.view_mut((0, 0), (N, N)).copy_from(&spd);
         g.view_mut((0, N), (N, 1)).copy_from(&b);
 
-        gauss(&mut g).expect("gauss reported singular on an SPD system");
+        gauss(&mut g, 1e25).expect("gauss reported singular on an SPD system");
         for i in 0..N {
             let got = g[(i, N)];
             assert!(
