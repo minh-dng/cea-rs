@@ -279,10 +279,8 @@ macro_rules! cea_debug {
 // - Adjacency uses the sibling order. NASA compares compiled phase numbers,
 //   which also count fit intervals, so it treats ice (1) and liquid water (3)
 //   as non-adjacent and cycles between them instead of letting them coexist.
-// - The melting-point coexistence path pins T to the transition temperature,
-//   which only makes sense when T is a Newton unknown — for const-T problems
-//   the user's T stays untouched (the doomed phase then dies through F.3.1's
-//   negative-amount removal instead).
+// - Fixed-T problems keep only the lower-Gibbs sibling near a transition;
+//   coexistence would duplicate an element column without a T unknown.
 #[allow(clippy::too_many_arguments)]
 fn check_condensed_phases(
     species: &[Species],
@@ -326,8 +324,21 @@ fn check_condensed_phases(
 
         for (rank, &sp) in siblings.iter().enumerate() {
             let Some(j) = cond_index(sp) else { continue };
-            let (_, t_high_j) = species[ng + j].data().valid_temperature_range();
-            if *temperature_k > t_high_j {
+            let (t_low_j, t_high_j) = species[ng + j].data().valid_temperature_range();
+            if const_t {
+                // Fit endpoints approximate the crossing; compare Gibbs energies
+                // in the same 50 K neighborhood used for variable-T phase changes.
+                let gibbs = |sp: Species| {
+                    sp.data().h_over_r(*temperature_k) / *temperature_k
+                        - sp.data().s_over_r(*temperature_k)
+                };
+                if (t_low_j <= t_high_j && *temperature_k < t_low_j - DT_PHASE)
+                    || *temperature_k > t_high_j + DT_PHASE
+                    || gibbs(sp) >= gibbs(species[sc_i])
+                {
+                    continue;
+                }
+            } else if *temperature_k > t_high_j {
                 continue; // sibling j can't exist at T
             }
             let d_phase = phase_rank.abs_diff(rank);
@@ -339,7 +350,7 @@ fn check_condensed_phases(
             }
             let out_of_range =
                 *temperature_k < t_low_i - DT_PHASE || *temperature_k > t_high_i + DT_PHASE;
-            if d_phase > 1 || (Some(j) != *j_switch && out_of_range) {
+            if const_t || d_phase > 1 || (Some(j) != *j_switch && out_of_range) {
                 cea_debug!(
                     "[F.4] replacing {} with {} at T={temperature_k}",
                     species[sc_i].data().symbol(),
@@ -366,9 +377,7 @@ fn check_condensed_phases(
                     species[sc_i].data().symbol(),
                     species[ng + j].data().symbol()
                 );
-                if !const_t {
-                    *temperature_k = t_high_i.min(t_high_j);
-                }
+                *temperature_k = t_high_i.min(t_high_j);
                 if t_high_i > t_high_j {
                     *j_sol = Some(j);
                     *j_liq = Some(i);
