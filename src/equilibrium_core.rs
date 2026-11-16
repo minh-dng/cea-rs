@@ -520,7 +520,9 @@ pub(crate) fn solve_for_products_debug_with_start(
         )
     };
     let original = solve(false);
-    if const_t && include_condensed && !original.converged {
+    // Only a pool with condensed species gets the retry: its relaxed pivot
+    // limit is meant for trace rows beside a condensed phase, not gas-only solves.
+    if const_t && !original.condensed_species.is_empty() && !original.converged {
         // Keep every already-converged result on its original numerical path.
         let mut retry = solve(true);
         retry.iterations_used += original.iterations_used;
