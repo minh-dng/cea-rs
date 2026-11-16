@@ -1154,9 +1154,15 @@ fn solve_equilibrium(
             // G.2's "first action always": disable truncation entirely —
             // all three thresholds, so charged species un-truncate too, and
             // xsize so a later convergence's tsize = xsize keeps it off.
+            let truncated = tsize < 80.0 || esize < 80.0;
             tsize = 80.0;
             xsize = 80.0;
             esize = 80.0;
+            if recover_fixed_t && truncated {
+                // Rebuild with the restored gas before blaming a condensed phase.
+                iteration = 0;
+                continue;
+            }
             let mut changed = false;
 
             // (a) freshly-added condensed conflicts: a singular matrix on

@@ -518,3 +518,54 @@ impl Solver {
         Ok(out)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fixed_temperature_continuation_changes_condensed_phase() {
+        let solver = Solver::new(
+            vec![
+                Reactant::named("Ar").unwrap(),
+                Reactant::named("H2O(L)").unwrap(),
+            ],
+            true,
+            false,
+            None,
+            vec![],
+        )
+        .unwrap();
+        let cold = solver.solve(Mode::TP(270.0, 1e5), &[1.0, 1.0]).unwrap();
+        assert!(cold.mass_fractions["H2O(cr)"] > 0.4);
+        let warm = solver
+            .solve_with_start(
+                Mode::TP(274.0, 1e5),
+                &[1.0, 1.0],
+                cold.equilibrium_seed.as_ref(),
+            )
+            .unwrap();
+        assert_eq!(warm.temperature_k, 274.0);
+        assert!(warm.mass_fractions["H2O(L)"] > 0.4);
+        assert!(!warm.mass_fractions.contains_key("H2O(cr)"));
+        assert!(warm.element_residual < 1e-6);
+        let mu = |name: &str| {
+            let sp = name.parse::<Species>().unwrap();
+            sp.data().h_over_r(274.0) / 274.0 - sp.data().s_over_r(274.0)
+        };
+        assert!(mu("H2O(L)") < mu("H2O(cr)"));
+        let ng: f64 = warm
+            .amounts
+            .iter()
+            .filter(|(_, s)| s.data().phase() == 0)
+            .map(|(n, _)| n)
+            .sum();
+        let nv = warm
+            .amounts
+            .iter()
+            .find(|(_, s)| s.data().symbol() == "H2O")
+            .unwrap()
+            .0;
+        assert!((mu("H2O") + (nv / ng).ln() - mu("H2O(L)")).abs() < 1e-7);
+    }
+}
