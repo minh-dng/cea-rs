@@ -1,5 +1,6 @@
 //! Experimental native Rust chemical equilibrium. No Fortran runtime is used.
 #![allow(clippy::needless_range_loop)]
+pub mod deck;
 pub mod derivatives;
 pub mod detonation;
 #[allow(dead_code)]
