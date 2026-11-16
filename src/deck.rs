@@ -637,7 +637,8 @@ impl ReactantInput {
         {
             named?
         } else {
-            let formula = if self.formula.is_empty() {
+            let formula_override = !self.formula.is_empty();
+            let formula = if !formula_override {
                 named
                     .as_ref()
                     .map_err(Clone::clone)?
@@ -648,14 +649,21 @@ impl ReactantInput {
             } else {
                 self.formula
             };
-            let mw = self.molecular_weight.unwrap_or(formula_mass(&formula)?);
-            let t = self.temperature.unwrap_or(298.15);
+            let mw = match self.molecular_weight {
+                Some(mw) => mw,
+                None if !formula_override => named.as_ref().map_err(Clone::clone)?.molecular_weight,
+                None => formula_mass(&formula)?,
+            };
+            let t = self
+                .temperature
+                .unwrap_or_else(|| named.as_ref().map_or(298.15, |r| r.reference_temperature));
             let h = match self.enthalpy {
                 Some(h) => h,
+                None if !needs_enthalpy => 0.0,
                 None => named
                     .as_ref()
                     .ok()
-                    .map(|r| r.properties(t).map(|p| p.1))
+                    .map(|r| r.enthalpy(t))
                     .transpose()?
                     .unwrap_or(0.0),
             };

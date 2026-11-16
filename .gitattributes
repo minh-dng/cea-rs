@@ -1,3 +1,6 @@
 # Preserve the upstream fixed-width data, including CRLF and padding.
 vendor/thermo-species/data/thermo.inp -text -whitespace
 vendor/nasa-transport/trans.inp -text -whitespace
+tests/data/nasa/*.inp -text -whitespace
+tests/data/nasa/*.out -text -whitespace
+tests/data/nasa/native-3.3.4/*.out -text -whitespace

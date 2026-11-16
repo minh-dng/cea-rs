@@ -22,10 +22,16 @@ end
 problem tp t,r=540 p,atm=1
 reac name H2
 end
+problem hp p=1
+reac name Air h,j=0 t=298.15
+end
+problem hp p=1
+reac name Heavy H 2 mw=3 h,j=0 t=298.15
+end
 ",
     )
     .unwrap();
-    assert_eq!(decks.len(), 4);
+    assert_eq!(decks.len(), 6);
     let d = &decks[0];
     assert_eq!(d.problem, Problem::HP);
     assert_eq!(d.pressures_pa, [500.0 * 6894.75729, 250.0 * 6894.75729]);
@@ -43,6 +49,11 @@ end
     assert_eq!(decks[2].pressures_pa, [1333.0]);
     assert_eq!(decks[3].temperatures_k, [300.0]);
     assert_eq!(decks[3].pressures_pa, [101325.0]);
+    assert_eq!(
+        decks[4].reactants[0].reactant.molecular_weight,
+        Reactant::named("Air").unwrap().molecular_weight
+    );
+    assert_eq!(decks[5].reactants[0].reactant.molecular_weight, 3.0);
 }
 
 #[test]

@@ -41,6 +41,22 @@ end
         with self.assertRaisesRegex(NotImplementedError, "Frozen Detonation"):
             cea_rs.run_deck("problem detonation frozen t=300 p=1\nreac fuel H2 oxid O2\nend")
 
+    def test_run_deck_application_results(self) -> None:
+        """Return each application type through the installed extension."""
+        for example, kind, result_type in (
+            (6, "detonation", cea_rs.DetonationResult),
+            (7, "shock", cea_rs.ShockResult),
+            (9, "rocket", cea_rs.RocketResult),
+            (12, "rocket", cea_rs.RocketResult),
+        ):
+            text = (Path(__file__).parent / "data" / "nasa" / f"example{example}.inp").read_text()
+            for case in cea_rs.run_deck(text):
+                self.assertEqual(case.kind, kind)
+                self.assertIsInstance(case.result, result_type)
+                self.assertTrue(case.weights)
+                if example == 12:
+                    self.assertAlmostEqual(case.reactant_density_kg_m3, 3.5 / (1 / 874 + 2.5 / 1431))
+
     def test_install_and_bad_inputs(self) -> None:
         """Verify the import path and ensure failed solves expose no state."""
         self.assertTrue(Path(cea_rs.__file__).is_relative_to(args.installed.resolve()))
