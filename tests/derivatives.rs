@@ -729,12 +729,17 @@ fn derivative_failures_are_errors_and_zero_weights_are_one_sided() {
         // Native finite constraint residuals become noise in near-zero finite differences.
         close(f, a, 2e-3);
     }
-    // Introducing oxygen at a zero weight changes the compatible product pool.
+    // Zero-weight oxygen retains its formula; native 3.3.4 also computes these derivatives.
     let s = solver(&["H2", "O2"]);
-    assert!(s.derivatives(Mode::TP(2500.0, 1e6), &[1.0, 0.0]).is_err());
+    let a = s.derivatives(Mode::TP(2500.0, 1e6), &[1.0, 0.0]).unwrap();
+    close(
+        &a.enthalpy,
+        &[21756.45866509002, -0.4514000844995226, 0.0, -49203696.60020991],
+        1e-10,
+    );
     assert!(
         s.finite_difference_derivatives(Mode::TP(2500.0, 1e6), &[1.0, 0.0], 1e-4)
-            .is_err()
+            .is_ok()
     );
     let s = Solver::new(
         vec![Reactant::named("H2").unwrap()],

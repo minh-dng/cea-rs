@@ -294,7 +294,7 @@ air5 100000 10 1 1 1 300 100000 1.156625946688379 1871.074057877082 -84587.30108
 
 #[test]
 fn frozen_shock_above_20000_k_matches_native() {
-    // Native cea==3.3.4 ShockSolver: Ar, T1=15000 K, P1=1 bar, Mach 1.5, incident frozen.
+    // Native 3.3.4: one mole Ar, T1=15000 K, P1=1 bar, Mach 1.5, incident frozen.
     let solver = Solver::new(
         vec![Reactant::named("Ar").unwrap()],
         true,
@@ -305,7 +305,7 @@ fn frozen_shock_above_20000_k_matches_native() {
     .unwrap();
     let r = solver
         .shock(
-            &[1.0],
+            &solver.moles_to_weights(&[1.0]).unwrap(),
             15000.0,
             1e5,
             ShockSpeed::Mach(1.5),
