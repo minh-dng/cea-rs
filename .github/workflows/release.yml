@@ -26,7 +26,7 @@ jobs:
           version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
           rust_version = tomllib.loads(Path("Cargo.toml").read_text())["package"]["version"]
           assert rust_version.replace("-alpha.", "a") == version, "Cargo and Python versions must match"
-          assert version not in {"0.1.0a1", "0.1.0a2"}, "Existing packages are immutable; bump the version first"
+          assert version not in {"0.1.0a1", "0.1.0a2", "0.1.0a3"}, "Existing packages are immutable; bump the version first"
           assert os.environ["GITHUB_REF_NAME"] == f"v{version}", "Tag must match the Python package version"
           PY
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
