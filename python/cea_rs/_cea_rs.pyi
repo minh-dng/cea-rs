@@ -7,6 +7,8 @@ R: float
 __version__: str
 
 class Reactant:
+    _nasa_formula: dict[str, float]
+    _nasa_phase: int
     name: str
     molecular_weight: float
     def __init__(
@@ -24,6 +26,8 @@ class Reactant:
     ) -> tuple[float | None, float, float | None]: ...
 
 class State:
+    _nasa_nj: dict[str, float]
+    _nasa_ln_nj: dict[str, float] | None
     gibbs_energy_j_kg: float
     cv_frozen_j_kg_k: float
     cv_equilibrium_j_kg_k: float | None
@@ -232,3 +236,5 @@ class DeckResult:
     reactant_density_kg_m3: float | None
 
 def run_deck(text: str) -> list[DeckResult]: ...
+
+def _nasa_species() -> list[tuple[str, float, int, dict[str, float]]]: ...

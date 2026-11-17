@@ -18,7 +18,8 @@ print(state.temperature_k, rocket.cstar_m_s, rocket.vacuum_velocity_m_s)
 
 Implements TP/HP/SP/TV/UV/SV, experimental condensed/ion equilibrium,
 IAC/FAC equilibrium or frozen rockets, incident/reflected shocks, equilibrium
-CJ detonation, transport, and NASA input decks. Numerical work runs in
+CJ detonation, transport, NASA input decks and a supported subset of NASA's
+Python API in `cea_rs.nasa`. Numerical work runs in
 Rust, with no Fortran or native CEA runtime dependency. Python requires >=3.12.
 The existing alpha packages remain in the original GitLab registry; this source
 migration does not republish them. See [GitHub CI and releases](docs/github.md)
@@ -87,8 +88,8 @@ The parser covers NASA's sample `problem`, `reactants`, `only`/`omit`/`insert`,
 `output` and `end` datasets, mixed units, custom formulas/enthalpies, mixture
 ratios and station schedules. Unknown keywords or units fail by name.
 Formatting/plot preferences are retained as metadata. Frozen detonation is
-unsupported. No NASA report formatter, CLI or Python compatibility layer is
-included. Existing solver numerics are unchanged.
+unsupported. No NASA report formatter or CLI is included. Existing solver
+numerics are unchanged.
 
 All 55 cases in NASA's 14 main-interface decks solve. The table gives strict
 `1e-4` relative comparison results against native 3.3.4 reports (example 6
@@ -122,6 +123,44 @@ new differences. [Deck validation](docs/input-decks.md) gives both reference
 tables, exact numbers, known NASA reporting/stopping limits and overlap with
 existing hand-entered tests. [Fixture provenance](tests/data/nasa/README.md)
 records NASA's notice, hashes and regeneration steps.
+
+## NASA Python API
+
+Install the optional adapter dependencies with
+`pip install 'cea-keplr-rs[nasa]'`. For supported NASA `cea==3.3.4` calling
+code, change the import to:
+
+```python
+from cea_rs import nasa as cea
+import numpy as np
+
+reactants = cea.Mixture(["H2", "O2"])
+products = cea.Mixture(["H2", "O2"], products_from_reactants=True)
+solver = cea.EqSolver(products, reactants=reactants)
+solution = cea.EqSolution(solver)
+solver.solve(solution, cea.TP, 3000.0, 10.0, np.array([1.0, 8.0]))
+print(solution.T, solution.P, solution.enthalpy)  # K, bar, kJ/kg
+```
+
+The submodule provides `Reactant`, `Mixture`, `EqSolver`/`EqSolution`,
+`EqDerivatives`, `RocketSolver`/`RocketSolution`, `ShockSolver`/`ShockSolution`
+and `DetonationSolver`/`DetonationSolution`, with NASA's defaults and NumPy
+array shapes. Only this submodule requires NumPy; the base `cea_rs` package
+works without it and continues to use SI. NASA itself is not a runtime dependency.
+
+The [complete member inventory and status](docs/nasa-python-api.md) records
+units, unsupported options and numerical limits. Smoothing, arbitrary initial
+guesses, custom binary databases, frozen detonation and MATLAB wrappers raise
+named `NotImplementedError`s. Failed verification raises a typed error and
+clears the solution. Native retained/invalid states are not returned. The
+known nozzle, frozen-Cv and condensed-phase differences remain explicit.
+The worst compared difference, including the named RP-1311 example 12
+exception, is 1.73451869e-4 (CO mass fraction at area 75, bounded at 1.8e-4).
+Other valid compared outputs meet 1e-4; their worst difference is 7.0467525e-5.
+
+`tests/test_nasa_api.py` uses the same calls for both implementations when
+NASA 3.3.4 is installed. Without it, stored native values and independent
+checks still cover all problem types; CI exercises that path from the wheel.
 
 ## Build
 

@@ -15,6 +15,9 @@ Licensed under the Apache License, Version 2.0.
 
 cea-rs modifications (2026): Rust/Python validation, reactant support, rocket
 expansion and packaging by Keplr contributors. This is not a NASA product.
+The cea_rs.nasa compatibility layer is independently written over the Rust
+bindings; NASA Python API names, signatures, constants and unit conventions
+were inspected for interoperability. No NASA Python implementation was copied.
 The text above is NASA's notice, kept unchanged. In this repository the NASA
 databases are at vendor/thermo-species/data/thermo.inp and
 vendor/nasa-transport/trans.inp. NASA example decks, original reference outputs,

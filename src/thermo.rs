@@ -70,6 +70,7 @@ pub struct Reactant {
     pub name: String,
     pub molecular_weight: f64,
     pub formula: Vec<(f64, Constituent)>,
+    pub(crate) phase: u8,
     pub reference_temperature: f64,
     reference_enthalpy: f64,
     fits: Vec<Fit>,
@@ -107,6 +108,7 @@ impl Reactant {
                 name: name.into(),
                 molecular_weight: sp.data().mw(),
                 formula: sp.data().constituents().to_vec(),
+                phase: sp.data().phase(),
                 reference_temperature: 298.15,
                 reference_enthalpy: sp.data().h_formation(),
                 fits: vec![],
@@ -156,6 +158,7 @@ impl Reactant {
             name,
             molecular_weight,
             formula: counts.into_iter().map(|(c, n)| (n, c)).collect(),
+            phase: 0,
             reference_temperature: reference_temperature_k,
             reference_enthalpy: enthalpy_j_mol,
             fits: vec![],
@@ -298,6 +301,7 @@ fn parse_reactants() -> Result<Vec<Reactant>> {
             number(meta, 65, 80)?,
             298.15,
         )?;
+        r.phase = number(meta, 50, 52)? as u8;
         if count == 0 {
             r.reference_temperature = number(
                 lines

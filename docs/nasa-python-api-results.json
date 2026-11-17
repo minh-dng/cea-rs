@@ -1,0 +1,407 @@
+{
+  "native_version": "3.3.4",
+  "worst_relative": {
+    "Air Jet-A stored": {
+      "difference": 8.127893353084971e-12,
+      "member": "exit T"
+    },
+    "Air Jet-A invariants": {
+      "difference": 4.1409677210406596e-10,
+      "member": "mass flux"
+    },
+    "TP": {
+      "difference": 3.793215103819771e-10,
+      "member": "cv_eq"
+    },
+    "derivatives": {
+      "difference": 2.2131530896260827e-12,
+      "member": "TV.dnj_dstate2"
+    },
+    "native derivative FD": {
+      "difference": 3.7132635675359335e-07,
+      "member": "UV.dH_dstate2_fd"
+    },
+    "derivative FD": {
+      "difference": 6.093624995202301e-09,
+      "member": "HP.dT_dw0"
+    },
+    "HP": {
+      "difference": 3.560231008833965e-11,
+      "member": "cv_eq"
+    },
+    "FD fixed-constraint noise": {
+      "difference": 0.0,
+      "member": "HP.dH_dstate2 Rust"
+    },
+    "SP": {
+      "difference": 3.613065661631132e-11,
+      "member": "cv_eq"
+    },
+    "TV": {
+      "difference": 2.1268467077487824e-09,
+      "member": "cv_fr"
+    },
+    "UV": {
+      "difference": 3.518836356790922e-11,
+      "member": "cv_eq"
+    },
+    "SV": {
+      "difference": 3.520448204182361e-11,
+      "member": "cv_eq"
+    },
+    "eq_solve": {
+      "difference": 1.1899011586622474e-14,
+      "member": "enthalpy"
+    },
+    "default reactants": {
+      "difference": 2.8717337843389865e-13,
+      "member": "mole_fractions.O2"
+    },
+    "mixture": {
+      "difference": 7.563446314501336e-16,
+      "member": "calc_property 7 ndarray"
+    },
+    "units": {
+      "difference": 0.0,
+      "member": "celsius_to_kelvin"
+    },
+    "custom": {
+      "difference": 1.306327059864998e-16,
+      "member": "molar enthalpy"
+    },
+    "stored NASA rocket-8-0": {
+      "difference": 2.2506313720455742e-05,
+      "member": "P"
+    },
+    "IAC equilibrium": {
+      "difference": 7.046752475618409e-05,
+      "member": "mass_fractions.NO"
+    },
+    "stored NASA rocket-8-1": {
+      "difference": 5.220650342711574e-06,
+      "member": "P"
+    },
+    "IAC frozen": {
+      "difference": 1.5181817099151968e-05,
+      "member": "P"
+    },
+    "IAC frozen frozen Cv identity": {
+      "difference": 3.618377365240491e-09,
+      "member": "cv_fr"
+    },
+    "stored NASA rocket-8-2": {
+      "difference": 2.068162459187035e-06,
+      "member": "P"
+    },
+    "stored NASA rocket-9-0": {
+      "difference": 2.2075562270205843e-05,
+      "member": "P"
+    },
+    "FAC equilibrium": {
+      "difference": 6.859254892902121e-05,
+      "member": "mass_fractions.H"
+    },
+    "stored NASA rocket-9-4": {
+      "difference": 1.8045025206503973e-06,
+      "member": "P"
+    },
+    "FAC frozen": {
+      "difference": 3.1813676045500656e-05,
+      "member": "P"
+    },
+    "FAC frozen frozen Cv identity": {
+      "difference": 1.956961339550625e-16,
+      "member": "cv_fr"
+    },
+    "stored NASA rocket-9-5": {
+      "difference": 3.1813676045500656e-05,
+      "member": "P"
+    },
+    "stored NASA rocket-10-0": {
+      "difference": 2.446164619079676e-05,
+      "member": "P"
+    },
+    "stored NASA rocket-11-0": {
+      "difference": 9.426035068536743e-06,
+      "member": "enthalpy"
+    },
+    "stored NASA rocket-12-0": {
+      "difference": 4.605260465442447e-05,
+      "member": "P"
+    },
+    "RP12 bounded trace exception": {
+      "difference": 0.00017345186889113933,
+      "member": "mass_fractions.CO[area75]"
+    },
+    "stored NASA rocket-12-2": {
+      "difference": 1.5181817099151968e-05,
+      "member": "P"
+    },
+    "stored NASA rocket-13-0": {
+      "difference": 1.864978902673961e-06,
+      "member": "density"
+    },
+    "FAC early freeze invariant": {
+      "difference": 1.5511993956408317e-15,
+      "member": "stagnation enthalpy"
+    },
+    "stored NASA rp-TP": {
+      "difference": 3.793215103819771e-10,
+      "member": "cv_eq"
+    },
+    "stored NASA rp-TV": {
+      "difference": 2.1268467077487824e-09,
+      "member": "cv_fr"
+    },
+    "stored NASA rp14-1000.0": {
+      "difference": 6.657590533097423e-13,
+      "member": "entropy"
+    },
+    "condensed TP": {
+      "difference": 2.0456017276915917e-09,
+      "member": "nj"
+    },
+    "stored NASA rp14-500.0": {
+      "difference": 5.109666416552461e-13,
+      "member": "cv_eq"
+    },
+    "stored NASA rp14-350.0": {
+      "difference": 3.893761227776065e-14,
+      "member": "cv_fr"
+    },
+    "stored NASA rp14-305.0": {
+      "difference": 3.6136626804102016e-13,
+      "member": "cv_eq"
+    },
+    "stored NASA rp14-304.3": {
+      "difference": 2.2083165465779875e-10,
+      "member": "cp_eq"
+    },
+    "stored NASA rp14-304.2": {
+      "difference": 9.506735085308957e-10,
+      "member": "cp_eq"
+    },
+    "stored NASA rp14-304.0": {
+      "difference": 4.3349578827554283e-10,
+      "member": "cp_eq"
+    },
+    "stored NASA rp14-300.0": {
+      "difference": 1.5105724204006781e-09,
+      "member": "cp_eq"
+    },
+    "condensed stored": {
+      "difference": 4.377268859249592e-13,
+      "member": "Br2 solid mass"
+    },
+    "stored NASA shock-0000": {
+      "difference": 6.527041306327153e-08,
+      "member": "energy"
+    },
+    "shock": {
+      "difference": 1.8963375845199483e-06,
+      "member": "cv_fr"
+    },
+    "stored NASA shock-0001": {
+      "difference": 1.8963375845199483e-06,
+      "member": "cv_fr"
+    },
+    "stored NASA shock-0010": {
+      "difference": 6.527041306327153e-08,
+      "member": "energy"
+    },
+    "stored NASA shock-0011": {
+      "difference": 1.8963375845199483e-06,
+      "member": "cv_fr"
+    },
+    "stored NASA shock-0100": {
+      "difference": 1.0168135688874031e-08,
+      "member": "energy"
+    },
+    "stored NASA shock-0101": {
+      "difference": 1.0168135688874031e-08,
+      "member": "energy"
+    },
+    "stored NASA shock-0110": {
+      "difference": 1.0168135688874031e-08,
+      "member": "energy"
+    },
+    "stored NASA shock-0111": {
+      "difference": 1.0168135688874031e-08,
+      "member": "energy"
+    },
+    "stored NASA shock-1000": {
+      "difference": 1.6360555111725808e-07,
+      "member": "energy"
+    },
+    "stored NASA shock-1001": {
+      "difference": 1.8963375845199483e-06,
+      "member": "cv_fr"
+    },
+    "stored NASA shock-1010": {
+      "difference": 9.059068223229242e-07,
+      "member": "Mach"
+    },
+    "shock station5 Cp": {
+      "difference": 1.3239328400066308e-06,
+      "member": "Cp identity"
+    },
+    "shock station5 Cv": {
+      "difference": 6.115788488287463e-10,
+      "member": "Cv identity"
+    },
+    "stored NASA shock-1011": {
+      "difference": 9.059068223229242e-07,
+      "member": "Mach"
+    },
+    "stored NASA shock-1100": {
+      "difference": 8.229699550823006e-08,
+      "member": "energy"
+    },
+    "stored NASA shock-1101": {
+      "difference": 3.230917182428317e-07,
+      "member": "cv_fr"
+    },
+    "stored NASA shock-1110": {
+      "difference": 8.221591806969306e-08,
+      "member": "velocity"
+    },
+    "stored NASA shock-1111": {
+      "difference": 8.221591806969306e-08,
+      "member": "velocity"
+    },
+    "stored NASA detonation-298.15-1.0": {
+      "difference": 2.701915543393735e-05,
+      "member": "energy"
+    },
+    "detonation": {
+      "difference": 4.1122016324389916e-05,
+      "member": "energy"
+    },
+    "stored NASA detonation-298.15-20.0": {
+      "difference": 4.1122016324389916e-05,
+      "member": "energy"
+    },
+    "stored NASA detonation-500.0-1.0": {
+      "difference": 2.3175115277623985e-05,
+      "member": "P"
+    },
+    "stored NASA detonation-500.0-20.0": {
+      "difference": 8.959287312218379e-06,
+      "member": "energy"
+    }
+  },
+  "exceptions": [
+    "Air/Jet-A 20MPa area80: NASA success has 14\u201315kJ/kg energy error and 18\u201319% mass-flux error; Rust independently closes both",
+    "Br2 TP262K: native reversed interval omits solid; Rust solid mass0.943263839016 and lower saturated vapour",
+    "FAC frozen.cv_eq: native frozen Cv retains a previous value or zero; Rust evaluates current Cv",
+    "FAC frozen.cv_fr: native frozen Cv retains a previous value or zero; Rust evaluates current Cv",
+    "HP.dH_dstate2_fd at h=1e-5: exact-zero constraint derivative; both backends bounded absolutely at 0.001 in NASA units",
+    "HP.dH_dw0_fd at h=1e-5: exact-zero constraint derivative; both backends bounded absolutely at 0.001 in NASA units",
+    "IAC frozen.cv_eq: native frozen Cv retains a previous value or zero; Rust evaluates current Cv",
+    "IAC frozen.cv_fr: native frozen Cv retains a previous value or zero; Rust evaluates current Cv",
+    "NASA ShockSolution.n/nj/ln_nj call missing _get_size; Rust returns n/nj arrays; independent native-fraction check",
+    "RP12 mass_fractions.CO at area75: native stops at area74.99733854; bound 1.8e-4",
+    "RP12 mass_fractions.H2 at area75: native stops at area74.99733854; bound 1.8e-4",
+    "RP12 mass_fractions.OH at area75: native stops at area74.99733854; bound 1.8e-4",
+    "RP12 mole_fractions.CO at area75: native stops at area74.99733854; bound 1.8e-4",
+    "RP12 mole_fractions.H2 at area75: native stops at area74.99733854; bound 1.8e-4",
+    "RP12 mole_fractions.OH at area75: native stops at area74.99733854; bound 1.8e-4",
+    "RP7 1000 m/s equilibrium: native LAST_VALID_SOLUTION=9; Rust raises and exposes no state",
+    "RP9 n_frz=3: native error8 stops after seven stations; Rust returns ten verified stations with energy closure",
+    "SP.dS_dstate2_fd at h=1e-5: exact-zero constraint derivative; both backends bounded absolutely at 1e-05 in NASA units",
+    "SP.dS_dw0_fd at h=1e-5: exact-zero constraint derivative; both backends bounded absolutely at 1e-05 in NASA units",
+    "SV.dS_dstate2_fd at h=1e-5: exact-zero constraint derivative; both backends bounded absolutely at 1e-05 in NASA units",
+    "SV.dS_dw0_fd at h=1e-5: exact-zero constraint derivative; both backends bounded absolutely at 1e-05 in NASA units",
+    "UV.dU_dstate2_fd at h=1e-5: exact-zero constraint derivative; both backends bounded absolutely at 0.001 in NASA units",
+    "UV.dU_dw0_fd at h=1e-5: exact-zero constraint derivative; both backends bounded absolutely at 0.001 in NASA units",
+    "condensed H2O TP 273.15: native error8; Rust matches stored independent T/phase checks",
+    "condensed Hg HP -1.8704414269347245: native error8; Rust matches stored independent T/phase checks",
+    "condensed NaCN TP 288.5: native error8; Rust matches stored independent T/phase checks",
+    "shock.cp_eq[2]: native reflected-frozen heat capacity is uninitialized; independent fixed-mixture check",
+    "shock.cp_fr[2]: native reflected-frozen heat capacity is uninitialized; independent fixed-mixture check",
+    "shock.cv_eq[2]: native reflected-frozen heat capacity is uninitialized; independent fixed-mixture check",
+    "shock.cv_fr[2]: native reflected-frozen heat capacity is uninitialized; independent fixed-mixture check"
+  ],
+  "tests": {
+    "run": 9,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "validation": {
+    "date": "2026-11-17",
+    "platform": "macOS arm64",
+    "rustc": "1.99.1 (58cf8f9c3 2026-10-13)",
+    "maturin": "1.16.0",
+    "numpy": "2.5.5",
+    "cargo_test_release": {
+      "passed": 70,
+      "failed": 0,
+      "ignored": 1
+    },
+    "clippy_default": "passed: cargo clippy --release --all-targets -- -D warnings",
+    "clippy_python": "passed: cargo clippy --release --all-targets --features python -- -D warnings",
+    "format": "passed: cargo fmt --check",
+    "wheel": "cea_keplr_rs-0.1.0a3-cp312-abi3-macosx_11_0_arm64.whl",
+    "wheel_contents": "verified nasa module, constants, units, lib aliases, .pyi files, py.typed; NumPy required only for extra nasa",
+    "python_with_nasa": {
+      "python": "3.12.14",
+      "cea": "3.3.4",
+      "numpy": "2.5.5",
+      "test_nasa_api": {
+        "run": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "python_without_nasa": {
+      "python": "3.15.1",
+      "cea_importable": false,
+      "numpy": "2.5.5",
+      "install": "uv pip install <wheel>[nasa]",
+      "test_nasa_api": {
+        "run": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "commands": [
+      "S=$(mktemp -d)",
+      "mise exec -- env CARGO_TARGET_DIR=\"$S/target\" TMPDIR=\"$S\" cargo test --release",
+      "mise exec -- env CARGO_TARGET_DIR=\"$S/target\" TMPDIR=\"$S\" cargo clippy --release --all-targets -- -D warnings",
+      "mise exec -- env CARGO_TARGET_DIR=\"$S/target\" TMPDIR=\"$S\" cargo clippy --release --all-targets --features python -- -D warnings",
+      "mise exec -- env CARGO_TARGET_DIR=\"$S/target\" TMPDIR=\"$S\" cargo fmt --check",
+      "mise exec -- env TMPDIR=\"$S\" UV_CACHE_DIR=\"$S/uv-cache\" uv venv --python 3.12 \"$S/native\"",
+      "mise exec -- env TMPDIR=\"$S\" UV_CACHE_DIR=\"$S/uv-cache\" uv pip install --python \"$S/native/bin/python\" cea==3.3.4",
+      "mise exec -- env TMPDIR=\"$S\" UV_CACHE_DIR=\"$S/uv-cache\" uv venv --python 3.12 \"$S/base\"",
+      "mise exec -- env TMPDIR=\"$S\" UV_CACHE_DIR=\"$S/uv-cache\" uv venv --python 3.15.1 \"$S/without-nasa\"",
+      "mise exec -- env CARGO_TARGET_DIR=\"$S/target\" TMPDIR=\"$S\" UV_CACHE_DIR=\"$S/uv-cache\" uvx maturin build --release --locked --out \"$S/wheels\" --interpreter \"$S/native/bin/python\"",
+      "mise exec -- env TMPDIR=\"$S\" UV_CACHE_DIR=\"$S/uv-cache\" uv pip install --python <venv>/bin/python --no-index --no-deps <wheel>",
+      "<venv>/bin/python -I <repo>/tests/test_wheel.py --installed <venv-site> (Python 3.12.14 and 3.15.1; NumPy/cea absent)",
+      "mise exec -- env TMPDIR=\"$S\" UV_CACHE_DIR=\"$S/uv-cache\" uv pip install --python \"$S/without-nasa/bin/python\" <wheel>[nasa]",
+      "<venv>/bin/python -I <repo>/tests/test_nasa_api.py --installed <venv-site> --report <report.json> (Python 3.12.14 with cea==3.3.4; Python 3.15.1 without cea)"
+    ],
+    "nasa_only_snapshots": {
+      "cases": 41,
+      "source": "PyPI cea==3.3.4; all calls converged with last_error=0",
+      "fixture": "tests/data/nasa/python-api-3.3.4.json"
+    },
+    "base_without_numpy": {
+      "python_versions": [
+        "3.12.14",
+        "3.15.1"
+      ],
+      "numpy_importable": false,
+      "cea_importable": false,
+      "install": "uv pip install --no-index --no-deps <wheel>",
+      "test_wheel_per_interpreter": {
+        "passed": 8,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    }
+  }
+}
