@@ -50,19 +50,19 @@
       "member": "cv_eq"
     },
     "shock-last-valid": {
-      "difference": 6.325702226236919e-11,
+      "difference": 1.0757343597609093e-12,
       "member": "energy"
     },
     "shock retained": {
-      "difference": 6.325702226236919e-11,
+      "difference": 1.0757343597609093e-12,
       "member": "energy"
     },
     "shock-retained-reflection": {
-      "difference": 9.981682344970606e-09,
+      "difference": 9.966758905674871e-09,
       "member": "mole_fractions.H"
     },
     "shock retained reflection": {
-      "difference": 7.179772534433061e-09,
+      "difference": 7.16885295871469e-09,
       "member": "mole_fractions.O"
     },
     "initial guesses": {
@@ -82,11 +82,11 @@
       "member": "ln_nj"
     },
     "shock-reflected-failure": {
-      "difference": 1.1041585446516624e-12,
+      "difference": 9.712505716843328e-13,
       "member": "v2"
     },
     "reflected-failure": {
-      "difference": 1.1041585446516624e-12,
+      "difference": 9.712505716843328e-13,
       "member": "v2"
     },
     "shock-incident-failure": {
@@ -98,11 +98,11 @@
       "member": "gibbs_energy"
     },
     "shock-atomic-transport": {
-      "difference": 2.1140822599155505e-08,
+      "difference": 2.114082237200003e-08,
       "member": "cv_eq"
     },
     "atomic-transport": {
-      "difference": 2.1140822599155505e-08,
+      "difference": 2.114082237200003e-08,
       "member": "cv_eq"
     },
     "shock-singular-last-valid": {
@@ -310,24 +310,24 @@
       "member": "cp_eq"
     },
     "stored NASA shock-0000": {
-      "difference": 6.973438441304676e-12,
-      "member": "cv_eq"
+      "difference": 1.3555956298250613e-14,
+      "member": "energy"
     },
     "shock": {
-      "difference": 1.8955418014176885e-06,
+      "difference": 1.895541805682585e-06,
       "member": "cv_eq"
     },
     "stored NASA shock-0001": {
-      "difference": 6.973438441304676e-12,
-      "member": "cv_eq"
+      "difference": 1.3555956298250613e-14,
+      "member": "energy"
     },
     "stored NASA shock-0010": {
-      "difference": 6.973438441304676e-12,
-      "member": "cv_eq"
+      "difference": 1.3555956298250613e-14,
+      "member": "energy"
     },
     "stored NASA shock-0011": {
-      "difference": 6.973438441304676e-12,
-      "member": "cv_eq"
+      "difference": 1.3555956298250613e-14,
+      "member": "energy"
     },
     "stored NASA shock-0100": {
       "difference": 4.49460048821224e-16,
@@ -346,19 +346,19 @@
       "member": "cv_fr"
     },
     "stored NASA shock-1000": {
-      "difference": 3.633732465944545e-10,
+      "difference": 3.633757550258039e-10,
       "member": "cv_eq"
     },
     "stored NASA shock-1001": {
-      "difference": 3.633732465944545e-10,
+      "difference": 3.633757550258039e-10,
       "member": "cv_eq"
     },
     "stored NASA shock-1010": {
-      "difference": 6.973438441304676e-12,
-      "member": "cv_eq"
+      "difference": 1.3555956298250613e-14,
+      "member": "energy"
     },
     "stored NASA shock-1011": {
-      "difference": 1.8955418014176885e-06,
+      "difference": 1.895541805682585e-06,
       "member": "cv_eq"
     },
     "stored NASA shock-1100": {
@@ -396,6 +396,10 @@
     "stored NASA detonation-500.0-20.0": {
       "difference": 4.427008509237247e-07,
       "member": "conductivity_fr"
+    },
+    "singular-ion-shock-roundoff": {
+      "difference": 8888.502795431323,
+      "member": "Mach, velocity, sonic_velocity, rho12, rho52, P21, P52, T21, T52, M21, M52, v2, u5_p_v2, T, P, density, M, MW, enthalpy, energy, entropy, gibbs_energy, gamma_s, cp_fr, cp_eq, cv_fr, cv_eq, viscosity, conductivity_fr, conductivity_eq, Pr_fr, Pr_eq"
     }
   },
   "exceptions": [
@@ -409,9 +413,11 @@
     "UV.dU_dw0_fd at h=1e-5: exact-zero constraint derivative; both backends bounded absolutely at 0.001 in NASA units"
   ],
   "tests": {
-    "run": 10,
+    "run": 11,
     "failures": 0,
     "errors": 0,
-    "skipped": 0
+    "skipped": 0,
+    "expected_failures": 1,
+    "unexpected_successes": 0
   }
 }

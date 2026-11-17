@@ -70,21 +70,6 @@ def main():
         warnings.simplefilter("ignore", RuntimeWarning)
         for key, (name, positional, keyword) in inputs.items():
             solution, _, _ = helpers[name](api, *positional, **keyword)
-            if key == "shock-ion-last-valid":
-                # Compare status/validity: singular ion iterates differ numerically across solvers.
-                for field in ("T", "P", "velocity", "sonic_velocity"):
-                    value = getattr(solution, field)
-                    assert np.all(np.isfinite(value)) and np.all(value > 0.0)
-                cases[key] = {
-                    "converged": solution.converged,
-                    "last_error": solution.last_error,
-                    "values": {},
-                    "diagnostic_values": {
-                        field: clean(getattr(solution, field))
-                        for field in ("T", "P", "P21", "T21")
-                    },
-                }
-                continue
             fields = helpers["THERMO"] + helpers["TRANSPORT"]
             if name in ("rp_rocket", "air_jet_a"):
                 fields += helpers["PERFORMANCE"] + ("n", "nj")
