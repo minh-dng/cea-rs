@@ -768,6 +768,13 @@ class NasaApiTests(unittest.TestCase):
                         RETAINED_VALUES["shock-atomic-transport"]["values"]["conductivity_eq"],
                         tolerance=1e-9,
                     )
+                    # The reflected-frozen header Cp sums gas fits at T2. Using the
+                    # transport-replaced station-2 Cp instead differs by 1.6e-8.
+                    self.close(
+                        case, "reflected header cp", actual.cp_eq[2],
+                        RETAINED_VALUES["shock-atomic-transport"]["values"]["cp_eq"][2],
+                        tolerance=1e-9,
+                    )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             actual = shock_edge(rust, "ion-last-valid")[0]

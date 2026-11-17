@@ -384,8 +384,17 @@ impl Solver {
             let ratio = 1.0 / rho25;
             let u5 = v2 / (ratio - 1.0);
             if reflected_frozen {
-                // NASA's reflected-frozen header retains incident Cp, even at T5.
-                let cp = up.cp_frozen_j_kg_k;
+                // NASA's reflected-frozen header uses the incident gas Cp at T2,
+                // even at T5. It sums the thermodynamic fits directly, so a
+                // transport-replaced station Cp must not be used here.
+                let cp = up
+                    .amounts
+                    .iter()
+                    .filter(|(_, sp)| sp.data().phase() == 0)
+                    .fold(0.0, |cp, (n, sp)| {
+                        n.mul_add(sp.data().cp_over_r(up.temperature_k), cp)
+                    })
+                    * R;
                 down.gamma_s = cp / (cp - R / up.molecular_weight_kg_kmol);
                 down.cp_equilibrium_j_kg_k = cp;
                 down.cv_equilibrium_j_kg_k = cp - down.gas_moles * R;
