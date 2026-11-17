@@ -222,3 +222,13 @@ class ShockResult:
     m5_m2: float | None
     rho5_rho2: float | None
     u5_plus_v2_m_s: float | None
+class DeckResult:
+    case_name: str
+    case_index: int
+    kind: str
+    weights: list[float]
+    result: State | RocketResult | ShockResult | DetonationResult
+    transport: list[Transport]
+    reactant_density_kg_m3: float | None
+
+def run_deck(text: str) -> list[DeckResult]: ...

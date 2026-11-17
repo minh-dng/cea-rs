@@ -17,11 +17,51 @@ parity, Python API compatibility and consumer replacement are not established.
 | Chapman-Jouguet detonation | Implemented equilibrium CJ, SI | Fixed-composition unburned gas fits; NASA's damped iteration; fresh burned state with mass/momentum/energy/sonic checks. Native 3.3.4: RP-1311 example 6, CH4/O2/N2 air and acetylene/O2 at phi=0.5/1/2 meet 1e-4 relative. An extra named-Air case needs 3e-4 for near-zero internal energy; shared equilibrium parity remains open. Frozen detonation is unsupported in native CEA and here. Native Python rounds T1 to float32; goldens use its effective T1, with a separate exact 298.15 K fit check. |
 | Transport | Implemented for State and rocket stations in Rust/Python | NASA gas selection, missing-data estimates, ion interactions, frozen/equilibrium Cp, conductivity and Prandtl; condensed species excluded, so transport Cp is gas-only. Native 3.3.4 comparisons include restricted gas pools and pass 1e-4 relative. Rocket `transport=True` (Rust `RocketOptions::transport`) fills `Station.transport` at every station from that station's composition; frozen stations use the frozen composition, as in NASA. All seven RP-1311 example 11 stations match NASA's reference output for all seven transport rows (worst 2.47e-5), and frozen n_frz=1/2 throat and exit stations match native. Unlike NASA, the station's thermodynamic Cp is not replaced by the transport Cp. Also unlike NASA, which fills estimates and continues, a transport failure at any station fails the whole rocket call. Finite-area-chamber stations and frozen stations with condensed species have no stored native golden. |
 | Arbitrary exit pressures/subsonic stations | Implemented | Any number of pi_p/subar/supar stations; native pressure and area Newton iterations; large-subar native stopping defect recorded in [rocket evidence](rocket-parity/README.md) |
-| Input-deck CLI, C/Fortran/Excel/MATLAB bindings | Unsupported | No legacy input or ABI compatibility layer |
+| NASA input decks | Implemented for sample keywords | Rust typed parser, case runner and Python `run_deck`; arbitrary dataset order, mixed units, custom formulas/enthalpies, mixture and station schedules; unknown keywords fail by name. All 14 decks run; strict comparison results below |
+| Input-deck CLI, C/Fortran/Excel/MATLAB bindings | Unsupported | Library/Python deck entry points are available; no CLI, report formatter or ABI compatibility layer |
 | NASA Python classes and options | Partial utilities | Solver has omit and trace, O/F, chemical r, mass phi, mole/mass conversions and valences; Reactant has NASA nominal temperature bounds. Four propellant conversion goldens pass at 1e-12; native Python rounds non-binary scalar ratios through float32. No Mixture/EqSolution/RocketSolution mutation API or smoothing controls |
 | Analytic sensitivities | Converged hard truncation | Solver.derivatives returns SI derivatives of T, gas n, species amounts, H/U/G/S by both state inputs and raw weights. TP/HP/SP native goldens for H2/O2 and CH4/O2/N2 at 2500 K, 1 MPa; worst relative difference 6.98e-7 (tolerance 1e-4). All six gas modes cross-checked; finite differences reject changed product pools/phases. Core cutoff and original gas logs are retained privately on State, including the residual cutoff before the trace-reporting pass. AP/Al at 300 K, 1 bar takes singular recovery to cutoff 80; all bulk sensitivities agree with central differences at 1e-5 relative and species at 1e-4 plus 1e-12 kmol/kg per input unit for trace noise. Analytic ions, element-reduced systems and UV/SV with condensates return errors; smoothing is unsupported |
 | Ambient/separated nozzle thrust | Ideal ambient-matched performance | Per-station Cf, Isp and Isp_vacuum in SI; no assigned ambient pressure, separation or consumer thrust-efficiency model |
 | Extra state properties | Implemented | Gibbs energy, frozen/equilibrium Cv, specific volume and NASA M/MW; native equilibrium and graphite goldens at 1e-4 relative |
+
+## NASA sample decks
+
+Every main-interface deck and both sample inputs at NASA commit `2f79a647`
+are in `tests/data/nasa`, with unchanged original reports and NASA's notice.
+Tests parse report values directly. Native 3.3.4 reports from an independently
+rebuilt pinned executable provide an additional oracle. All 55 main-interface
+cases solve. Nonzero values use `1e-4` relative tolerance, with composition
+>=1e-5; zero unburned reference enthalpy uses 1e-3 J/kg absolute tolerance.
+Example 6 uses the complete historical report because the new native printer
+mislabels its unburned table. No solver numerics were changed.
+
+| Deck | Primary comparison | Worst relative difference | Historical reference issue |
+|---|---|---:|---|
+| 1 | Pass | 1.61392e-9 | Two first-case carbon fractions differ by 1.10248e-4 |
+| 2 | Pass | 6.74146e-8 | Pass |
+| 3 | Pass | 4.40289e-10 | Pass |
+| 4 | Pass | 1.39425e-10 | Pass |
+| 5 | Pass | 1.48335e-5 | Pass |
+| 6 | Pass, historical long report | 4.11214e-5 | Modern unburned/burned print defect |
+| 7 | Pass | 8.81075e-6 | Old mmHg conversion; worst 1.68507e-4 |
+| 8 | Pass | 6.96275e-5 | Subsonic performance; worst 1.14411e-4 |
+| 9 | Pass | 6.85920e-5 | Combustor performance; worst 1.14472e-4 |
+| 10 | Pass | 6.68535e-5 | Combustor area/performance; worst 1.39245e-4 |
+| 11 | Pass | 3.20473e-5 | Subsonic performance; worst 1.00125e-4 |
+| 12 | **Fail**, equilibrium CO/OH at area 75 | 1.73452e-4 | Original report contains frozen-only input; frozen comparison passes |
+| 13 | Pass | 2.12241e-5 | Pass |
+| 14 | Pass | 2.04574e-9 | Pass |
+| Standalone sample 1 | Pass | 1.61392e-9 | Equivalent to example 1 |
+| Combined RP-1311 | 56/57 solve; known 1000 m/s shock failure; two example 12 trace differences | 1.73455e-4 among successes | All other successful cases compared directly |
+| Frozen detonation | Unsupported | — | Explicit error, as in native 3.3.4 |
+
+Example 12 is a nozzle stopping difference: NASA reports area 74.99733854
+for requested 75, while Rust reaches 75.00000000. At NASA's exact T/P the
+public TP solver matches CO/OH within 6.4e-9 relative. The combined sample's
+1000 m/s equilibrium shock fails in NASA as well; its printed retained values
+are not accepted. The regression suite bounds explicitly named known cells
+and rejects any new discrepancy. Green tests do not imply full deck parity.
+[Deck API, comparison policy, exact defects and existing-test overlap](input-decks.md).
 
 ## Units and failures
 

@@ -3,6 +3,7 @@
 from ._cea_rs import (
     ConvergenceError,
     DomainError,
+    DeckResult,
     EqDerivatives,
     DetonationResult,
     R,
@@ -15,6 +16,7 @@ from ._cea_rs import (
     Transport,
     UnburnedState,
     __version__,
+    run_deck,
 )
 from ._cea_rs import (
     Solver as _Solver,
@@ -26,6 +28,7 @@ __all__ = [
     "NASA_THERMO_SHA256",
     "ConvergenceError",
     "DomainError",
+    "DeckResult",
     "EqDerivatives",
     "DetonationResult",
     "R",
@@ -40,6 +43,7 @@ __all__ = [
     "UnburnedState",
     "__version__",
     "capabilities",
+    "run_deck",
 ]
 
 
@@ -324,9 +328,9 @@ def capabilities() -> dict[str, object]:
         "detonation": ["Chapman-Jouguet equilibrium"],
         "transport": ["viscosity", "conductivity", "Prandtl number", "rocket stations"],
         "derivatives": ["analytic", "finite difference"],
+        "input_decks": ["problem", "reactants", "only", "omit", "insert", "output", "end"],
         "unsupported": [
             "frozen detonation",
-            "legacy input decks",
             "NASA Python API compatibility",
         ],
         "full_cea_parity": False,
