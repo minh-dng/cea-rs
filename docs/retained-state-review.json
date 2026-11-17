@@ -1,0 +1,476 @@
+{
+  "nasa_commit": "2f79a647e85737742fb08a127da00d1ea1d069da",
+  "native_wheel": "cea==3.3.4",
+  "platform": "macOS arm64",
+  "before_commit": "fc9d496",
+  "reproduction": "/tmp/cea-stack-review.L1wog7/reproduce.py",
+  "native": {
+    "shock_weight_scale": {
+      "converged": true,
+      "last_error": 0,
+      "M": [
+        9.0,
+        9.0
+      ],
+      "T": [
+        300.0,
+        1016.4569597035139
+      ],
+      "P21": 10.978342592867241,
+      "rho12": 0.308624898250099
+    },
+    "cold_ion_polish": {
+      "converged": false,
+      "last_error": 8,
+      "T": 300.0,
+      "P": 0.0,
+      "M": 0.0,
+      "n": 4311816.4723374555,
+      "enthalpy": 0.0
+    },
+    "zero_weight_reactant": {
+      "converged": true,
+      "last_error": 0,
+      "T": 3000.0,
+      "P": 1.0,
+      "M": 1.8685800134145119,
+      "mole_fractions": {
+        "H": 0.14613957161647478,
+        "H2": 0.8538599750883215,
+        "H2O": 4.246308717502577e-07,
+        "H2O2": 1.6503446054497177e-19,
+        "HO2": 9.581693816318687e-19,
+        "O": 2.51799542075068e-09,
+        "O2": 4.951892521440727e-16,
+        "O3": 1.482155808550022e-29,
+        "OH": 2.6146336276812302e-08,
+        "H2O(L)": 0.0,
+        "H2O(cr)": 0.0
+      }
+    },
+    "abort_and_reuse": [
+      {
+        "input_pressure_bar": 0.01,
+        "exception": null,
+        "converged": true,
+        "last_error": 0,
+        "T": 200.0,
+        "P": 0.01,
+        "n": 0.01251831127224969
+      },
+      {
+        "input_pressure_bar": 1.0,
+        "exception": "RuntimeError: EqSolver.solve failed with CEA_FORTRAN_ABORT: EqSolver_test_condensed: Re-insertion of H2O(cr)         likely to cause singular matrix.",
+        "converged": true,
+        "last_error": 10,
+        "T": 200.0,
+        "P": 0.01,
+        "n": 0.040270488683396034
+      },
+      {
+        "input_pressure_bar": 200.0,
+        "exception": null,
+        "converged": true,
+        "last_error": 0,
+        "T": 200.0,
+        "P": 200.0,
+        "n": 0.012516271254487713
+      }
+    ],
+    "failed_shock_volume": {
+      "converged": false,
+      "last_error": 8,
+      "T": [
+        100.0,
+        100.99760053573038,
+        0.0
+      ],
+      "density": [
+        4.804612659074317,
+        4.876681973296648,
+        0.0
+      ],
+      "volume": [
+        0.20813332332031645,
+        0.2050574561711675,
+        0.20492110860316412
+      ]
+    },
+    "lost_transport_seed": [
+      {
+        "input_T": 270.0,
+        "input_pressure_bar": 0.01,
+        "converged": true,
+        "last_error": 0,
+        "T": 270.0,
+        "P": 0.01,
+        "n": 0.0062575090108129795,
+        "viscosity": 0.14269525624169493
+      },
+      {
+        "input_T": 270.0,
+        "input_pressure_bar": 1.0,
+        "converged": false,
+        "last_error": 8,
+        "T": 270.0,
+        "P": 0.01,
+        "n": 8.645578388313318e-12,
+        "viscosity": 0.14269525624169493
+      },
+      {
+        "input_T": 270.0,
+        "input_pressure_bar": 200.0,
+        "converged": true,
+        "last_error": 0,
+        "T": 270.0,
+        "P": 200.0,
+        "n": "nan",
+        "viscosity": 0.14269525624169493
+      },
+      {
+        "input_T": 8000.0,
+        "input_pressure_bar": 1.0,
+        "converged": false,
+        "last_error": 8,
+        "T": 270.0,
+        "P": 200.0,
+        "n": "nan",
+        "viscosity": 0.14269525624169493
+      }
+    ],
+    "singular_transport": {
+      "converged": true,
+      "last_error": 0,
+      "T": [
+        300.0,
+        301.99173250521306,
+        303.98971080829006
+      ],
+      "P21": 1.0234949680768515,
+      "conductivity_eq": [
+        0.0,
+        6.901408616467386e+20,
+        0.0
+      ],
+      "Pr_eq": [
+        0.0,
+        1.6179082086403505,
+        0.0
+      ]
+    }
+  },
+  "rust_before": {
+    "shock_weight_scale": {
+      "converged": true,
+      "last_error": 0,
+      "M": [
+        12.063200735737807,
+        12.063200735737807
+      ],
+      "T": [
+        300.0,
+        1052.729785475256
+      ],
+      "P21": 16.138565454262842,
+      "rho12": 0.21743563855550904
+    },
+    "cold_ion_polish": {
+      "converged": true,
+      "last_error": 0,
+      "T": 300.0,
+      "P": 1.0,
+      "M": 28.013399999999987,
+      "n": 0.03569720205330308,
+      "enthalpy": 1.9233946706937222
+    },
+    "zero_weight_reactant": {
+      "exception": "ValueError",
+      "message": "invalid_input: Product formula contains an absent reactant element"
+    },
+    "abort_and_reuse": [
+      {
+        "input_pressure_bar": 0.01,
+        "exception": null,
+        "converged": true,
+        "last_error": 0,
+        "T": 200.0,
+        "P": 0.01,
+        "n": 0.01251831127224969
+      },
+      {
+        "input_pressure_bar": 1.0,
+        "exception": null,
+        "converged": false,
+        "last_error": 10,
+        "T": 200.0,
+        "P": 0.01,
+        "n": 0.040270488683396034
+      },
+      {
+        "input_pressure_bar": 200.0,
+        "exception": null,
+        "converged": false,
+        "last_error": 10,
+        "T": 200.0,
+        "P": 0.01,
+        "n": 0.040270488683394154
+      }
+    ],
+    "failed_shock_volume": {
+      "converged": false,
+      "last_error": 8,
+      "T": [
+        100.0,
+        100.99760053572939,
+        0.0
+      ],
+      "density": [
+        4.8046126590743174,
+        4.876681973296577,
+        0.0
+      ],
+      "volume": [
+        0.2081333233203164,
+        0.20505745617117047,
+        0.0
+      ]
+    },
+    "lost_transport_seed": [
+      {
+        "input_T": 270.0,
+        "input_pressure_bar": 0.01,
+        "converged": true,
+        "last_error": 0,
+        "T": 270.0,
+        "P": 0.01,
+        "n": 0.0062575090108129795,
+        "viscosity": 0.1426952562416949
+      },
+      {
+        "input_T": 270.0,
+        "input_pressure_bar": 1.0,
+        "converged": false,
+        "last_error": 8,
+        "T": 270.0,
+        "P": 0.01,
+        "n": 8.645578388313318e-12,
+        "viscosity": 0.1426952562416949
+      },
+      {
+        "input_T": 270.0,
+        "input_pressure_bar": 200.0,
+        "converged": true,
+        "last_error": 0,
+        "T": 270.0,
+        "P": 200.00000000000003,
+        "n": "nan",
+        "viscosity": 0.1426952562416949
+      },
+      {
+        "input_T": 8000.0,
+        "input_pressure_bar": 1.0,
+        "converged": false,
+        "last_error": 8,
+        "T": 8000.0,
+        "P": 200.00000000000003,
+        "n": "nan",
+        "viscosity": 0.1426952562416949
+      }
+    ],
+    "singular_transport": {
+      "converged": true,
+      "last_error": 0,
+      "T": [
+        300.0,
+        301.9917325052435,
+        303.9897108083514
+      ],
+      "P21": 1.0234949680772143,
+      "conductivity_eq": [
+        0.0,
+        2.7865869518881613e+20,
+        0.0
+      ],
+      "Pr_eq": [
+        0.0,
+        0.6844038102265843,
+        0.0
+      ]
+    }
+  },
+  "rust_after": {
+    "shock_weight_scale": {
+      "converged": true,
+      "last_error": 0,
+      "M": [
+        9.0,
+        9.0
+      ],
+      "T": [
+        300.0,
+        1016.4569597035139
+      ],
+      "P21": 10.978342592867241,
+      "rho12": 0.308624898250099
+    },
+    "cold_ion_polish": {
+      "converged": false,
+      "last_error": 8,
+      "T": 300.0,
+      "P": 0.0,
+      "M": 0.0,
+      "n": 4311816.4723374555,
+      "enthalpy": 0.0
+    },
+    "zero_weight_reactant": {
+      "converged": true,
+      "last_error": 0,
+      "T": 3000.0,
+      "P": 1.0,
+      "M": 1.8685800134145119,
+      "mole_fractions": {
+        "H": 0.14613957161647478,
+        "H2": 0.8538599750883215,
+        "H2O": 4.246308717502577e-07,
+        "H2O2": 1.6503446054497177e-19,
+        "HO2": 9.581693816318687e-19,
+        "O": 2.51799542075068e-09,
+        "O2": 4.951892521440727e-16,
+        "O3": 1.482155808550022e-29,
+        "OH": 2.6146336276812302e-08,
+        "H2O(L)": 0.0,
+        "H2O(cr)": 0.0
+      }
+    },
+    "abort_and_reuse": [
+      {
+        "input_pressure_bar": 0.01,
+        "exception": null,
+        "converged": true,
+        "last_error": 0,
+        "T": 200.0,
+        "P": 0.01,
+        "n": 0.01251831127224969
+      },
+      {
+        "input_pressure_bar": 1.0,
+        "exception": "RuntimeError: EqSolver.solve failed with CEA_FORTRAN_ABORT: EqSolver_test_condensed: Re-insertion of H2O(cr)         likely to cause singular matrix.",
+        "converged": true,
+        "last_error": 10,
+        "T": 200.0,
+        "P": 0.01,
+        "n": 0.040270488683396034
+      },
+      {
+        "input_pressure_bar": 200.0,
+        "exception": null,
+        "converged": true,
+        "last_error": 0,
+        "T": 200.0,
+        "P": 200.00000000000003,
+        "n": 0.012516271254487713
+      }
+    ],
+    "failed_shock_volume": {
+      "converged": false,
+      "last_error": 8,
+      "T": [
+        100.0,
+        100.99760053572939,
+        0.0
+      ],
+      "density": [
+        4.8046126590743174,
+        4.876681973296577,
+        0.0
+      ],
+      "volume": [
+        0.20813332332031642,
+        0.20505745617117047,
+        0.20492110860316742
+      ]
+    },
+    "lost_transport_seed": [
+      {
+        "input_T": 270.0,
+        "input_pressure_bar": 0.01,
+        "converged": true,
+        "last_error": 0,
+        "T": 270.0,
+        "P": 0.01,
+        "n": 0.0062575090108129795,
+        "viscosity": 0.1426952562416949
+      },
+      {
+        "input_T": 270.0,
+        "input_pressure_bar": 1.0,
+        "converged": false,
+        "last_error": 8,
+        "T": 270.0,
+        "P": 0.01,
+        "n": 8.645578388313318e-12,
+        "viscosity": 0.1426952562416949
+      },
+      {
+        "input_T": 270.0,
+        "input_pressure_bar": 200.0,
+        "converged": true,
+        "last_error": 0,
+        "T": 270.0,
+        "P": 200.00000000000003,
+        "n": "nan",
+        "viscosity": 0.1426952562416949
+      },
+      {
+        "input_T": 8000.0,
+        "input_pressure_bar": 1.0,
+        "converged": false,
+        "last_error": 8,
+        "T": 270.0,
+        "P": 200.00000000000003,
+        "n": "nan",
+        "viscosity": 0.1426952562416949
+      }
+    ],
+    "singular_transport": {
+      "converged": true,
+      "last_error": 0,
+      "T": [
+        300.0,
+        301.99173250522,
+        303.98971080830376
+      ],
+      "P21": 1.0234949680769339,
+      "conductivity_eq": [
+        0.0,
+        6.90140861646759e+20,
+        0.0
+      ],
+      "Pr_eq": [
+        0.0,
+        1.6179082086402559,
+        0.0
+      ]
+    }
+  },
+  "singular_air_inputs": {
+    "weights": [
+      22.130586,
+      6.719747999999999
+    ],
+    "old_amounts": [
+      0.027382698585049308,
+      0.007278945193494119
+    ],
+    "native_operation_order_amounts": [
+      0.02738269858504931,
+      0.00727894519349412
+    ],
+    "native_stored_gas_moles": 0.03466164377854343,
+    "original_native_trace": "/tmp/cea-stack-review.L1wog7/transport-native.log",
+    "original_rust_trace": "/tmp/cea-stack-review.L1wog7/transport-rust.log",
+    "equal_input_check": "/tmp/cea-stack-review.L1wog7/transport-equal.log",
+    "equal_input_conductivity_native_units": 6.901408616467386e+20
+  },
+  "result": "All seven regressions match native exceptions, statuses and numerical fields within the recorded test tolerances."
+}

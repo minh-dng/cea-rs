@@ -13,7 +13,10 @@ The current target is NASA CEA 3.3.4 behavior at commit `2f79a647e85737742fb08a1
 - Stop runaway gas-mole iterates early and impose a separate total iteration cap.
 - Apply the high-temperature condensed fallback on an exhausted Newton epoch. NASA's fallback is after the convergence gate, while condensed changes reset its iteration counter.
 - Reject equilibrium results after independent element, constraint, finite-value and physical-property checks.
-- Raise on numerical failure and clear the report instead of returning NASA's status and retained fields.
+- Raise on numerical nonconvergence and clear the report instead of warning with NASA's status and retained fields. Fortran aborts already raise after updating the solution.
+- Clear the converged flag and restore a saved seed after a Fortran abort instead of retaining NASA's working iterate.
+- Reset the electron-polish correction when its charge sum underflows instead of carrying NASA's previous correction.
+- Derive shock gas moles from normalized species amounts instead of NASA's weight-scale-dependent `1/sum(weights)`.
 - Reject fixed temperatures outside 160–22000 K before solving rather than returning NASA's post-processed code 8 state.
 - Reject NaN residuals during convergence checks and NaN condensed amounts before transport.
 - Refine sonic throats and assigned areas beyond NASA's stopping tests, with a bracketed area search.
@@ -27,7 +30,7 @@ The current target is NASA CEA 3.3.4 behavior at commit `2f79a647e85737742fb08a1
 - Use flow velocity consistently for rocket pressure schedules rather than NASA's sonic-velocity throat basis in its pi/p routines.
 - Recompute frozen-station Cv rather than retaining NASA's earlier or zero values.
 - Mark frozen equilibrium Cp/Cv unavailable instead of returning NASA's stored workspace values.
-- Recompute volume, M/MW and Gibbs energy from the current iterate instead of retaining NASA's report fields.
+- Recompute volume, M/MW and Gibbs energy from the current iterate instead of retaining NASA's report fields, including shock volume after density is cleared.
 - Fill the reflected-frozen shock Cp workspace from its current temperature rather than retaining NASA's fields.
 - Keep a station's thermodynamic frozen Cp separate from NASA's transport Cp replacement.
 - Use the assigned chamber enthalpy for rocket performance instead of NASA's recomputed chamber value.

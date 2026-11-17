@@ -27,7 +27,8 @@ features, not alternate numerical policies.
 - Mixture.calc_property: H/U/G J/kg, scalar-temperature S J/(kg K), Cp/Cv J/(kg K).
   In 3.3.4 array-temperature S is divided by 1000; array-temperature G retains
   the supplied weight scale and divides bar pressure by 1e5; V/DENSITY retain legacy ×1000/×0.001 relative to SI.
-- Weights are masses normalized by the solver; mole inputs require moles_to_weights.
+- Equilibrium weights are normalized masses; mole inputs require moles_to_weights.
+  Shock initialization retains NASA's `n=1/sum(weights)` quirk, so weight scale matters.
   Conversion helpers preserve amount scale and return float64 NumPy arrays.
 - Products are selected from all reactant elements, including zero-weight reactants.
   omit applies only to generated products; explicit Mixture names are the only pool.
@@ -43,7 +44,9 @@ features, not alternate numerical policies.
   Shock stations are [1,2] or [1,2,5]; ratio properties are scalar floats.
 - All solve methods mutate the solution and return None. converged is bool;
   last_error is an integer code. This port keeps NASA's available values, sets the native error code, and warns
-  on numerical failure. A failed solve does not clear the report.
+  on numerical nonconvergence. A failed solve does not clear the report.
+  Fortran aborts raise RuntimeError after updating the solution, retaining
+  converged=True, code 10 and the working iterate for the next solve.
 
 ## Classes, methods and properties
 

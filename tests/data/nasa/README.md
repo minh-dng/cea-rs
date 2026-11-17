@@ -16,7 +16,7 @@ See the root LICENSE and [provenance](../../../docs/provenance.md).
 | `shock-reflected-transport.inp` | Example 7 mixture at 1400 m/s, reflected/frozen modes and transport |
 | `native-3.3.4/shock-reflected-transport.out` | Pinned NASA executable, run on that regression deck |
 | `python-api-3.3.4.json` | 41 successful native Python calls |
-| `retained-3.3.4.json` | 24 native failure, false-positive, retained-state and control-flow calls |
+| `retained-3.3.4.json` | 31 native failure, false-positive, retained-state and control-flow calls |
 
 Original NASA inputs/reports are copied byte for byte, including line endings,
 trailing spaces and missing final newlines. `.gitattributes` preserves them.
@@ -43,7 +43,10 @@ continued reflection, AP/Al's NaN success, reused water-solution failure,
 positive and FAC early freezing. Additional calls cover the reduced NaCN
 singular exit, cleared reflected/incident shock failures, frozen temperature
 caps, a mercury last-valid incident state, the atomic incident transport
-basis, nonfinite detonations and Python constructor-guess restoration.
+basis, nonfinite detonations and Python constructor-guess restoration. The review
+regressions add cold N2 ions, zero-weight oxygen, Ar/water abort and reuse,
+Br2 transport restoration, unnormalized shock weights and singular air
+transport. Shock snapshots include volume even when density is zero.
 Nonfinite values are encoded as strings such as `"nan"`; tests require
 matching locations and status codes.
 

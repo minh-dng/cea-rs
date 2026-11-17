@@ -30,8 +30,9 @@ and kJ conventions. Numerical failure returns a state or partial flow result.
 Check `State.converged`, `ShockResult.converged`, `DetonationResult.converged`,
 `RocketResult.complete`, and the NASA adapter's `converged`/`last_error`.
 Codes are 0 (success), 8 (not converged), 9 (last valid shock state) and
-10 (Fortran abort). The adapter warns on numerical failure; it does not clear
-the previous report or raise a convergence exception. Input validation still
+10 (Fortran abort). The adapter warns on numerical nonconvergence and retains
+the previous report. Fortran aborts raise RuntimeError after updating the
+solution, retaining the native converged flag and working iterate. Input validation still
 rejects malformed or nonfinite requests.
 
 A native success is not a proof of conservation or phase stability. The port

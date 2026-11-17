@@ -22,7 +22,10 @@ earlier report alone. Retained states use NASA's post-processing without new
 partials, and transport seeds are restored on the same exits as in NASA.
 
 Rust states expose `converged` and `last_error`. The NASA Python adapter warns
-on numerical failure, retains the fields NASA retains, and returns normally.
+on numerical nonconvergence, retains the fields NASA retains, and returns normally.
+A Fortran abort raises `RuntimeError` after updating the solution. The abort
+keeps NASA's `converged=True`, code 10 and working iterate; the next solve
+continues from that iterate.
 A reused failed solution keeps the previous report and transport fields while
 exposing the new raw temperature and species amounts. Positive fixed
 temperatures outside 160–22000 K return NASA's post-processed code 8 state.
@@ -37,6 +40,16 @@ The tests preserve these native results:
 - Example 12's stop near area 74.99733854 for requested area 75.
 - FAC early freezing, including partial results and NaN workspaces.
 - Native frozen Cp/Cv fields and transport Cp replacement.
+- Shock gas moles initialized as `1/sum(weights)`, including unnormalized weights.
+- N2 ion polishing at 300 K retaining its electron correction when the charge
+  sum underflows, then returning code 8 and `n=4311816.4723374555`.
+- Zero-weight reactants retaining their elements in the product pool.
+- Ar/water abort/reuse and Br2 transport-seed restoration across no-gas states.
+- Failed equilibrium shocks retaining volume after density is cleared; failed
+  frozen shocks keep their unfilled volume at zero.
+- Mach-1.01 air with frozen reflection retaining NASA's singular incident
+  conductivity and Prandtl number. The shock species amounts now use
+  `(weight/molecular_weight)/sum(weights)`, in NASA's operation order.
 - Failed equilibrium reflections and frozen temperature-cap exits with cleared
   report fields and zero shock ratios.
 - Mercury incident shocks with no valid state at 100 K and a retained last
@@ -70,7 +83,7 @@ Checks use Rust 1.99.1, CPython 3.12.14 and NumPy 2.5.5.
 | Clippy | Default and Python-feature all-target checks passed with warnings denied |
 | Formatting | `cargo fmt --check` passed |
 
-The Python tests use 41 successful native snapshots and 24 retained-state
+The Python tests use 41 successful native snapshots and 31 retained-state
 snapshots. Every retained-state snapshot now contains numerical fields.
 The singular ion-shock comparison of P21, T21, station thermodynamics, flow
 and transport is an explicit `expectedFailure`, named
@@ -91,6 +104,10 @@ throat-frozen performance coefficient close to zero. The NASA Python suite's
 worst difference is `3.712466258753133e-6`, example 11 equilibrium conductivity.
 The historical 2004 printed reports have a larger maximum, `1.67777e-4`, from
 example 7's old pressure conversion; they are not the 3.3.4 numerical oracle.
+
+[Review reproductions](retained-state-review.json) record the seven additional
+before/after comparisons, including the air transport inputs. No new numerical
+gap or mixture-specific correction was needed.
 
 [Native sweep](native-comparison.json), [rocket sweep](rocket-parity/comparison.json)
 and [Python results](nasa-python-api-results.json) contain the numerical evidence.
@@ -154,15 +171,15 @@ with ions, transport and trace 1e-10, has no stable numerical oracle at the
 usual 1e-4 relative tolerance. Both solvers return `converged=False` and
 `last_error=9`. Their retained station fields remain numerically different.
 
-| Field | Native wheel | Rust before this fix | Rust after this fix |
+| Field | Native wheel | Rust before this fix | Rust after weight-scale fix |
 |---|---:|---:|---:|
-| P21 | 187.1000520352476 | 93.93591779797539 | 91.71039505329456 |
-| T21 | 7.4476985618769715 | 6.260995578175356 | 5.809607765153923 |
-| T2, K | 2216.705271501316 | 1821.9497132490285 | 1650.8435890870553 |
+| P21 | 187.1000520352476 | 93.93591779797539 | 93.13409970167557 |
+| T21 | 7.4476985618769715 | 6.260995578175356 | 5.854726378439977 |
+| T2, K | 2216.705271501316 | 1821.9497132490285 | 1663.7384500747291 |
 | Status | 9 | 9 | 9 |
 
-The original P21 difference was 49.7938%; the final difference is 50.9832%.
-The changes correct the iteration equations; they do not reduce or bound
+The original P21 difference was 49.7938%; the current difference is 50.2223%.
+The changes follow NASA's iteration and initialization arithmetic; they do not bound
 the error in this unstable final state.
 
 The Fortran/Rust trace found two defects in failed-shock finalization.
