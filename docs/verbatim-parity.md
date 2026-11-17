@@ -75,7 +75,7 @@ Checks use Rust 1.99.1, CPython 3.12.14 and NumPy 2.5.5.
 | Check | Result |
 |---|---|
 | Release Rust suite | 62 passed; one existing diagnostic ignored |
-| Installed-wheel tests | 8 passed |
+| Installed-wheel tests | 7 passed with native CEA; 7 passed without it |
 | NASA Python tests with the native wheel | 10 passed; one explicit expected numerical failure |
 | NASA Python tests without the native package | 10 passed; the same expected numerical failure against an independent snapshot |
 | Broad native sweep | 146 comparison rows passed |
@@ -97,7 +97,7 @@ Historical CEA2 reports retain explicitly bounded printing/version differences.
 Across the passing numerical comparisons, excluding the explicitly expected
 `singular-ion-shock-roundoff` failure, the worst relative difference is
 **7.554308465184085e-5 (0.0075543%)**. It is the chamber enthalpy in the H2/O2,
-5 MPa, area-20, throat-frozen case: native `-0.0005354430331850154 J/kg`,
+5 MPa, area-20 schedule: native `-0.0005354430331850154 J/kg`,
 Rust `-0.0005354025841666333 J/kg`. The absolute difference is about
 `4.04e-8 J/kg`. The next largest difference is about `6.52e-5` in a FAC
 throat-frozen performance coefficient close to zero. The NASA Python suite's
@@ -107,7 +107,9 @@ example 7's old pressure conversion; they are not the 3.3.4 numerical oracle.
 
 [Review reproductions](retained-state-review.json) record the seven additional
 before/after comparisons, including the air transport inputs. No new numerical
-gap or mixture-specific correction was needed.
+gap or mixture-specific correction was needed. The supplied `reproduce.py`
+also passes a full-field comparison at 1e-9 relative tolerance. The final
+broad and rocket numerical records are unchanged from the linked sweeps.
 
 [Native sweep](native-comparison.json), [rocket sweep](rocket-parity/comparison.json)
 and [Python results](nasa-python-api-results.json) contain the numerical evidence.

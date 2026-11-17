@@ -98,12 +98,12 @@
       "member": "gibbs_energy"
     },
     "shock-atomic-transport": {
-      "difference": 2.114082237200003e-08,
-      "member": "cv_eq"
+      "difference": 6.017047693327993e-10,
+      "member": "Pr_eq"
     },
     "atomic-transport": {
-      "difference": 2.114082237200003e-08,
-      "member": "cv_eq"
+      "difference": 6.017047693327993e-10,
+      "member": "Pr_eq"
     },
     "shock-singular-last-valid": {
       "difference": 2.957329227318533e-15,
@@ -128,6 +128,22 @@
     "reflected-cap": {
       "difference": 4.206389961882016e-16,
       "member": "density"
+    },
+    "shock-weight-scale": {
+      "difference": 3.204681044463685e-16,
+      "member": "volume"
+    },
+    "weight-scale": {
+      "difference": 3.204681044463685e-16,
+      "member": "volume"
+    },
+    "shock-singular-transport": {
+      "difference": 3.4692632844392156e-12,
+      "member": "v2"
+    },
+    "singular-transport": {
+      "difference": 3.4692632844392156e-12,
+      "member": "v2"
     },
     "detonation-nonfinite": {
       "difference": 0.0,
@@ -196,6 +212,26 @@
     "nacn-reduced": {
       "difference": 1.6384e-16,
       "member": "P"
+    },
+    "cold-ion-polish": {
+      "difference": 0.0,
+      "member": "T"
+    },
+    "zero-weight-reactant": {
+      "difference": 5.5397993637423254e-08,
+      "member": "cv_eq"
+    },
+    "fortran-abort": {
+      "difference": 3.796940181505919e-12,
+      "member": "cv_eq"
+    },
+    "fortran-abort-reuse": {
+      "difference": 2.366201954558861e-16,
+      "member": "density"
+    },
+    "br2-transport-reuse": {
+      "difference": 8.752736762853995e-16,
+      "member": "Pr_fr"
     },
     "stored NASA rocket-8-0": {
       "difference": 1.1890975933232821e-10,
@@ -314,7 +350,7 @@
       "member": "energy"
     },
     "shock": {
-      "difference": 1.895541805682585e-06,
+      "difference": 6.944607913366851e-10,
       "member": "cv_eq"
     },
     "stored NASA shock-0001": {
@@ -358,8 +394,8 @@
       "member": "energy"
     },
     "stored NASA shock-1011": {
-      "difference": 1.895541805682585e-06,
-      "member": "cv_eq"
+      "difference": 1.3555956298250613e-14,
+      "member": "energy"
     },
     "stored NASA shock-1100": {
       "difference": 6.944607913366851e-10,
@@ -398,8 +434,8 @@
       "member": "conductivity_fr"
     },
     "singular-ion-shock-roundoff": {
-      "difference": 8888.502795431323,
-      "member": "Mach, velocity, sonic_velocity, rho12, rho52, P21, P52, T21, T52, M21, M52, v2, u5_p_v2, T, P, density, M, MW, enthalpy, energy, entropy, gibbs_energy, gamma_s, cp_fr, cp_eq, cv_fr, cv_eq, viscosity, conductivity_fr, conductivity_eq, Pr_fr, Pr_eq"
+      "difference": 29043.74094256304,
+      "member": "volume, Mach, velocity, sonic_velocity, rho12, rho52, P21, P52, T21, T52, M21, M52, v2, u5_p_v2, T, P, density, M, MW, enthalpy, energy, entropy, gibbs_energy, gamma_s, cp_fr, cp_eq, cv_fr, cv_eq, viscosity, conductivity_fr, conductivity_eq, Pr_fr, Pr_eq"
     }
   },
   "exceptions": [

@@ -472,5 +472,62 @@
     "equal_input_check": "/tmp/cea-stack-review.L1wog7/transport-equal.log",
     "equal_input_conductivity_native_units": 6.901408616467386e+20
   },
-  "result": "All seven regressions match native exceptions, statuses and numerical fields within the recorded test tolerances."
+  "result": "All seven regressions match native exceptions, statuses and numerical fields within the recorded test tolerances.",
+  "validation": {
+    "branch": "docs/readme-install",
+    "scratch": "/tmp/cea-review-fixes.Vm6QnR",
+    "rust_release": {
+      "passed": 62,
+      "ignored": 1,
+      "command": "mise exec -- env CARGO_TARGET_DIR=$S/target TMPDIR=$S/tmp cargo test --release"
+    },
+    "clippy": {
+      "default": "passed with warnings denied",
+      "python_feature": "passed with warnings denied"
+    },
+    "format": "cargo fmt --check passed",
+    "wheel": {
+      "with_native": 7,
+      "without_native": 7
+    },
+    "nasa_api": {
+      "with_native": {
+        "run": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 1,
+        "unexpected_successes": 0
+      },
+      "without_native": {
+        "run": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 1,
+        "unexpected_successes": 0
+      }
+    },
+    "broad": {
+      "rows": 146,
+      "all_passed": true,
+      "worst_unscaled_relative": 7.554308465184085e-05,
+      "field": "chamber enthalpy_j_kg",
+      "native": -0.0005354430331850154,
+      "rust": -0.0005354025841666333
+    },
+    "rocket": {
+      "cases": 24,
+      "all_passed": true,
+      "worst_relative": 6.52253779651054e-05
+    },
+    "reproduction": {
+      "all_seven_match": true,
+      "full_field_max_relative": 8.048749724874176e-14,
+      "field": ".singular_transport.P21"
+    },
+    "existing_gap": "singular-ion-shock-roundoff remains an explicit expected failure",
+    "native_sweep_numeric_changes": 0,
+    "rocket_sweep_numeric_changes": 0
+  }
 }
