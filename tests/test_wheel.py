@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import sys
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -33,12 +32,6 @@ class InstalledWheelTests(unittest.TestCase):
             "Co(b)", formula={"H": 2}, molecular_weight=2.01588, enthalpy_j_mol=0
         )
         self.assertEqual(custom._nasa_phase, 0)
-
-    def test_optional_numpy(self) -> None:
-        """Keep the base API usable and name the extra if NumPy is absent."""
-        if importlib.util.find_spec("numpy") is None:
-            with self.assertRaisesRegex(ImportError, r"cea-keplr-rs\[nasa\]"):
-                from cea_rs import nasa
 
     def test_run_deck(self) -> None:
         """Expose structured deck cases and the existing typed failures."""

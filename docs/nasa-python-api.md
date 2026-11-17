@@ -5,9 +5,8 @@ Inspected the PyPI wheel and Python/Cython sources at NASA commit
 on 2026-11-17. This inventory records public API facts, not copied implementation.
 NASA is Apache-2.0; see [provenance](provenance.md) and the root NOTICE.
 
-Install `cea-keplr-rs[nasa]` to use this adapter. NumPy is optional for the
-base package: `import cea_rs` and its SI API work without it. Importing
-`cea_rs.nasa` without NumPy raises ImportError naming that extra.
+NumPy is a required dependency of the package, so `import cea_rs.nasa as cea`
+works after a plain install.
 
 The adapter targets NASA behavior verbatim. It retains failures and false
 positives. [Current validation](verbatim-parity.md) records the measured

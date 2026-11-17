@@ -1,10 +1,46 @@
 # cea-rs
 
-Experimental native Rust thermochemistry and chemical equilibrium, with Python
-bindings. Canonical source: [minh-dng/cea-rs](https://github.com/minh-dng/cea-rs).
-Install distribution `cea-keplr-rs`; import `cea_rs`. Version 0.1.0a3 is an
-alpha, not a full NASA CEA replacement. Native `cea==3.3.4` remains the default
-in the released Hybrid and keplr-solver consumers.
+Chemical equilibrium and rocket performance in Rust, with Python bindings.
+It copies the behaviour of [NASA CEA](https://github.com/nasa/cea) 3.3.4,
+including its quirks and failure codes, and needs no Fortran at runtime.
+Version 0.1.0a3 is an alpha.
+
+## Install
+
+Python 3.12 or later. Building from source needs a Rust toolchain
+([rustup](https://rustup.rs)).
+
+```sh
+uv add git+https://github.com/minh-dng/cea-rs
+# or
+pip install git+https://github.com/minh-dng/cea-rs
+```
+
+Prebuilt wheels for Linux and macOS are attached to
+[GitHub releases](https://github.com/minh-dng/cea-rs/releases) when published.
+
+## Use it in place of NASA CEA
+
+`cea_rs.nasa` has the same classes, arguments and units as NASA's `cea`
+package, so most scripts only change the import:
+
+```python
+import numpy as np
+import cea_rs.nasa as cea  # was: import cea
+
+reac = cea.Mixture(["H2", "O2"])
+prod = cea.Mixture(["H2", "O2"], products_from_reactants=True)
+solver = cea.EqSolver(prod, reactants=reac)
+soln = cea.EqSolution(solver)
+solver.solve(soln, cea.TP, 3000.0, 10.0, reac.moles_to_weights(np.array([2.0, 1.0])))
+print(soln.converged, soln.T, soln.mole_fractions["H2O"])
+```
+
+As in NASA CEA, a failed solve does not raise. It sets `converged=False` and
+`last_error` and gives a `RuntimeWarning`, so check `converged`. Features not
+yet ported raise `NotImplementedError` by name.
+
+## SI API
 
 ```python
 from cea_rs import Solver
@@ -16,31 +52,28 @@ rocket = solver.rocket([1.0, 6.0], [298.15, 298.15], 3e6, 10.0,
 print(state.converged, state.temperature_k, rocket.complete, rocket.cstar_m_s)
 ```
 
-Implements TP/HP/SP/TV/UV/SV, experimental condensed/ion equilibrium,
-IAC/FAC equilibrium or frozen rockets, incident/reflected shocks, equilibrium
-CJ detonation, transport, NASA input decks and a supported subset of NASA's
-Python API in `cea_rs.nasa`. Numerical work runs in
-Rust, with no Fortran or native CEA runtime dependency. Python requires >=3.12.
-The existing alpha packages remain in the original GitLab registry; this source
-migration does not republish them. See [GitHub CI and releases](docs/github.md)
-for the wheel targets and future release process.
+It covers TP/HP/SP/TV/UV/SV equilibrium, condensed phases and ions, IAC/FAC
+rockets, incident and reflected shocks, CJ detonation, transport properties,
+and NASA input decks (see below).
 
-[Implementation matrix](docs/implementation-matrix.md) gives exact units,
-unsupported modes and failure behavior. [Validation](docs/verbatim-parity.md)
-records native comparisons, retained-state tests and remaining gaps.
-[0.1.0a2 performance](docs/performance-0.1.0a2/README.md) records historical
-measurements; [historical CI validation](docs/ci-validation.md)
-records local Linux checks and quota-blocked GitLab execution.
-[GitHub Actions](https://github.com/minh-dng/cea-rs/actions) runs the current CI.
-[Provenance](docs/provenance.md) identifies NASA and prior Rust sources/licenses.
+## Documentation
 
-Version 0.1.0a2 was **slower than native CEA** in its measured workloads.
-Version 0.1.0a3 has not been benchmarked.
-The target is verbatim NASA CEA 3.3.4 behavior, including its quirks, failures
-and false positives. Check returned convergence/status fields. A reported
-success is not a proof of conservation or phase stability. Unsupported NASA
-features raise NotImplementedError by name; see the implementation matrix.
-The port does not call Fortran or the native wheel at runtime.
+- **NASA CEA documentation:** <https://nasa.github.io/cea/>. Use it for the
+  `cea_rs.nasa` API, input decks and the underlying theory.
+- [NASA Python API inventory](docs/nasa-python-api.md): every NASA class and
+  member, its units, and whether it is supported here.
+- [Implementation matrix](docs/implementation-matrix.md): what this port
+  supports, with units and failure behaviour.
+- [Parity with NASA](docs/verbatim-parity.md): native comparisons, the
+  largest differences and the remaining gaps.
+- [Future improvements](docs/future-improvements.md): corrections to NASA
+  behaviour that were removed and may return as options.
+- [Input decks](docs/input-decks.md), [CI and releases](docs/github.md),
+  [provenance and licences](docs/provenance.md).
+
+Version 0.1.0a2 was slower than native CEA in its measured workloads
+([measurements](docs/performance-0.1.0a2/README.md)); 0.1.0a3 has not been
+benchmarked.
 
 ## Released consumers
 
