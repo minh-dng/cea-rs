@@ -279,10 +279,8 @@ macro_rules! cea_debug {
 // - Adjacency uses the sibling order. NASA compares compiled phase numbers,
 //   which also count fit intervals, so it treats ice (1) and liquid water (3)
 //   as non-adjacent and cycles between them instead of letting them coexist.
-// - The melting-point coexistence path pins T to the transition temperature,
-//   which only makes sense when T is a Newton unknown — for const-T problems
-//   the user's T stays untouched (the doomed phase then dies through F.3.1's
-//   negative-amount removal instead).
+// - Fixed-T problems keep only the lower-Gibbs sibling near a transition;
+//   coexistence would duplicate an element column without a T unknown.
 #[allow(clippy::too_many_arguments)]
 fn check_condensed_phases(
     species: &[Species],
@@ -326,8 +324,22 @@ fn check_condensed_phases(
 
         for (rank, &sp) in siblings.iter().enumerate() {
             let Some(j) = cond_index(sp) else { continue };
-            let (_, t_high_j) = species[ng + j].data().valid_temperature_range();
-            if *temperature_k > t_high_j {
+            let (t_low_j, t_high_j) = species[ng + j].data().valid_temperature_range();
+            if const_t {
+                // Compare Gibbs energies only inside the sibling's own fit:
+                // extrapolated fits can claim a false lower Gibbs energy, for
+                // example NaCN(III) below its 288.5 K lambda transition.
+                let gibbs = |sp: Species| {
+                    sp.data().h_over_r(*temperature_k) / *temperature_k
+                        - sp.data().s_over_r(*temperature_k)
+                };
+                if (t_low_j <= t_high_j && *temperature_k < t_low_j)
+                    || *temperature_k > t_high_j
+                    || gibbs(sp) >= gibbs(species[sc_i])
+                {
+                    continue;
+                }
+            } else if *temperature_k > t_high_j {
                 continue; // sibling j can't exist at T
             }
             let d_phase = phase_rank.abs_diff(rank);
@@ -339,7 +351,7 @@ fn check_condensed_phases(
             }
             let out_of_range =
                 *temperature_k < t_low_i - DT_PHASE || *temperature_k > t_high_i + DT_PHASE;
-            if d_phase > 1 || (Some(j) != *j_switch && out_of_range) {
+            if const_t || d_phase > 1 || (Some(j) != *j_switch && out_of_range) {
                 cea_debug!(
                     "[F.4] replacing {} with {} at T={temperature_k}",
                     species[sc_i].data().symbol(),
@@ -366,9 +378,7 @@ fn check_condensed_phases(
                     species[sc_i].data().symbol(),
                     species[ng + j].data().symbol()
                 );
-                if !const_t {
-                    *temperature_k = t_high_i.min(t_high_j);
-                }
+                *temperature_k = t_high_i.min(t_high_j);
                 if t_high_i > t_high_j {
                     *j_sol = Some(j);
                     *j_liq = Some(i);
@@ -1574,7 +1584,9 @@ pub(crate) fn solve_for_products_debug_with_start(
                 }
                 let sc = ng + c;
                 let (t_low, t_high) = species[sc].data().valid_temperature_range();
-                let allowed = (temperature_k >= t_low || t_low == 200.0) && temperature_k <= t_high;
+                // An inverted interval has no usable lower bound; retain its upper phase limit.
+                let allowed = (temperature_k >= t_low || t_low == 200.0 || t_low > t_high)
+                    && temperature_k <= t_high;
                 if !allowed {
                     continue;
                 }
@@ -1633,6 +1645,49 @@ pub(crate) fn solve_for_products_debug_with_start(
     // range means the iterate ran away, not that the problem was solved.
     if converged && !(160.0..=22000.0).contains(&temperature_k) {
         converged = false;
+    }
+
+    // A cold energy/entropy target may have no gas-only solution; obtain a
+    // converged condensed seed at NASA's lower bound, then retry once.
+    if !converged
+        && !const_t
+        && nc > 0
+        && (times_converged == 0 || temperature_k < 160.0)
+        && active_ranked.is_empty()
+        && start.is_none()
+    {
+        let cold = solve_for_products_debug_with_start(
+            reactants,
+            true,
+            false,
+            const_p,
+            160.0,
+            state2,
+            include_condensed,
+            include_ions,
+            only,
+            insert,
+            trace,
+            None,
+        );
+        if cold.converged && cold.condensed_active.iter().any(|active| *active) {
+            let mut retry = solve_for_products_debug_with_start(
+                reactants,
+                const_t,
+                const_s,
+                const_p,
+                state1,
+                state2,
+                include_condensed,
+                include_ions,
+                only,
+                insert,
+                trace,
+                Some(&cold.seed),
+            );
+            retry.iterations_used += iterations_used + cold.iterations_used;
+            return retry;
+        }
     }
 
     // Section I: post-processing & thermodynamic derivatives. Runs once, at
