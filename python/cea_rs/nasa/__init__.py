@@ -11,14 +11,7 @@ import warnings as _warnings
 import os
 import importlib.resources as importlib_resources
 
-try:
-    import numpy as _np
-except ModuleNotFoundError as exc:
-    if exc.name != "numpy":
-        raise
-    raise ImportError(
-        "cea_rs.nasa requires NumPy; install 'cea-keplr-rs[nasa]'"
-    ) from exc
+import numpy as _np
 
 import cea_rs as _rs
 from cea_rs._cea_rs import _nasa_species

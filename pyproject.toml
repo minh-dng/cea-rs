@@ -6,14 +6,13 @@ build-backend = "maturin"
 name = "cea-keplr-rs"
 version = "0.1.0a3"
 requires-python = ">=3.12"
-description = "Experimental Rust CEA thermochemistry; not a drop-in NASA CEA replacement"
+description = "Rust port of NASA CEA 3.3.4 with a NASA-compatible Python API"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE", "vendor/*LICENSE*", "vendor/thermo-species/LICENSE*"]
+dependencies = ["numpy>=1.26"]
 classifiers = ["Development Status :: 3 - Alpha", "Topic :: Scientific/Engineering :: Chemistry", "Programming Language :: Rust"]
 
-[project.optional-dependencies]
-nasa = ["numpy>=1.26"]
 
 [project.urls]
 Repository = "https://github.com/minh-dng/cea-rs"

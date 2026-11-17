@@ -22,9 +22,9 @@ Bit Mango license pairs were checked against the pinned upstream sources in
   treated as errors.
 - Maturin 1.15.0: release wheels for Linux x86-64, Linux ARM64 (the Keplr target),
   and macOS ARM64, using native runners. Linux wheels target manylinux 2.28.
-- Each base wheel is installed with `--no-deps` and tested outside the checkout
-  on Python 3.12 and 3.15.1. The `nasa` extra is then installed in a separate
-  directory for the adapter tests. NASA itself is not installed.
+- Each wheel is installed with its dependencies and tested outside the checkout
+  on Python 3.12 and 3.15.1, including the NASA-compatible API tests. NASA
+  itself is not installed.
 - The Linux x86-64 job also builds the source distribution. Successful jobs
   retain their artifacts in GitHub Actions.
 

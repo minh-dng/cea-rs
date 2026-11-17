@@ -11,13 +11,12 @@ Python 3.12 or later. Building from source needs a Rust toolchain
 ([rustup](https://rustup.rs)).
 
 ```sh
-uv add "cea-keplr-rs[nasa] @ git+https://github.com/minh-dng/cea-rs"
+uv add git+https://github.com/minh-dng/cea-rs
 # or
-pip install "cea-keplr-rs[nasa] @ git+https://github.com/minh-dng/cea-rs"
+pip install git+https://github.com/minh-dng/cea-rs
 ```
 
-The `nasa` extra adds NumPy for the NASA-compatible API. Leave it out if you
-only use the SI API. Prebuilt wheels for Linux and macOS are attached to
+Prebuilt wheels for Linux and macOS are attached to
 [GitHub releases](https://github.com/minh-dng/cea-rs/releases) when published.
 
 ## Use it in place of NASA CEA
