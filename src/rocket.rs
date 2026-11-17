@@ -115,54 +115,43 @@ fn frozen_bounds(reference: &State) -> (f64, f64) {
     (low.max(0.8 * gas_min), high)
 }
 
-fn frozen_expansion(reference: &State, p: f64) -> Result<State> {
+fn frozen_expansion(reference: &State, p: f64, mut t: f64) -> Result<State> {
     let (min_t, max_t) = frozen_bounds(reference);
-    if reference.frozen(min_t, p)?.entropy_j_kg_k > reference.entropy_j_kg_k
-        || (max_t.is_finite()
-            && reference.frozen(max_t, p)?.entropy_j_kg_k < reference.entropy_j_kg_k)
-    {
-        return Err(Error::Domain(format!(
-            "Frozen calculations stopped: entropy requires a temperature outside {min_t}..{max_t} K"
-        )));
-    }
-    let mut t = reference.temperature_k
-        * (p / reference.pressure_pa).powf((reference.gamma_s - 1.0) / reference.gamma_s);
-    t = t.clamp(min_t, max_t);
-    for _ in 0..30 {
+    let mut converged = false;
+    for _ in 0..8 {
         let mut st = reference.frozen(t, p)?;
-        let ds = reference.entropy_j_kg_k - st.entropy_j_kg_k;
-        if ds.abs() / reference.entropy_j_kg_k.abs().max(1.0) < 1e-11 {
+        if converged {
             if t < min_t || t > max_t {
                 return Err(Error::Domain(format!(
-                    "Frozen calculations stopped at {t:.6} K: allowed reference fit range {min_t}..{max_t} K"
+                    "Frozen calculations stopped: temperature outside {min_t}..{max_t} K"
                 )));
             }
-            st.constraint_residual = ds.abs() / reference.entropy_j_kg_k.abs().max(1.0);
+            st.entropy_j_kg_k = reference.entropy_j_kg_k;
+            st.gibbs_energy_j_kg = st.enthalpy_j_kg - t * st.entropy_j_kg_k;
+            st.cv_frozen_j_kg_k = 0.0;
+            st.cv_equilibrium_j_kg_k = 0.0;
             return Ok(st);
         }
-        t = (t * (ds / st.cp_frozen_j_kg_k).clamp(-0.5, 0.5).exp()).clamp(min_t, max_t);
+        let dlnt = (reference.entropy_j_kg_k - st.entropy_j_kg_k) / st.cp_frozen_j_kg_k;
+        t = (t.ln() + dlnt).exp();
+        if dlnt.abs() < 0.5e-4 {
+            converged = true;
+        }
     }
-    Err(Error::Convergence(
-        "Frozen temperature did not converge".into(),
+    Err(Error::Domain(
+        "Frozen calculations did not converge in 8 iterations".into(),
     ))
 }
 
 fn station(name: &'static str, state: State, h0: f64, flux: Option<f64>) -> Result<Station> {
     let speed2 = if flux.is_some() {
-        2.0 * (h0 - state.enthalpy_j_kg)
+        2.0 * (h0 - state.iteration_enthalpy())
     } else {
         0.0
     };
-    if !speed2.is_finite() || speed2 < 0.0 {
-        return Err(Error::Convergence(
-            "Nozzle has negative kinetic energy".into(),
-        ));
-    }
     let velocity = speed2.sqrt();
-    let area = flux.map(|g| g / (state.density_kg_m3 * velocity));
-    if area.is_some_and(|a| !a.is_finite() || a <= 0.0) {
-        return Err(Error::Convergence("Invalid nozzle mass flux".into()));
-    }
+    let area = flux
+        .map(|g| g * state.gas_moles * R * state.temperature_k / (state.pressure_pa * velocity));
     Ok(Station {
         name,
         sound_speed_m_s: state.sound_speed(),
@@ -185,57 +174,95 @@ struct Nozzle<'a> {
     weights: &'a [f64],
     reference: &'a State,
     frozen: bool,
+    temperature: f64,
     h0: f64,
 }
 impl Nozzle<'_> {
     fn state(&mut self, p: f64) -> Result<State> {
         if self.frozen {
-            return frozen_expansion(self.reference, p);
+            let st = frozen_expansion(self.reference, p, self.temperature)?;
+            self.temperature = st.temperature_k;
+            return Ok(st);
         }
-        let st = self.solver.solve_with_start(
+        let mut st = self.solver.solve_with_start(
             Mode::SP(self.reference.entropy_j_kg_k, p),
             self.weights,
             self.start.as_ref(),
         )?;
-        self.start.clone_from(&st.equilibrium_seed);
+        if st.converged {
+            self.start.clone_from(&st.equilibrium_seed);
+        }
+        st.pressure_pa = p;
         Ok(st)
     }
 
-    fn throat(&mut self, p0: f64) -> Result<Station> {
-        let gamma = self.reference.gamma_s;
+    fn throat(&mut self, p0: f64, gamma: f64) -> Result<Station> {
         let mut p = p0 / ((gamma + 1.0) / 2.0).powf(gamma / (gamma - 1.0));
-        for _ in 0..40 {
+        let mut last = None;
+        let mut melt_t = 0.0_f64;
+        for i in 1..=22 {
             let st = self.state(p)?;
-            let speed2 = 2.0 * (self.h0 - st.enthalpy_j_kg);
+            let speed2 = 2.0 * (self.h0 - st.iteration_enthalpy());
             let mach2 = speed2 / st.sound_speed().powi(2);
-            if !mach2.is_finite() || mach2 <= 0.0 {
-                return Err(Error::Convergence("Nonphysical throat iterate".into()));
+            let mut current = station("throat", st, self.h0, Some(1.0))?;
+            let flux = current.state.pressure_pa * current.velocity_m_s
+                / (current.state.gas_moles * R * current.state.temperature_k);
+            current.area_ratio = Some(1.0);
+            if self.frozen {
+                current.state.cv_frozen_j_kg_k = self.reference.cv_frozen_j_kg_k;
+                current.state.cv_equilibrium_j_kg_k = self.reference.cv_equilibrium_j_kg_k;
             }
-            if (mach2 - 1.0).abs() < 2e-8 {
-                let flux = st.density_kg_m3 * speed2.sqrt();
-                return station("throat", st, self.h0, Some(flux));
+            if (mach2 - 1.0).abs() / mach2 <= 0.4e-4 {
+                return Ok(current);
             }
-            // NASA RP-1311 Eq. 6.17, using the current isentropic exponent.
-            p *= (1.0 + st.gamma_s * mach2) / (1.0 + st.gamma_s);
-            p = p.clamp(p0 * 1e-6, p0 * (1.0 - 1e-8));
+            let next = p * (1.0 + current.state.gamma_s * mach2) / (1.0 + current.state.gamma_s);
+            p = if i <= 3 {
+                if !self.frozen
+                    && current
+                        .state
+                        .equilibrium_seed
+                        .as_ref()
+                        .is_some_and(|s| s.j_sol.is_some())
+                {
+                    melt_t = current.state.temperature_k;
+                    next
+                } else if !self.frozen && melt_t.abs() >= 1e-6 {
+                    current.state.pressure_pa = p
+                        * ((melt_t / current.state.temperature_k).ln()
+                            * current.state.cp_frozen_j_kg_k
+                            / (current.state.gas_moles * R * current.state.dlnv_dlnt))
+                            .exp();
+                    return Ok(current);
+                } else {
+                    next
+                }
+            } else {
+                next.max(p) - (next - p).abs() / 20.0
+            };
+            last = Some((current, flux));
         }
-        Err(Error::Convergence("Sonic throat did not converge".into()))
+        let mut current = last.unwrap().0;
+        current.state.pressure_pa = p;
+        Ok(current)
     }
 
-    fn area(&mut self, p0: f64, throat: &Station, area: f64, supersonic: bool) -> Result<Station> {
-        if area == 1.0 {
-            let mut st = throat.clone();
-            st.name = "exit";
-            return Ok(st);
-        }
-        let flux = throat.state.density_kg_m3 * throat.velocity_m_s;
+    fn area(
+        &mut self,
+        p0: f64,
+        throat: &Station,
+        area: f64,
+        supersonic: bool,
+        gamma_estimate: f64,
+    ) -> Result<Station> {
+        let flux = throat.state.pressure_pa * throat.velocity_m_s
+            / (throat.state.gas_moles * R * throat.state.temperature_k);
         let xt = (p0 / throat.state.pressure_pa).ln();
         let loga = area.ln();
         let mut x = if supersonic {
             if area < 2.0 {
                 xt + (3.294 * loga.powi(2) + 1.535 * loga).sqrt()
             } else {
-                throat.state.gamma_s + 1.4 * loga
+                gamma_estimate + 1.4 * loga
             }
         } else {
             let mut x = xt / (area + 10.587 * loga.powi(3) + 9.454 * loga);
@@ -246,41 +273,20 @@ impl Nozzle<'_> {
             }
             x
         };
-        let mut lo = if supersonic { xt } else { 0.0 };
-        let mut hi = if supersonic { f64::INFINITY } else { xt };
-        for _ in 0..40 {
-            let st = station("exit", self.state(p0 * (-x).exp())?, self.h0, Some(flux))?;
-            let actual = st
-                .area_ratio
-                .ok_or_else(|| Error::Convergence("Missing nozzle area".into()))?;
-            let residual = (area / actual).ln();
-            let m2 = st.mach.powi(2);
-            let update = st.state.gamma_s * m2 / (m2 - 1.0) * residual;
-            if residual.abs() < 2e-8
-                || (!supersonic
-                    && (actual / area - 1.0).abs() < 5e-4
-                    && ((actual / area - 1.0).abs() <= 4e-5 || update.abs() < 4e-5))
-            {
+        let mut last = None;
+        for _ in 0..10 {
+            let st = station("exit", self.state(p0 / x.exp())?, self.h0, Some(flux))?;
+            let actual = st.area_ratio.unwrap();
+            let speed2 = st.velocity_m_s.powi(2);
+            let sound2 = st.sound_speed_m_s.powi(2);
+            let update = st.state.gamma_s * speed2 / (speed2 - sound2) * (area.ln() - actual.ln());
+            if (actual - area).abs() / area <= 4e-5 || update.abs() < 4e-5 {
                 return Ok(st);
             }
-            if (actual < area) == supersonic {
-                lo = x;
-            } else {
-                hi = x;
-            }
-            // NASA RP-1311 Eq. 6.23; safeguard the two area branches near Mach 1.
-            let next = x + update;
-            x = if next.is_finite() && next > lo && next < hi {
-                next
-            } else if hi.is_finite() {
-                (lo + hi) / 2.0
-            } else {
-                x + 1.0
-            };
+            x += update;
+            last = Some(st);
         }
-        Err(Error::Convergence(
-            "Assigned nozzle area did not converge".into(),
-        ))
+        Ok(last.unwrap())
     }
 }
 
@@ -308,13 +314,6 @@ impl Solver {
                 ..RocketOptions::default()
             },
         )?;
-        if !result.complete {
-            return Err(Error::Domain(
-                result
-                    .stop_reason
-                    .unwrap_or_else(|| "Frozen exit was not completed".into()),
-            ));
-        }
         Ok(result)
     }
 
@@ -332,7 +331,7 @@ impl Solver {
             || pc <= 0.0
             || o.pi_p.iter().any(|p| !p.is_finite() || *p <= 1.0)
             || o.subar.iter().any(|a| !a.is_finite() || *a <= 1.0)
-            || o.supar.iter().any(|a| !a.is_finite() || *a < 1.0)
+            || o.supar.iter().any(|a| !a.is_finite() || *a <= 1.0)
             || o.hc.is_some_and(|h| !h.is_finite())
             || o.tc.is_some_and(|t| !t.is_finite() || t <= 0.0)
             || o.tc_est.is_some_and(|t| !t.is_finite() || t <= 0.0)
@@ -367,34 +366,26 @@ impl Solver {
             if let Some(t) = o.tc {
                 return self.solve(Mode::TP(t, p), weights);
             }
-            if let Some(mut t) = o.tc_est {
-                // Public solve has no temperature seed; honor tc_est through TP heat-capacity updates.
-                for _ in 0..40 {
-                    let st = self.solve(Mode::TP(t, p), weights)?;
-                    let dh = assigned_h - st.enthalpy_j_kg;
-                    let scale = assigned_h
-                        .abs()
-                        .max(R * t / st.molecular_weight_kg_kmol)
-                        .max(1.0);
-                    if dh.abs() < 1e-9 * scale {
-                        return Ok(st);
-                    }
-                    t += (dh / st.cp_equilibrium_j_kg_k).clamp(-0.25 * t, 0.25 * t);
-                }
-                return Err(Error::Convergence(
-                    "Estimated chamber enthalpy iteration did not converge".into(),
-                ));
+            if let Some(t) = o.tc_est {
+                let seed = self.initial_seed(weights, t, None)?;
+                return self.solve_with_start(Mode::HP(assigned_h, p), weights, Some(&seed));
             }
             self.solve(Mode::HP(assigned_h, p), weights)
         };
         let mut injector = chamber_at(pc)?;
-        let h0 = injector.enthalpy_j_kg;
+        let h0 = if o.tc.is_some() {
+            injector.iteration_enthalpy()
+        } else {
+            assigned_h
+        };
         let mut stations;
         let throat;
         let infinity;
         if o.iac {
             if o.n_frz == 1 {
-                injector = injector.frozen(injector.temperature_k, pc)?;
+                injector.gamma_s = injector.cp_frozen_j_kg_k
+                    / (injector.cp_frozen_j_kg_k - injector.gas_moles * R);
+                injector.equilibrium = false;
             }
             infinity = injector.clone();
             let mut nozzle = Nozzle {
@@ -403,85 +394,113 @@ impl Solver {
                 start: infinity.equilibrium_seed.clone(),
                 reference: &infinity,
                 frozen: o.n_frz == 1,
+                temperature: infinity.temperature_k,
                 h0,
             };
-            throat = nozzle.throat(pc)?;
+            throat = nozzle.throat(pc, infinity.gamma_s)?;
             stations = vec![station("infinity", injector, h0, None)?, throat.clone()];
         } else {
             let mut ac = o.ac_at.unwrap_or(2.0);
             let ratio = |a: f64| (1.0257 - 1.2318 * a) / (1.0 - 1.26505 * a);
-            let mut pinf = pc * ratio(ac);
+            let mut prat = 0.0;
+            let mut pinf = pc;
+            for _ in 0..4 {
+                prat = ratio(ac);
+                pinf = pc * prat;
+                if o.ac_at.is_some() {
+                    break;
+                }
+                ac = pinf / (o.mdot.unwrap() * 2350.0);
+                if ac < 1.0 {
+                    return Err(Error::Input(
+                        "FAC mass flow gives a contraction ratio below one".into(),
+                    ));
+                }
+            }
+            let mut inf_seed = self.initial_seed(weights, o.tc_est.unwrap_or(3800.0), None)?;
             let mut closed = None;
             for _ in 0..100 {
-                let inf = if o.n_frz == 1 {
-                    injector.frozen(injector.temperature_k, pinf)?
+                let mode = if let Some(t) = o.tc {
+                    Mode::TP(t, pinf)
                 } else {
-                    chamber_at(pinf)?
+                    Mode::HP(assigned_h, pinf)
                 };
+                let inf = self.solve_with_start(mode, weights, Some(&inf_seed))?;
+                if inf.converged {
+                    inf_seed = inf.equilibrium_seed.clone().unwrap();
+                }
                 let mut nozzle = Nozzle {
                     solver: self,
                     weights,
                     start: inf.equilibrium_seed.clone(),
                     reference: &inf,
-                    frozen: (1..=2).contains(&o.n_frz),
+                    frozen: false,
+                    temperature: inf.temperature_k,
                     h0,
                 };
-                let mut thr = nozzle.throat(pinf)?;
-                let mut consistent_combustor = None;
-                for _ in 0..40 {
-                    let flux = thr.state.density_kg_m3 * thr.velocity_m_s;
-                    if let Some(mdot) = o.mdot {
-                        ac = flux / mdot;
+                let thr = nozzle.throat(pinf, injector.gamma_s)?;
+                nozzle.start = inf.equilibrium_seed.clone();
+                let mut combustor = nozzle.area(pinf, &thr, ac, false, inf.gamma_s)?;
+                combustor.name = "combustor";
+                let check = combustor.state.pressure_pa
+                    + combustor.velocity_m_s.powi(2) * combustor.state.pressure_pa
+                        / (R * combustor.state.gas_moles * combustor.state.temperature_k);
+                let done = if o.ac_at.is_some() {
+                    let done = (pc - check).abs() / pc <= 2e-5;
+                    if !done {
+                        pinf *= pc / check;
                     }
-                    if ac < 1.0 || !ac.is_finite() {
-                        return Err(Error::Input(
-                            "FAC mass flux exceeds the sonic chamber limit".into(),
-                        ));
-                    }
-                    let mut combustor = nozzle.area(pinf, &thr, ac, false)?;
-                    combustor.name = "combustor";
-                    if o.n_frz == 3 {
-                        let mut frozen = Nozzle {
-                            solver: self,
-                            weights,
-                            start: combustor.state.equilibrium_seed.clone(),
-                            reference: &combustor.state,
-                            frozen: true,
-                            h0,
-                        };
-                        let frozen_throat = frozen.throat(pinf)?;
-                        let frozen_flux =
-                            frozen_throat.state.density_kg_m3 * frozen_throat.velocity_m_s;
-                        thr = frozen_throat;
-                        if (frozen_flux / flux - 1.0).abs() > 2e-8 {
-                            continue;
+                    done
+                } else {
+                    let flux = thr.state.pressure_pa * thr.velocity_m_s
+                        / (R * thr.state.gas_moles * thr.state.temperature_k);
+                    ac = flux / o.mdot.unwrap();
+                    let mut previous = prat;
+                    prat = ratio(ac);
+                    let done = (pc - check).abs() / check <= 2e-5;
+                    if !done {
+                        let mut pjrat = check / pc;
+                        for _ in 0..2 {
+                            let pr = pjrat * previous / prat;
+                            pinf /= pr;
+                            ac /= pr;
+                            combustor.area_ratio = Some(ac);
+                            previous = prat;
+                            pjrat = 1.0;
+                            prat = ratio(ac);
                         }
                     }
-                    consistent_combustor = Some(combustor);
+                    done
+                };
+                closed = Some((inf, combustor, thr));
+                if done {
                     break;
                 }
-                let combustor = consistent_combustor.ok_or_else(|| {
-                    Error::Convergence(
-                        "Frozen FAC combustor/throat mass closure did not converge".into(),
-                    )
-                })?;
-                let check = combustor.state.pressure_pa
-                    + combustor.state.density_kg_m3 * combustor.velocity_m_s.powi(2);
-                if (check / pc - 1.0).abs() < 2e-8 {
-                    closed = Some((inf, combustor, thr));
-                    break;
-                }
-                pinf *= pc / check;
             }
-            let (inf, combustor, thr) = closed.ok_or_else(|| {
-                Error::Convergence("FAC injector momentum closure did not converge".into())
-            })?;
+            let (inf, combustor, mut thr) = closed.unwrap();
+            // NASA leaves the FAC infinity/combustor gamma workspace at zero here.
+            if (1..=3).contains(&o.n_frz) {
+                let reference = match o.n_frz {
+                    1 => &injector,
+                    2 => &inf,
+                    _ => &combustor.state,
+                };
+                let mut nozzle = Nozzle {
+                    solver: self,
+                    weights,
+                    start: None,
+                    reference,
+                    frozen: true,
+                    temperature: reference.temperature_k,
+                    h0,
+                };
+                thr = nozzle.throat(pinf, if o.n_frz == 1 { reference.gamma_s } else { 0.0 })?;
+            }
             infinity = inf;
             throat = thr;
             stations = vec![
                 station("injector", injector, h0, None)?,
                 Station {
-                    // NASA leaves this auxiliary FAC station's sonic output at zero.
                     sound_speed_m_s: 0.0,
                     ..station("infinity", infinity.clone(), h0, None)?
                 },
@@ -489,23 +508,18 @@ impl Solver {
                 throat.clone(),
             ];
         }
-        let flux = throat.state.density_kg_m3 * throat.velocity_m_s;
-        if !flux.is_finite() || flux <= 0.0 || (throat.mach - 1.0).abs() > 2e-6 {
-            return Err(Error::Convergence(
-                "Nozzle failed sonic or mass-flow closure".into(),
-            ));
-        }
+        let flux = throat.state.pressure_pa * throat.sound_speed_m_s
+            / (throat.state.gas_moles * R * throat.state.temperature_k);
         let mut stop_reason = None;
         for (kind, schedule) in [(0, o.pi_p), (1, o.subar), (2, o.supar)] {
+            let mut frozen_temperature = None;
             // NASA omits subsonic schedules when freezing after station 1.
             if kind == 1 && o.n_frz > 1 {
                 continue;
             }
             for &value in schedule {
                 let frozen = o.n_frz > 0 && stations.len() >= o.n_frz;
-                let reference = if frozen && !o.iac && o.n_frz == 1 {
-                    &infinity
-                } else if frozen {
+                let reference = if frozen {
                     &stations[o.n_frz - 1].state
                 } else {
                     &infinity
@@ -528,6 +542,13 @@ impl Solver {
                         .and_then(|st| st.state.equilibrium_seed.clone()),
                     reference,
                     frozen,
+                    temperature: *frozen_temperature.get_or_insert_with(|| {
+                        if kind == 0 {
+                            infinity.temperature_k
+                        } else {
+                            stations.last().unwrap().state.temperature_k
+                        }
+                    }),
                     h0,
                 };
                 let result = if kind == 0 {
@@ -540,7 +561,17 @@ impl Solver {
                         nozzle.frozen = false;
                         nozzle.reference = &infinity;
                     }
-                    nozzle.area(infinity.pressure_pa, &throat, value, kind == 2)
+                    nozzle.area(
+                        infinity.pressure_pa,
+                        &throat,
+                        value,
+                        kind == 2,
+                        if o.iac {
+                            throat.state.gamma_s
+                        } else {
+                            infinity.gamma_s
+                        },
+                    )
                 };
                 let st = match result {
                     Ok(st) => st,
@@ -550,39 +581,32 @@ impl Solver {
                     }
                     Err(err) => return Err(err),
                 };
-                let area_tolerance = if kind == 1 { 5e-4 } else { 2e-6 };
-                if kind != 0 && (st.area_ratio.unwrap_or(0.0) / value - 1.0).abs() > area_tolerance
-                {
-                    return Err(Error::Convergence(
-                        "Nozzle failed assigned mass-flow closure".into(),
-                    ));
-                }
                 stations.push(st);
             }
             if stop_reason.is_some() {
                 break;
             }
         }
-        let cstar = infinity.pressure_pa / flux;
+        let performance_h0 = stations[0].state.iteration_enthalpy();
+        let throat_isp = (2.0 * (performance_h0 - throat.state.iteration_enthalpy())).sqrt();
+        let throat_flux = throat.state.pressure_pa * throat_isp
+            / (throat.state.gas_moles * R * throat.state.temperature_k);
+        let cstar = infinity.pressure_pa / throat_flux;
         for st in &mut stations {
             st.cstar_m_s = cstar;
-            if let Some(area) = st.area_ratio {
-                st.thrust_coefficient = st.velocity_m_s / cstar;
-                if (st.state.density_kg_m3 * st.velocity_m_s * area / flux - 1.0).abs() > 2e-6 {
-                    return Err(Error::Convergence(
-                        "Nozzle failed station mass-flow closure".into(),
-                    ));
-                }
-                st.isp_vacuum_m_s = st.velocity_m_s
-                    + st.state.pressure_pa / (st.state.density_kg_m3 * st.velocity_m_s);
-                let energy = st.state.enthalpy_j_kg + st.velocity_m_s.powi(2) / 2.0;
-                if !st.isp_vacuum_m_s.is_finite() || (energy - h0).abs() > 2e-6 * h0.abs().max(1.0)
-                {
-                    return Err(Error::Convergence("Nozzle failed energy closure".into()));
-                }
+            if st.area_ratio.is_some() {
+                st.isp_m_s = (2.0 * (performance_h0 - st.state.iteration_enthalpy())).sqrt();
+                st.thrust_coefficient = st.isp_m_s / cstar;
+                st.isp_vacuum_m_s =
+                    st.isp_m_s + st.state.gas_moles * R * st.state.temperature_k / st.isp_m_s;
             }
             if o.transport {
-                st.transport = Some(st.state.transport()?);
+                let tr = st.state.transport()?;
+                st.state.cp_frozen_j_kg_k = tr.cp_frozen_j_kg_k;
+                if st.state.equilibrium {
+                    st.state.cv_frozen_j_kg_k = tr.cp_frozen_j_kg_k - st.state.gas_moles * R;
+                }
+                st.transport = Some(tr);
             }
         }
         let exit = stations

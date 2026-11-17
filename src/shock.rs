@@ -36,6 +36,8 @@ pub struct ShockStation {
 )]
 #[derive(Debug, Clone)]
 pub struct ShockResult {
+    pub converged: bool,
+    pub last_error: i32,
     pub station1: ShockStation,
     pub station2: ShockStation,
     pub station5: Option<ShockStation>,
@@ -64,109 +66,79 @@ fn station(state: State, velocity_m_s: f64) -> ShockStation {
     }
 }
 
-fn verify_jump(up: &State, down: &State, u: f64, v: f64) -> Result<()> {
-    let mass = up.density_kg_m3 * u;
-    let momentum = up.pressure_pa + mass * u;
-    let energy = up.enthalpy_j_kg + u * u / 2.0;
-    let errors = [
-        (mass - down.density_kg_m3 * v).abs() / mass.abs().max(1.0),
-        (momentum - down.pressure_pa - down.density_kg_m3 * v * v).abs() / momentum.abs().max(1.0),
-        (energy - down.enthalpy_j_kg - v * v / 2.0).abs()
-            / energy
-                .abs()
-                .max(u * u)
-                .max(R * up.temperature_k / up.molecular_weight_kg_kmol)
-                .max(1.0),
-    ];
-    if errors.iter().any(|e| !e.is_finite() || *e > 5e-5)
-        || down.pressure_pa <= up.pressure_pa
-        || down.density_kg_m3 <= up.density_kg_m3
-        || !u.is_finite()
-        || !v.is_finite()
-        || v <= 0.0
-        || u <= v
-    {
-        return Err(Error::Convergence(format!(
-            "Shock failed mass, momentum or energy closure: {errors:?}"
-        )));
-    }
-    Ok(())
-}
-
-/// NASA's two log-pressure/log-temperature Newton equations and damping.
-/// Numerical TP derivatives keep the equilibrium core behind its public API.
+/// NASA's analytic log-pressure/log-temperature shock equations.
 fn solve_jump(
     up: &State,
     speed: f64,
     reflected: bool,
     mut p_ratio: f64,
     mut t_ratio: f64,
-    state_at: impl Fn(f64, f64) -> Result<State>,
-) -> Result<State> {
-    let residual = |st: &State| {
-        let d = st.density_kg_m3 / up.density_kg_m3;
-        let (dynamic, kinetic) = if reflected {
-            (
-                up.density_kg_m3 * speed * speed * d / (d - 1.0),
-                speed * speed * (d + 1.0) / (d - 1.0) / 2.0,
-            )
-        } else {
-            (
-                up.density_kg_m3 * speed * speed * (1.0 - 1.0 / d),
-                speed * speed * (1.0 - 1.0 / (d * d)) / 2.0,
-            )
-        };
-        [
-            (st.pressure_pa - up.pressure_pa - dynamic) / up.pressure_pa,
-            (st.enthalpy_j_kg - up.enthalpy_j_kg - kinetic) / R,
-        ]
-    };
+    mut state_at: impl FnMut(f64, f64) -> Result<State>,
+) -> Result<(State, bool, f64, f64, f64)> {
+    let wm = up.molecular_weight_kg_kmol;
+    let t0 = up.temperature_k;
+    let mu = wm * speed * speed / (R * t0);
+    let h_init = up.enthalpy_j_kg / R;
+    let mut last = None;
     for iter in 1..=60 {
-        let p = up.pressure_pa * p_ratio;
-        let t = up.temperature_k * t_ratio;
-        let mut st = state_at(t, p)?;
-        let f = residual(&st);
-        let step: f64 = 1e-4;
-        let fp = residual(&state_at(t, p * step.exp())?);
-        let ft = residual(&state_at(t * step.exp(), p)?);
-        let a = (fp[0] - f[0]) / step;
-        let b = (ft[0] - f[0]) / step;
-        let c = (fp[1] - f[1]) / step;
-        let d = (ft[1] - f[1]) / step;
-        let det = a * d - b * c;
-        let mut dp = (b * f[1] - d * f[0]) / det;
-        let mut dt = (c * f[0] - a * f[1]) / det;
-        if !dp.is_finite() || !dt.is_finite() {
-            return Err(Error::Convergence("Singular shock Newton system".into()));
+        let t = t_ratio * t0;
+        let st = state_at(t, up.pressure_pa * p_ratio)?;
+        let wmk = 1.0 / st.gas_moles;
+        let rho12 = wm * t_ratio / (p_ratio * wmk);
+        let cp = st.cp_equilibrium_j_kg_k / R;
+        let (vp, vt) = (st.dlnv_dlnp, st.dlnv_dlnt);
+        let rho52 = 1.0 / rho12;
+        let mut tmp = if reflected {
+            -mu * rho52 / (rho52 - 1.0).powi(2)
+        } else {
+            rho12 * mu
+        };
+        let a = -tmp * vp - p_ratio;
+        let b = -tmp * vt;
+        let f = if reflected {
+            p_ratio - 1.0 + tmp * (rho52 - 1.0)
+        } else {
+            p_ratio - 1.0 + tmp - mu
+        };
+        tmp *= t0 / wm;
+        if !reflected {
+            tmp *= rho12;
         }
+        let c = -tmp * vp + t * (vt - 1.0) / wmk;
+        let d = -tmp * vt - t * cp;
+        let g = st.iteration_enthalpy() / R
+            - h_init
+            - speed * speed / (2.0 * R)
+                * if reflected {
+                    (rho52 + 1.0) / (rho52 - 1.0)
+                } else {
+                    1.0 - rho12 * rho12
+                };
+        let det = a * d - b * c;
+        let mut dp = (f * d - g * b) / det;
+        let mut dt = (a * g - c * f) / det;
         let correction = dp.abs().max(dt.abs());
         if correction < 5e-5 {
-            let ratio = st.density_kg_m3 / up.density_kg_m3;
-            let (u, v) = if reflected {
-                (speed * ratio / (ratio - 1.0), speed / (ratio - 1.0))
-            } else {
-                (speed, speed / ratio)
-            };
-            verify_jump(up, &st, u, v)?;
-            st.iterations += iter;
-            return Ok(st);
+            return Ok((st, true, p_ratio, t_ratio, rho12));
         }
         let cap = if iter > 20 {
-            1.05_f64.ln()
+            0.04879016
         } else if iter > 12 {
-            1.1_f64.ln()
+            0.09531018
         } else if iter > 4 {
-            1.25_f64.ln()
+            0.22314355
         } else {
-            1.5_f64.ln()
+            0.40546511
         };
-        let damping = (cap / correction).min(1.0);
-        dp *= damping;
-        dt *= damping;
-        p_ratio *= dp.exp();
-        t_ratio *= dt.exp();
+        if correction / cap > 1.0 {
+            dp /= correction / cap;
+            dt /= correction / cap;
+        }
+        p_ratio = (p_ratio.ln() + dp).exp();
+        t_ratio = (t_ratio.ln() + dt).exp();
+        last = Some((st, false, p_ratio, t_ratio, rho12));
     }
-    Err(Error::Convergence("Shock exceeded 60 iterations".into()))
+    Ok(last.unwrap())
 }
 
 impl Solver {
@@ -219,7 +191,7 @@ impl Solver {
                 "Shock temperature/pressure outside the thermodynamic domain".into(),
             ));
         }
-        let initial = frozen_state(&amounts, temperature_k, pressure_pa)?;
+        let initial = frozen_state(&amounts, temperature_k, pressure_pa, None)?;
         let u1 = match speed {
             ShockSpeed::Velocity(u) => u,
             ShockSpeed::Mach(m) => m * initial.sound_speed(),
@@ -232,30 +204,44 @@ impl Solver {
         }
         let gamma = initial.gamma_s;
         let p21 = (2.0 * gamma * mach1 * mach1 - gamma + 1.0) / (gamma + 1.0);
+        let mut seed = self.initial_seed(weights, temperature_k, Some(&initial.amounts))?;
         let t21 = if incident_frozen {
             p21 * (2.0 / (mach1 * mach1) + gamma - 1.0) / (gamma + 1.0)
         } else {
-            self.solve(
+            let hp = self.solve_with_start(
                 Mode::HP(initial.enthalpy_j_kg + u1 * u1 / 2.0, pressure_pa * p21),
                 weights,
-            )?
-            .temperature_k
-                / temperature_k
-        };
-        let incident = solve_jump(&initial, u1, false, p21, t21, |t, p| {
-            if incident_frozen {
-                initial.frozen(t, p)
-            } else {
-                self.solve(Mode::TP(t, p), weights)
+                Some(&seed),
+            )?;
+            if hp.converged {
+                seed = hp.equilibrium_seed.clone().unwrap();
             }
-        })?;
-        let u2 = u1 * initial.density_kg_m3 / incident.density_kg_m3;
+            hp.temperature_k / temperature_k
+        }
+        .min(21000.0 / temperature_k);
+        let (mut incident, converged, p21, t21, rho12) =
+            solve_jump(&initial, u1, false, p21, t21, |t, p| {
+                if incident_frozen {
+                    initial.frozen(t, p)
+                } else {
+                    let st = self.solve_state(Mode::TP(t, p), weights, Some(&seed), true)?;
+                    if st.converged {
+                        seed = st.equilibrium_seed.clone().unwrap();
+                    }
+                    Ok(st)
+                }
+            })?;
+        incident.pressure_pa = p21 * pressure_pa;
+        incident.transport_atomic = !incident.converged;
+        let u2 = u1 * rho12;
         let v2 = u1 - u2;
         let mut result = ShockResult {
-            p2_p1: incident.pressure_pa / pressure_pa,
-            t2_t1: incident.temperature_k / temperature_k,
+            converged,
+            last_error: if converged { 0 } else { 9 },
+            p2_p1: p21,
+            t2_t1: t21,
             m2_m1: incident.molecular_weight_kg_kmol / initial.molecular_weight_kg_kmol,
-            rho2_rho1: incident.density_kg_m3 / initial.density_kg_m3,
+            rho2_rho1: 1.0 / rho12,
             v2_m_s: v2,
             station1: station(initial, u1),
             station2: station(incident, u2),
@@ -266,75 +252,44 @@ impl Solver {
             rho5_rho2: None,
             u5_plus_v2_m_s: None,
         };
-        if reflected {
+        if reflected && result.station2.state.temperature_k > 0.0 {
             let up = &result.station2.state;
             let mu = up.density_kg_m3 * v2 * v2 / up.pressure_pa;
             let b = (1.0 + mu + 2.0) / 2.0;
             let p52 = b + (b * b - 2.0).sqrt();
-            let mut down = solve_jump(up, v2, true, p52, 2.0, |t, p| {
-                if reflected_frozen {
-                    up.frozen(t, p)
-                } else {
-                    self.solve(Mode::TP(t, p), weights)
-                }
-            })?;
-            let ratio = down.density_kg_m3 / up.density_kg_m3;
+            let mut seed = self.initial_seed(weights, up.temperature_k, Some(&up.amounts))?;
+            let (mut down, converged, p52, t52, rho25) =
+                solve_jump(up, v2, true, p52, 2.0, |t, p| {
+                    if reflected_frozen {
+                        up.frozen(t, p)
+                    } else {
+                        let st = self.solve_with_start(Mode::TP(t, p), weights, Some(&seed))?;
+                        if st.converged {
+                            seed = st.equilibrium_seed.clone().unwrap();
+                        }
+                        Ok(st)
+                    }
+                })?;
+            result.converged = converged;
+            result.last_error = if converged { 0 } else { 8 };
+            let ratio = 1.0 / rho25;
             let u5 = v2 / (ratio - 1.0);
             if reflected_frozen {
                 // NASA's reflected-frozen header retains incident Cp, even at T5.
                 let cp = up.cp_frozen_j_kg_k;
                 down.gamma_s = cp / (cp - R / up.molecular_weight_kg_kmol);
+                down.cp_equilibrium_j_kg_k = cp;
+                down.cv_equilibrium_j_kg_k = cp - down.gas_moles * R;
+                down.cp_frozen_j_kg_k = 0.0;
+                down.cv_frozen_j_kg_k = 0.0;
             }
-            result.p5_p2 = Some(down.pressure_pa / up.pressure_pa);
-            result.t5_t2 = Some(down.temperature_k / up.temperature_k);
+            result.p5_p2 = Some(p52);
+            result.t5_t2 = Some(t52);
             result.m5_m2 = Some(down.molecular_weight_kg_kmol / up.molecular_weight_kg_kmol);
             result.rho5_rho2 = Some(ratio);
             result.u5_plus_v2_m_s = Some(u5 + v2);
             result.station5 = Some(station(down, u5));
         }
         Ok(result)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::thermo::Reactant;
-
-    #[test]
-    fn conservation_guard_rejects_corrupted_mass_momentum_and_energy() {
-        let solver = Solver::new(
-            vec![Reactant::named("N2").unwrap()],
-            false,
-            false,
-            None,
-            vec![],
-        )
-        .unwrap();
-        let result = solver
-            .shock(
-                &[1.0],
-                300.0,
-                1e5,
-                ShockSpeed::Mach(3.0),
-                false,
-                true,
-                false,
-            )
-            .unwrap();
-        let up = &result.station1;
-        let down = &result.station2;
-        for property in 0..3 {
-            let mut bad = down.state.clone();
-            match property {
-                0 => bad.density_kg_m3 *= 1.1,
-                1 => bad.pressure_pa *= 1.1,
-                _ => bad.enthalpy_j_kg += 1e5,
-            }
-            assert!(matches!(
-                verify_jump(&up.state, &bad, up.velocity_m_s, down.velocity_m_s),
-                Err(Error::Convergence(_))
-            ));
-        }
     }
 }

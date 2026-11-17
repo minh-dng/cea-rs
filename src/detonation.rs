@@ -32,6 +32,9 @@ pub struct UnburnedState {
 )]
 #[derive(Debug, Clone)]
 pub struct DetonationResult {
+    pub converged: bool,
+    pub last_error: i32,
+    pub sonic_velocity_m_s: f64,
     pub unburned: UnburnedState,
     pub burned: State,
     pub pressure_ratio: f64,
@@ -152,40 +155,30 @@ impl Solver {
             tt1 = temp + 0.5 * pp1 * gamma * (rk * rk - 1.0) / (mw1 * cp * rk);
         }
 
+        let mut seed = initial.equilibrium_seed.clone();
+        let mut result = None;
         for _ in 0..8 {
-            if !pp1.is_finite() || pp1 <= 1.0 || !tt1.is_finite() || tt1 <= 0.0 {
-                return Err(Error::Convergence("Nonphysical CJ iteration".into()));
-            }
             let t2 = temperature_k * tt1;
             let p2 = pressure_pa * pp1;
-            let state = self.solve(Mode::TP(t2, p2), weights)?;
+            let mut state = self.solve_with_start(Mode::TP(t2, p2), weights, seed.as_ref())?;
+            if state.converged {
+                seed.clone_from(&state.equilibrium_seed);
+            }
             let gamma = state.gamma_s;
             let cp = state.cp_equilibrium_j_kg_k / R;
-            let mw = state.molecular_weight_kg_kmol;
+            let mw = 1.0 / state.gas_moles;
             let rr1 = pp1 * mw / mw1 / tt1;
-
-            // Public State lacks volume partials: central TP differences give
-            // dlnV/dlnT; gamma and Cp supply dlnV/dlnP by the exact identity.
-            // shortcut: neighboring TP fits must be valid, use analytic partials when exposed.
-            let step = 1e-3_f64;
-            let plus = self.solve(Mode::TP(t2 * step.exp(), p2), weights)?;
-            let minus = self.solve(Mode::TP(t2 * (-step).exp(), p2), weights)?;
-            let vt = (minus.density_kg_m3 / plus.density_kg_m3).ln() / (2.0 * step);
-            let vp = -1.0 / gamma - vt * vt / (mw * cp);
-
+            let (vt, vp) = (state.dlnv_dlnt, state.dlnv_dlnp);
             let a11 = 1.0 / pp1 + gamma * rr1 * vp;
             let a12 = gamma * rr1 * vt;
             let a21 = 0.5 * gamma * (rr1 * rr1 - 1.0 - vp * (1.0 + rr1 * rr1)) + vt - 1.0;
             let a22 = -0.5 * gamma * vt * (rr1 * rr1 + 1.0) - mw * cp;
             let b1 = 1.0 / pp1 - 1.0 + gamma * (rr1 - 1.0);
-            let b2 =
-                mw * (state.enthalpy_j_kg - enthalpy) / (R * t2) - 0.5 * gamma * (rr1 * rr1 - 1.0);
+            let b2 = mw * (state.iteration_enthalpy() - enthalpy) / (R * t2)
+                - 0.5 * gamma * (rr1 * rr1 - 1.0);
             let determinant = a11 * a22 - a12 * a21;
             let x1 = (a22 * b1 - a12 * b2) / determinant;
             let x2 = (a11 * b2 - a21 * b1) / determinant;
-            if !x1.is_finite() || !x2.is_finite() {
-                return Err(Error::Convergence("Singular CJ iteration".into()));
-            }
             let change = x1.abs().max(x2.abs());
             let damping = if change > 0.4054652 {
                 0.4054652 / change
@@ -194,115 +187,28 @@ impl Solver {
             };
             pp1 *= (x1 * damping).exp();
             tt1 *= (x2 * damping).exp();
-            if change < 0.5e-4 {
-                // NASA mutates T after its last solve; re-solve to avoid stale properties.
-                let burned =
-                    self.solve(Mode::TP(temperature_k * tt1, pressure_pa * pp1), weights)?;
-                return verified_result(unburned, burned);
+            // NASA updates T and wave speeds while retaining the preceding thermodynamic fields.
+            state.temperature_k = temperature_k * tt1;
+            let sonic = (gamma * R * state.temperature_k / mw).sqrt();
+            let velocity = rr1 * sonic;
+            let converged = change < 0.5e-4;
+            result = Some(DetonationResult {
+                converged,
+                last_error: if converged { 0 } else { 8 },
+                sonic_velocity_m_s: sonic,
+                pressure_ratio: pp1,
+                temperature_ratio: tt1,
+                molecular_weight_ratio: mw / mw1,
+                density_ratio: rr1,
+                mach: velocity / unburned.sound_speed_m_s,
+                velocity_m_s: velocity,
+                unburned: unburned.clone(),
+                burned: state,
+            });
+            if converged {
+                break;
             }
         }
-        Err(Error::Convergence(
-            "CJ solve exceeded NASA's eight iterations".into(),
-        ))
-    }
-}
-
-fn verified_result(unburned: UnburnedState, burned: State) -> Result<DetonationResult> {
-    let pressure_ratio = burned.pressure_pa / unburned.pressure_pa;
-    let temperature_ratio = burned.temperature_k / unburned.temperature_k;
-    let molecular_weight_ratio =
-        burned.molecular_weight_kg_kmol / unburned.molecular_weight_kg_kmol;
-    let density_ratio = burned.density_kg_m3 / unburned.density_kg_m3;
-    let sonic = burned.sound_speed();
-    let velocity_m_s = density_ratio * sonic;
-    let mach = velocity_m_s / unburned.sound_speed_m_s;
-
-    // Independently recover the downstream velocity from the jump in momentum.
-    let downstream = velocity_m_s
-        - (burned.pressure_pa - unburned.pressure_pa) / (unburned.density_kg_m3 * velocity_m_s);
-    let mass =
-        (burned.density_kg_m3 * downstream / (unburned.density_kg_m3 * velocity_m_s) - 1.0).abs();
-    let momentum = ((unburned.pressure_pa + unburned.density_kg_m3 * velocity_m_s.powi(2))
-        - (burned.pressure_pa + burned.density_kg_m3 * downstream.powi(2)))
-    .abs()
-        / (unburned.pressure_pa + unburned.density_kg_m3 * velocity_m_s.powi(2));
-    let energy = (burned.enthalpy_j_kg + downstream.powi(2) / 2.0
-        - unburned.enthalpy_j_kg
-        - velocity_m_s.powi(2) / 2.0)
-        .abs()
-        / unburned
-            .enthalpy_j_kg
-            .abs()
-            .max(velocity_m_s.powi(2) / 2.0)
-            .max(1.0);
-    let cj = (downstream / sonic - 1.0).abs();
-    if pressure_ratio <= 1.0
-        || density_ratio <= 1.0
-        || mach <= 1.0
-        || [
-            pressure_ratio,
-            temperature_ratio,
-            molecular_weight_ratio,
-            density_ratio,
-            velocity_m_s,
-            mach,
-            mass,
-            momentum,
-            energy,
-            cj,
-        ]
-        .iter()
-        .any(|v| !v.is_finite())
-        || [mass, momentum, energy, cj].iter().any(|v| *v > 2e-5)
-    {
-        return Err(Error::Convergence(format!(
-            "Failed CJ closure: mass={mass}, momentum={momentum}, energy={energy}, sonic={cj}"
-        )));
-    }
-    Ok(DetonationResult {
-        unburned,
-        burned,
-        pressure_ratio,
-        temperature_ratio,
-        molecular_weight_ratio,
-        density_ratio,
-        mach,
-        velocity_m_s,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::thermo::Reactant;
-
-    #[test]
-    fn rejects_states_that_break_jump_or_sonic_closure() {
-        let solver = Solver::new(
-            vec![
-                Reactant::named("H2").unwrap(),
-                Reactant::named("O2").unwrap(),
-            ],
-            false,
-            false,
-            None,
-            vec![],
-        )
-        .unwrap();
-        let result = solver
-            .detonation(&[4.03176, 31.9988], 298.15, 1e5, false)
-            .unwrap();
-        for field in ["pressure", "enthalpy", "gamma"] {
-            let mut burned = result.burned.clone();
-            match field {
-                "pressure" => burned.pressure_pa *= 1.01,
-                "enthalpy" => burned.enthalpy_j_kg += 1e5,
-                _ => burned.gamma_s *= 1.01,
-            }
-            assert!(matches!(
-                verified_result(result.unburned.clone(), burned),
-                Err(Error::Convergence(_))
-            ));
-        }
+        Ok(result.unwrap())
     }
 }

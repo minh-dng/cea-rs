@@ -296,14 +296,7 @@ impl Comparison {
             ("u", state.energy_j_kg),
             ("s", state.entropy_j_kg_k),
             ("m", state.molecular_weight_kg_kmol),
-            (
-                "cp",
-                if state.equilibrium {
-                    state.cp_equilibrium_j_kg_k
-                } else {
-                    state.cp_frozen_j_kg_k
-                },
-            ),
+            ("cp", state.cp_equilibrium_j_kg_k),
             ("gamma", state.gamma_s),
             ("sound", state.sound_speed()),
         ] {
@@ -572,37 +565,10 @@ fn nasa_sample_decks_against_reference_reports() {
             let pages = reference(&text);
             let c = compare(&results, &pages);
             if i == 12 && !source.is_empty() {
-                let result = results[0].as_ref().unwrap();
-                let CaseOutput::Rocket(r) = &result.output else {
+                let CaseOutput::Rocket(r) = &results[0].as_ref().unwrap().output else {
                     unreachable!()
                 };
-                assert!((r.stations[7].area_ratio.unwrap() - 75.0).abs() < 1e-8);
-                // The strict composition mismatch is a nozzle stopping difference:
-                // the same public TP solver matches at NASA's reported state.
-                let solver = cea_rs::solver::Solver::new(
-                    deck.reactants.iter().map(|r| r.reactant.clone()).collect(),
-                    true,
-                    deck.ions,
-                    deck.only.clone(),
-                    deck.insert.clone(),
-                )
-                .unwrap();
-                let page = &pages[0];
-                let st = solver
-                    .solve(
-                        cea_rs::solver::Mode::TP(page.rows["t"][7], page.rows["p"][7]),
-                        &result.weights,
-                    )
-                    .unwrap();
-                let mut at_same_tp = Comparison::default();
-                at_same_tp.state(page, "", 7, &st);
-                assert!(at_same_tp.failures.is_empty());
-                for name in ["CO", "OH"] {
-                    assert!(
-                        (st.mass_fractions[name] / page.rows[&format!("y.{name}")][7] - 1.0).abs()
-                            < 1e-7
-                    );
-                }
+                assert!((r.stations[7].area_ratio.unwrap() - 74.99733854).abs() < 1e-6);
             }
             println!(
                 "example{i} {source} checked={} worst={:.9e} {} failures={}",
@@ -681,11 +647,7 @@ fn known_difference(example: usize, source: &str, failure: &str) -> bool {
             _ => return false,
         }
     } else {
-        match (example, key) {
-            (12, "case 1 station 7 (exit) y.CO") => 1.74e-4,
-            (12, "case 1 station 7 (exit) y.OH") => 1.07e-4,
-            _ => return false,
-        }
+        return false;
     };
     failure
         .split("relative=")
@@ -721,25 +683,7 @@ fn nasa_reflected_shock_and_transport_report() {
         c.failures.len()
     );
     assert_eq!(c.checked, 187);
-    assert_eq!(c.failures.len(), 2);
-    for failure in &c.failures {
-        println!("{failure}");
-        // NASA's frozen reflected header retains incident Cp; transport Cp uses T5.
-        let bound = match failure.split(": Rust=").next().unwrap() {
-            "case 1 5.cp" => 1.64e-2,
-            "case 3 5.cp" => 2.07e-2,
-            _ => panic!("New reflected-shock discrepancy: {failure}"),
-        };
-        assert!(
-            failure
-                .rsplit("relative=")
-                .next()
-                .unwrap()
-                .parse::<f64>()
-                .unwrap()
-                <= bound
-        );
-    }
+    assert!(c.failures.is_empty());
 }
 
 #[test]
@@ -765,24 +709,18 @@ fn nasa_combined_and_standalone_sample_inputs() {
     for (index, deck) in decks.iter().enumerate() {
         let mut results = vec![];
         for case in deck.cases().unwrap() {
-            match case.run() {
-                Ok(result) => {
-                    solved += 1;
-                    results.push(Some(result));
-                }
-                Err(e) => {
-                    println!("combined example{} case{} {e}", index + 1, case.index);
-                    assert_eq!(index + 1, 7);
-                    assert_eq!(case.index, 1);
-                    assert!(matches!(e, cea_rs::Error::Convergence(_)));
-                    assert_eq!(
-                        e.to_string(),
-                        "not_converged: case \"7\" #1: Shock exceeded 60 iterations"
-                    );
-                    results.push(None);
-                    failed += 1;
-                }
+            let result = case.run().unwrap();
+            if let CaseOutput::Shock(r) = &result.output
+                && !r.converged
+            {
+                assert_eq!(index + 1, 7);
+                assert_eq!(case.index, 1);
+                assert_eq!(r.last_error, 9);
+                failed += 1;
+            } else {
+                solved += 1;
             }
+            results.push(Some(result));
         }
         let example = index + 1;
         let report = match example {
@@ -797,14 +735,18 @@ fn nasa_combined_and_standalone_sample_inputs() {
             assert!(text.contains("WARNING: No convergence for u1="));
             assert!(text.contains("ANSWERS NOT RELIABLE"));
             assert_eq!(results.len(), 14);
-            assert!(results[0].is_none());
+            let CaseOutput::Shock(r) = &results[0].as_ref().unwrap().output else {
+                unreachable!()
+            };
+            assert!(!r.converged);
+            assert_eq!(r.last_error, 9);
             assert!(results[1..].iter().all(Option::is_some));
         }
         if example == 12 {
             let CaseOutput::Rocket(r) = &results[0].as_ref().unwrap().output else {
                 unreachable!()
             };
-            assert!((r.stations[7].area_ratio.unwrap() - 75.0).abs() < 1e-8);
+            assert!((r.stations[7].area_ratio.unwrap() - 74.99733854).abs() < 1e-6);
         }
         let c = compare(&results, &pages);
         println!(

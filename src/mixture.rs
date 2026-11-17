@@ -3,11 +3,9 @@
 //! Ratio conversions retain f64 precision; native cea==3.3.4 Python wrappers
 //! first round scalar ratios through float32 (for example r=0.9 differs by
 //! 2.65e-8 relative). Exactly representable scalar goldens agree to 1e-12.
-//! Frozen Cv is Cp-R/M at the current state. Native frozen rocket stations
-//! can retain an earlier Cv or report zero, so those diagnostics are not a
-//! usable frozen-Cv oracle. Equilibrium Cv is reconstructed without core edits.
+//! Heat capacities and Gibbs energy retain NASA's station-reporting values.
 use crate::{
-    Error, R, Result,
+    Error, Result,
     solver::{Solver, State},
 };
 use std::collections::BTreeMap;
@@ -203,21 +201,25 @@ fn atom_valence(name: &str) -> Result<f64> {
 
 /// Gibbs energy in J/kg.
 pub fn gibbs_energy(state: &State) -> f64 {
-    state.enthalpy_j_kg - state.temperature_k * state.entropy_j_kg_k
+    state.gibbs_energy_j_kg
 }
 
 /// Frozen Cv in J/(kg K), including condensed heat capacity.
 pub fn cv_frozen(state: &State) -> f64 {
-    state.cp_frozen_j_kg_k - R / state.molecular_weight_kg_kmol
+    state.cv_frozen_j_kg_k
 }
 
-/// Equilibrium Cv in J/(kg K), reconstructed from the untruncated TP Jacobian.
+/// Stored NASA equilibrium Cv in J/(kg K), including frozen retained values.
 pub fn cv_equilibrium(state: &State) -> Result<f64> {
-    crate::derivatives::cv_equilibrium(state)
+    Ok(state.cv_equilibrium_j_kg_k)
 }
 
 pub fn specific_volume(state: &State) -> f64 {
-    1.0 / state.density_kg_m3
+    if state.density_kg_m3 == 0.0 {
+        0.0
+    } else {
+        1.0 / state.density_kg_m3
+    }
 }
 
 /// NASA M = 1/n_gas; includes condensed mass in the one-kg mixture basis.
@@ -227,12 +229,5 @@ pub fn molecular_weight_m(state: &State) -> f64 {
 
 /// NASA MW = M times the gas fraction of total gas plus condensed moles.
 pub fn molecular_weight_mw(state: &State) -> f64 {
-    let total: f64 = state.amounts.iter().map(|(n, _)| n).sum();
-    let condensed: f64 = state
-        .amounts
-        .iter()
-        .filter(|(_, s)| s.data().phase() != 0)
-        .map(|(n, _)| n)
-        .sum();
-    state.molecular_weight_kg_kmol * (1.0 - condensed / total)
+    state.mean_molecular_weight
 }
