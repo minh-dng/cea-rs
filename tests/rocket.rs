@@ -444,6 +444,120 @@ fn air_jet_a_nozzle_continues_from_the_chamber() {
 }
 
 #[test]
+fn air_jet_a_high_pressure_exit_obeys_conservation_and_water_phase_equilibrium() {
+    // Native 3.3.4 reports success with inconsistent exit properties for this
+    // case; check the balances and chemical potentials instead of that golden.
+    let solver = model(&["Air", "Jet-A(L)"], None);
+    let result = solver
+        .rocket(
+            &[25.0, 1.0],
+            &[298.15; 2],
+            20e6,
+            80.0,
+            cea_rs::rocket::FlowMode::Equilibrium,
+        )
+        .unwrap();
+    assert!(result.complete);
+    assert_eq!(result.stations.len(), 3);
+    let exit = &result.exit;
+    let state = &exit.state;
+    // Both phases hold a real share of the water, not a trace.
+    assert!(state.mass_fractions["H2O(cr)"] > 1e-3);
+    assert!(state.mass_fractions["H2O(L)"] > 1e-3);
+    let amounts: Vec<_> = state
+        .mass_fractions
+        .iter()
+        .filter(|(_, y)| **y > 0.0)
+        .map(|(name, y)| {
+            let sp = name.parse::<thermo_species::Species>().unwrap();
+            (y / sp.data().mw(), sp)
+        })
+        .collect();
+    let ng: f64 = amounts
+        .iter()
+        .filter(|(_, sp)| sp.data().phase() == 0)
+        .map(|(n, _)| n)
+        .sum();
+    let (t, p) = (state.temperature_k, state.pressure_pa);
+    let mut h = 0.0;
+    let mut s = 0.0;
+    for &(n, sp) in &amounts {
+        let d = sp.data();
+        h += n * d.h_over_r(t) * cea_rs::R;
+        let mixing = if d.phase() == 0 {
+            (n / ng * p / 1e5).ln()
+        } else {
+            0.0
+        };
+        s += n * (d.s_over_r(t) - mixing) * cea_rs::R;
+    }
+    for element in solver
+        .reactants
+        .iter()
+        .flat_map(|r| &r.formula)
+        .map(|(_, e)| e)
+    {
+        let feed: f64 = solver
+            .reactants
+            .iter()
+            .zip([25.0 / 26.0, 1.0 / 26.0])
+            .map(|(r, w)| {
+                w / r.molecular_weight
+                    * r.formula
+                        .iter()
+                        .filter(|(_, e)| e == element)
+                        .map(|(a, _)| a)
+                        .sum::<f64>()
+            })
+            .sum();
+        let product: f64 = amounts
+            .iter()
+            .map(|(n, sp)| {
+                n * sp
+                    .data()
+                    .constituents()
+                    .iter()
+                    .filter(|(_, e)| e == element)
+                    .map(|(a, _)| a)
+                    .sum::<f64>()
+            })
+            .sum();
+        assert!((product / feed - 1.0).abs() < 2e-6, "{element:?}");
+    }
+    assert!((s - result.chamber.state.entropy_j_kg_k).abs() < 1e-3);
+    assert!((h + exit.velocity_m_s.powi(2) / 2.0 - result.chamber.state.enthalpy_j_kg).abs() < 0.1);
+    let rho = p / (ng * cea_rs::R * t);
+    let throat_flux = result.throat.state.density_kg_m3 * result.throat.velocity_m_s;
+    assert!((rho / state.density_kg_m3 - 1.0).abs() < 2e-6);
+    assert!((rho * exit.velocity_m_s * 80.0 / throat_flux - 1.0).abs() < 2e-6);
+    let water = |name: &str| name.parse::<thermo_species::Species>().unwrap();
+    let mu = |name: &str| {
+        let sp = water(name);
+        sp.data().h_over_r(t) / t - sp.data().s_over_r(t)
+    };
+    let gas_fraction: f64 = state
+        .mole_fractions
+        .iter()
+        .filter(|(name, _)| water(name).data().phase() == 0)
+        .map(|(_, x)| x)
+        .sum();
+    let mu_vapor = mu("H2O") + (state.mole_fractions["H2O"] / gas_fraction * p / 1e5).ln();
+    for phase in ["H2O(cr)", "H2O(L)"] {
+        assert!((mu(phase) - mu_vapor).abs() < 1e-7, "{phase}");
+    }
+    let standalone = solver
+        .solve(
+            cea_rs::solver::Mode::SP(result.chamber.state.entropy_j_kg_k, p),
+            &[25.0, 1.0],
+        )
+        .unwrap();
+    assert!((standalone.temperature_k - t).abs() < 1e-5);
+    for phase in ["H2O", "H2O(cr)", "H2O(L)"] {
+        assert!((standalone.mass_fractions[phase] - state.mass_fractions[phase]).abs() < 1e-7);
+    }
+}
+
+#[test]
 fn rp1311_example_13_continues_through_beo_coexistence() {
     // Native cea==3.3.4 RocketSolver, complete product pool, insert=["BeO(L)"],
     // trace=1e-10, pc=cea.units.psi_to_bar(3000), pi_p=[3,10,30,300].

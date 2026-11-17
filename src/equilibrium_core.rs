@@ -272,14 +272,17 @@ macro_rules! cea_debug {
 // for condensed species with sibling phases (H2O(cr) vs H2O(L), Al2O3(a) vs
 // Al2O3(L), ...). Sibling discovery uses Species::phases() (the build-time
 // equivalent of CEA's trailing-suffix stripping), sorted by max fit
-// temperature ("melting point") low→high; `phase()` is NASA's compiled phase
-// number, including interval numbering. At most ONE change per
-// call, reported by the return value so the caller restarts its epoch.
+// temperature ("melting point") low→high. At most ONE change per call,
+// reported by the return value so the caller restarts its epoch.
 //
-// One deviation from the Fortran: the melting-point coexistence path pins T
-// to the transition temperature, which only makes sense when T is a Newton
-// unknown — for const-T problems the user's T stays untouched (the doomed
-// phase then dies through F.3.1's negative-amount removal instead).
+// Two deviations from the Fortran:
+// - Adjacency uses the sibling order. NASA compares compiled phase numbers,
+//   which also count fit intervals, so it treats ice (1) and liquid water (3)
+//   as non-adjacent and cycles between them instead of letting them coexist.
+// - The melting-point coexistence path pins T to the transition temperature,
+//   which only makes sense when T is a Newton unknown — for const-T problems
+//   the user's T stays untouched (the doomed phase then dies through F.3.1's
+//   negative-amount removal instead).
 #[allow(clippy::too_many_arguments)]
 fn check_condensed_phases(
     species: &[Species],
@@ -306,37 +309,37 @@ fn check_condensed_phases(
         let (t_low_i, t_high_i) = species[sc_i].data().valid_temperature_range();
 
         // Sibling phases (self included), sorted by melting point low→high.
-        let mut siblings: Vec<usize> = species[sc_i]
-            .phases()
-            .iter()
-            .filter_map(|&sp| cond_index(sp))
-            .collect();
+        let mut siblings = species[sc_i].phases().to_vec();
         siblings.sort_by(|&a, &b| {
-            let ta = species[ng + a].data().valid_temperature_range().1;
-            let tb = species[ng + b].data().valid_temperature_range().1;
+            let ta = a.data().valid_temperature_range().1;
+            let tb = b.data().valid_temperature_range().1;
             ta.partial_cmp(&tb).unwrap()
         });
+        // Ranks count siblings left out of a restricted pool, so two phases
+        // on either side of an absent one stay non-adjacent, as in NASA.
+        let phase_rank = siblings.iter().position(|&sp| sp == species[sc_i]).unwrap();
         let max_t_sibling = siblings
             .iter()
-            .map(|&j| species[ng + j].data().valid_temperature_range().1)
+            .filter(|&&sp| cond_index(sp).is_some())
+            .map(|sp| sp.data().valid_temperature_range().1)
             .fold(0.0_f64, f64::max);
 
-        for &j in &siblings {
+        for (rank, &sp) in siblings.iter().enumerate() {
+            let Some(j) = cond_index(sp) else { continue };
             let (_, t_high_j) = species[ng + j].data().valid_temperature_range();
             if *temperature_k > t_high_j {
                 continue; // sibling j can't exist at T
             }
-            let d_phase =
-                species[sc_i].data().phase() as i32 - species[ng + j].data().phase() as i32;
+            let d_phase = phase_rank.abs_diff(rank);
             if d_phase == 0 {
-                break; // reached i itself (same phase id) — stop scanning
+                break; // reached i itself — stop scanning
             }
             if is_active[j] {
                 continue; // both already active; nothing to transition
             }
             let out_of_range =
                 *temperature_k < t_low_i - DT_PHASE || *temperature_k > t_high_i + DT_PHASE;
-            if d_phase.abs() > 1 || (Some(j) != *j_switch && out_of_range) {
+            if d_phase > 1 || (Some(j) != *j_switch && out_of_range) {
                 cea_debug!(
                     "[F.4] replacing {} with {} at T={temperature_k}",
                     species[sc_i].data().symbol(),
