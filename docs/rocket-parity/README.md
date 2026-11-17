@@ -6,7 +6,8 @@ ratio or mass flow per chamber area; station-index freezing; and per-station
 sonic velocity, c-star, thrust coefficient, ambient-matched Isp and vacuum Isp.
 Assigned stagnation enthalpy `hc` is J/kg, assigned temperature `tc` and its
 optional estimate `tc_est` are K. Isp values are velocities in m/s, as in NASA's
-SI output, rather than seconds. Transport remains rejected.
+SI output, rather than seconds. Station transport is covered in
+[the implementation matrix](../implementation-matrix.md).
 
 ```python
 from cea_rs import Solver
@@ -162,6 +163,7 @@ Hooks needed outside the owned files:
 3. Equilibrium SP convergence/phase handling for example 13 at the exact state
    above. The failure is reproducible outside the rocket solver.
 
-No equilibrium, reactant, transport, package-version, CI or root README changes
-are included. NOTICE is unchanged. The rocket module and provenance file name
+No equilibrium, reactant, package-version, CI or root README changes are
+included. Transport at rocket stations was added later; see the transport row of
+`docs/implementation-matrix.md`. NOTICE is unchanged. The rocket module and provenance file name
 the Apache-2.0 NASA derivation.

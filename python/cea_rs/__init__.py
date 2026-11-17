@@ -230,8 +230,8 @@ class Solver:
         verified stations, with stop_reason explaining the limit.
 
         hc (J/kg) or tc (K) assigns the stagnation state instead of the reactant
-        enthalpy. tc_est seeds a chamber temperature iteration. transport must be
-        False. Specific impulses are velocities in m/s; divide by 9.80665 to obtain seconds.
+        enthalpy. tc_est seeds a chamber temperature iteration. transport=True
+        fills Station.transport at every station. Specific impulses are velocities in m/s; divide by 9.80665 to obtain seconds.
         """
 
         def schedule(value: float | list[float] | None) -> list[float]:
@@ -322,11 +322,10 @@ def capabilities() -> dict[str, object]:
         "ions": "experimental charge-neutral equilibrium",
         "shock": ["incident", "reflected", "equilibrium or frozen"],
         "detonation": ["Chapman-Jouguet equilibrium"],
-        "transport": ["viscosity", "conductivity", "Prandtl number"],
+        "transport": ["viscosity", "conductivity", "Prandtl number", "rocket stations"],
         "derivatives": ["analytic", "finite difference"],
         "unsupported": [
             "frozen detonation",
-            "transport on rocket stations",
             "legacy input decks",
             "NASA Python API compatibility",
         ],

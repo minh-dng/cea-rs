@@ -10,6 +10,8 @@ use std::{collections::BTreeSet, f64::consts::PI, sync::OnceLock};
 use thermo_species::{Constituent, Species};
 
 /// Gas transport properties in SI, including NASA's reaction contribution.
+/// The heat capacities are NASA's transport values: gas species only, over the
+/// transport species selection, so they can differ from the state's.
 #[cfg_attr(
     feature = "python",
     pyo3::pyclass(frozen, get_all, skip_from_py_object)
@@ -17,6 +19,8 @@ use thermo_species::{Constituent, Species};
 #[derive(Debug, Clone, Copy)]
 pub struct Transport {
     pub viscosity_pa_s: f64,
+    pub cp_frozen_j_kg_k: f64,
+    pub cp_equilibrium_j_kg_k: f64,
     pub conductivity_frozen_w_m_k: f64,
     pub conductivity_equilibrium_w_m_k: f64,
     pub prandtl_frozen: f64,
@@ -427,16 +431,19 @@ pub fn transport(state: &State) -> Result<Transport> {
         reactions(&species, &selected, &components, &a, &xs, &mw, &eta, t)?;
     let weight: f64 = xs.iter().zip(&mw).map(|(x, m)| x * m).sum();
     let cp_frozen = R * xs.iter().zip(&cp).map(|(x, c)| x * c).sum::<f64>() / weight;
+    let cp_equilibrium = cp_frozen + cp_reaction / weight * 1000.0;
     // NASA stores millipoise and mW/(cm K); convert both to SI here.
     viscosity *= 1e-7;
     frozen *= 1e-4;
     let equilibrium = frozen + conductivity_reaction * 1e-4;
     let result = Transport {
         viscosity_pa_s: viscosity,
+        cp_frozen_j_kg_k: cp_frozen,
+        cp_equilibrium_j_kg_k: cp_equilibrium,
         conductivity_frozen_w_m_k: frozen,
         conductivity_equilibrium_w_m_k: equilibrium,
         prandtl_frozen: viscosity * cp_frozen / frozen,
-        prandtl_equilibrium: viscosity * (cp_frozen + cp_reaction / weight * 1000.0) / equilibrium,
+        prandtl_equilibrium: viscosity * cp_equilibrium / equilibrium,
     };
     if [
         result.viscosity_pa_s,

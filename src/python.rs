@@ -303,11 +303,6 @@ impl PySolver {
                 "FAC calls require ac_at or mdot",
             ));
         }
-        if transport {
-            return Err(PyNotImplementedError::new_err(
-                "Rocket transport is not implemented",
-            ));
-        }
         let n_frz = n_frz
             .map(|n| {
                 usize::try_from(n).map_err(|_| {
@@ -360,6 +355,7 @@ impl PySolver {
                     hc,
                     tc,
                     tc_est,
+                    transport,
                 },
             )
         })?;
@@ -524,6 +520,10 @@ impl Station {
     #[getter(area_ratio)]
     fn area(&self) -> Option<f64> {
         self.area_ratio
+    }
+    #[getter(transport)]
+    fn transport_py(&self) -> Option<crate::transport::Transport> {
+        self.transport
     }
 }
 #[pymethods]

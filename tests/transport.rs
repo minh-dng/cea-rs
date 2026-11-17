@@ -740,8 +740,9 @@ fn frozen_nozzle_transport_matches_native() {
     // Same native initialization and SI conversion as above. RocketSolver:
     // H2/O2 weights [1,6], inlet [298.15,298.15] K, Pc=30 bar, supar=10,
     // hc=reactants.calc_property(cea.ENTHALPY, weights, inlet_T)/cea.R.
-    // These are the throat and exit columns for n_frz=1 and n_frz=2.
-    use cea_rs::rocket::FlowMode;
+    // These are the throat and exit columns for n_frz=1 and n_frz=2, read from
+    // the rocket stations rather than recomputed from their states.
+    use cea_rs::rocket::RocketOptions;
     let solver = Solver::new(
         vec![
             Reactant::named("H2").unwrap(),
@@ -753,9 +754,9 @@ fn frozen_nozzle_transport_matches_native() {
         vec![],
     )
     .unwrap();
-    for (flow, expected) in [
+    for (n_frz, expected) in [
         (
-            FlowMode::FrozenAtChamber,
+            1,
             [
                 [
                     9.871962119771526e-5,
@@ -774,7 +775,7 @@ fn frozen_nozzle_transport_matches_native() {
             ],
         ),
         (
-            FlowMode::FrozenAtThroat,
+            2,
             [
                 [
                     0.00010202513647301411,
@@ -794,10 +795,20 @@ fn frozen_nozzle_transport_matches_native() {
         ),
     ] {
         let rocket = solver
-            .rocket(&[1.0, 6.0], &[298.15, 298.15], 3e6, 10.0, flow)
+            .rocket_stations(
+                &[1.0, 6.0],
+                &[298.15, 298.15],
+                3e6,
+                &RocketOptions {
+                    supar: &[10.0],
+                    n_frz,
+                    transport: true,
+                    ..RocketOptions::default()
+                },
+            )
             .unwrap();
         for (station, expected) in [rocket.throat, rocket.exit].iter().zip(expected) {
-            let result = station.state.transport().unwrap();
+            let result = station.transport.unwrap();
             for (actual, expected) in [
                 result.viscosity_pa_s,
                 result.conductivity_frozen_w_m_k,

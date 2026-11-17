@@ -4,6 +4,7 @@
 use crate::{
     Error, R, Result,
     solver::{Mode, Solver, State},
+    transport::Transport,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +32,8 @@ pub struct RocketOptions<'a> {
     pub tc: Option<f64>,
     /// Initial temperature for the assigned-enthalpy chamber iteration, K.
     pub tc_est: Option<f64>,
+    /// Fill `Station::transport` at every station, as NASA's `transport` flag.
+    pub transport: bool,
 }
 impl Default for RocketOptions<'_> {
     fn default() -> Self {
@@ -45,6 +48,7 @@ impl Default for RocketOptions<'_> {
             hc: None,
             tc: None,
             tc_est: None,
+            transport: false,
         }
     }
 }
@@ -63,6 +67,9 @@ pub struct Station {
     /// Ambient-matched specific impulse expressed as velocity, m/s.
     pub isp_m_s: f64,
     pub isp_vacuum_m_s: f64,
+    /// `state.transport()`, set only when `RocketOptions::transport` is true.
+    /// As in NASA, a frozen station uses its frozen composition and gas Cp.
+    pub transport: Option<Transport>,
 }
 #[cfg_attr(feature = "python", pyo3::pyclass(frozen, skip_from_py_object))]
 #[derive(Debug, Clone)]
@@ -167,6 +174,7 @@ fn station(name: &'static str, state: State, h0: f64, flux: Option<f64>) -> Resu
         thrust_coefficient: 0.0,
         isp_m_s: velocity,
         isp_vacuum_m_s: 0.0,
+        transport: None,
     })
 }
 
@@ -572,6 +580,9 @@ impl Solver {
                 {
                     return Err(Error::Convergence("Nozzle failed energy closure".into()));
                 }
+            }
+            if o.transport {
+                st.transport = Some(st.state.transport()?);
             }
         }
         let exit = stations

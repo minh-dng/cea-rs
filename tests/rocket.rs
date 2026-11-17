@@ -597,3 +597,124 @@ fn frozen_stations_keep_the_reference_composition_and_fail_on_pressure_underflow
         Err(Error::Convergence(_))
     ));
 }
+
+#[test]
+fn rp1311_example_11_station_transport_matches_native() {
+    // NASA reference output test/main_interface/reference_output/example11.out
+    // from the cea==3.3.4 source distribution (input example11.inp): Li(cr) 1 mol
+    // at 298.15 K, F2(L) 0.5556 mol at 85.02 K, 1000 psia, ions, pi/p=68.0457,
+    // sub,ae/at=10, sup,ae/at=10,20,100, "output siunits transport".
+    // Rows as printed: viscosity (mP); then with equilibrium reactions, then
+    // frozen: Cp (kJ/kg/K), conductivity (mW/cm/K), Prandtl number.
+    let native: [[f64; 7]; 7] = [
+        [
+            1.44086084233322,
+            1.38756891216587,
+            1.08094365141607,
+            1.44065568791414,
+            1.07343363915964,
+            0.957980327677688,
+            0.730779279446989,
+        ],
+        [
+            6.74183038490226,
+            6.57001007031321,
+            2.64478761678052,
+            6.74135812123616,
+            2.52930383841077,
+            1.63147627228976,
+            3.12192785647386,
+        ],
+        [
+            14.4392128293363,
+            13.6898533160665,
+            4.32055209126837,
+            14.4367253693726,
+            4.08901376560418,
+            2.20750048751974,
+            2.66773740218423,
+        ],
+        [
+            0.672754084455482,
+            0.665919605981778,
+            0.661690062591856,
+            0.672727067471198,
+            0.663984026330257,
+            0.708005358441645,
+            0.855196687489371,
+        ],
+        [
+            1.68538349186687,
+            1.65025485430167,
+            1.51557398262904,
+            1.68524297447376,
+            1.51373700426589,
+            1.49039042854806,
+            1.45844581433450,
+        ],
+        [
+            3.15185265477646,
+            3.01403971576610,
+            2.29168366793858,
+            3.15131349654330,
+            2.27428101585519,
+            2.00661241261551,
+            1.48875164401176,
+        ],
+        [
+            0.770468465289995,
+            0.759725335071703,
+            0.714867456487950,
+            0.770426325199351,
+            0.714465894887988,
+            0.711529890940498,
+            0.715903143146033,
+        ],
+    ];
+    let si = [1e-4, 1e3, 0.1, 1.0, 1e3, 0.1, 1.0];
+    let solver = Solver::new(
+        vec![
+            Reactant::named("Li(cr)").unwrap(),
+            Reactant::named("F2(L)").unwrap(),
+        ],
+        true,
+        true,
+        None,
+        vec![],
+    )
+    .unwrap();
+    let result = solver
+        .rocket_stations(
+            &[6.941, 0.5556 * 37.9968064],
+            &[298.15, 85.02],
+            6_894_757.293_168_572,
+            &RocketOptions {
+                pi_p: &[68.0457],
+                subar: &[10.0],
+                supar: &[10.0, 20.0, 100.0],
+                transport: true,
+                ..RocketOptions::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(result.stations.len(), 7);
+    for (i, station) in result.stations.iter().enumerate() {
+        let t = station.transport.unwrap();
+        let actual = [
+            t.viscosity_pa_s,
+            t.cp_equilibrium_j_kg_k,
+            t.conductivity_equilibrium_w_m_k,
+            t.prandtl_equilibrium,
+            t.cp_frozen_j_kg_k,
+            t.conductivity_frozen_w_m_k,
+            t.prandtl_frozen,
+        ];
+        for (k, actual) in actual.into_iter().enumerate() {
+            let expected = native[k][i] * si[k];
+            assert!(
+                (actual / expected - 1.0).abs() < 1e-4,
+                "station {i} quantity {k}: {actual} vs {expected}"
+            );
+        }
+    }
+}
