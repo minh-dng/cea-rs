@@ -26,11 +26,15 @@ class Reactant:
     ) -> tuple[float | None, float, float | None]: ...
 
 class State:
+    converged: bool
+    last_error: int
+    _nasa_n: float
+    _nasa_post_processed: bool
     _nasa_nj: dict[str, float]
     _nasa_ln_nj: dict[str, float] | None
     gibbs_energy_j_kg: float
     cv_frozen_j_kg_k: float
-    cv_equilibrium_j_kg_k: float | None
+    cv_equilibrium_j_kg_k: float
     specific_volume_m3_kg: float
     M: float
     MW: float
@@ -40,7 +44,7 @@ class State:
     enthalpy_j_kg: float
     energy_j_kg: float
     entropy_j_kg_k: float
-    cp_equilibrium_j_kg_k: float | None
+    cp_equilibrium_j_kg_k: float
     cp_frozen_j_kg_k: float
     gamma_s: float
     molecular_weight_kg_kmol: float
@@ -115,7 +119,7 @@ class Solver:
         trace: float = 0.0,
     ) -> None: ...
     def solve(
-        self, mode: str, state1: float, state2: float, weights: list[float]
+        self, mode: str, state1: float, state2: float, weights: list[float], *, start: State | None = None
     ) -> State: ...
     def reactant_enthalpy(
         self, weights: list[float], temperatures_k: list[float]
@@ -200,6 +204,9 @@ class UnburnedState:
     sound_speed_m_s: float
 
 class DetonationResult:
+    converged: bool
+    last_error: int
+    sonic_velocity_m_s: float
     unburned: UnburnedState
     burned: State
     pressure_ratio: float
@@ -213,6 +220,8 @@ class ShockStation:
     sonic_velocity_m_s: float
 
 class ShockResult:
+    converged: bool
+    last_error: int
     station1: ShockStation
     station2: ShockStation
     station5: ShockStation | None

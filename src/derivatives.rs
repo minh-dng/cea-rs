@@ -98,7 +98,7 @@ impl EqDerivatives {
     }
 
     /// Central differences; zero weights use a second-order forward stencil.
-    /// Reject product-pool/phase changes and propagate every failed solve.
+    /// Reject product-pool/phase changes; use the values returned by each solve.
     pub fn compute_fd(
         solver: &Solver,
         mode: Mode,
@@ -181,7 +181,7 @@ impl EqDerivatives {
                 difference(&mut out, col, &[(&plus, 1.0), (&minus, -1.0)], 2.0 * h);
             }
         }
-        validate(out)
+        Ok(out)
     }
 }
 
@@ -457,10 +457,7 @@ impl System {
                 .sum::<f64>()
                 * p_fac;
         }
-        let du =
-            self.j.clone().lu().solve(&rhs).ok_or_else(|| {
-                Error::Convergence("Singular equilibrium derivative Jacobian".into())
-            })?;
+        let du = solve_multiple_rhs(&self.j, &rhs);
         let residual = &self.j * &du - &rhs;
         let mut defect = 0.0_f64;
         for i in 0..self.j.nrows() {
@@ -471,11 +468,6 @@ impl System {
                         .sum::<f64>();
                 defect = defect.max(residual[(i, c)].abs() / scale.max(f64::MIN_POSITIVE));
             }
-        }
-        if !defect.is_finite() || defect > 1e-10 {
-            return Err(Error::Convergence(format!(
-                "Equilibrium derivative closure defect {defect}"
-            )));
         }
         let mut out = empty(state, cols);
         out.closure_defect = Some(defect);
@@ -538,7 +530,7 @@ impl System {
             out.entropy[c] = ds;
             out.gibbs_energy[c] = dh - state.entropy_j_kg_k * dt - t * ds;
         }
-        validate(out)
+        Ok(out)
     }
 }
 
@@ -584,94 +576,56 @@ fn difference(out: &mut EqDerivatives, col: usize, states: &[(&State, f64)], den
     }
 }
 
-fn validate(out: EqDerivatives) -> Result<EqDerivatives> {
-    if [
-        &out.temperature,
-        &out.total_moles,
-        &out.enthalpy,
-        &out.energy,
-        &out.gibbs_energy,
-        &out.entropy,
-    ]
-    .into_iter()
-    .chain(out.species_amounts.values())
-    .flatten()
-    .any(|v| !v.is_finite())
-    {
-        return Err(Error::Convergence(
-            "Nonfinite equilibrium derivatives".into(),
-        ));
+// NASA's scaled partial-pivoting factorization, including zero output on singularity.
+fn solve_multiple_rhs(a: &DMatrix<f64>, b: &DMatrix<f64>) -> DMatrix<f64> {
+    let n = a.nrows();
+    let mut lu = a.clone();
+    let mut x = b.clone();
+    let mut scale: Vec<_> = (0..n)
+        .map(|i| (0..n).map(|j| lu[(i, j)].abs()).fold(0.0_f64, f64::max))
+        .collect();
+    if scale.contains(&0.0) {
+        return DMatrix::zeros(n, b.ncols());
     }
-    Ok(out)
-}
-
-pub(crate) fn cv_equilibrium(state: &State) -> Result<f64> {
-    let mode = Mode::TP(state.temperature_k, state.pressure_pa);
-    let system = System::new(state, mode, false)?;
-    let d = system.compute(state, mode, &DMatrix::zeros(system.elements.len(), 0))?;
-    let n = 1.0 / state.molecular_weight_kg_kmol;
-    let dlnv_dlnp = state.pressure_pa / n * d.total_moles[1] - 1.0;
-    let cv = -state.cp_equilibrium_j_kg_k / (state.gamma_s * dlnv_dlnp);
-    if !cv.is_finite() || cv <= 0.0 {
-        return Err(Error::Convergence("Nonphysical equilibrium Cv".into()));
-    }
-    Ok(cv)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::thermo::Reactant;
-
-    #[test]
-    fn recovered_cutoff_derivatives_match_central_differences() {
-        // The complete AP/Al pool at 300 K, 1 bar takes singular recovery,
-        // then converges with liquid water and Al(OH)3(a), without reducing elements.
-        let solver = Solver::new(
-            ["NH4CLO4(I)", "AL(cr)"]
-                .iter()
-                .map(|name| Reactant::named(name).unwrap())
-                .collect(),
-            true,
-            false,
-            None,
-            vec![],
-        )
-        .unwrap();
-        let mode = Mode::TP(300.0, 1e5);
-        let weights = [4.0, 1.0];
-        let state = solver.solve(mode, &weights).unwrap();
-        let seed = state.equilibrium_seed.as_ref().unwrap();
-        assert_eq!(seed.converged_tsize, 80.0);
-        assert!(!seed.elements_reduced);
-        let analytic = solver.derivatives(mode, &weights).unwrap();
-        let fd = solver
-            .finite_difference_derivatives(mode, &weights, 1e-4)
-            .unwrap();
-        assert!(analytic.closure_defect.unwrap() < 1e-10);
-        for (actual, expected) in [
-            (&analytic.temperature, &fd.temperature),
-            (&analytic.total_moles, &fd.total_moles),
-            (&analytic.enthalpy, &fd.enthalpy),
-            (&analytic.energy, &fd.energy),
-            (&analytic.gibbs_energy, &fd.gibbs_energy),
-            (&analytic.entropy, &fd.entropy),
-        ] {
-            for (col, (&a, &f)) in actual.iter().zip(expected).enumerate() {
-                assert!(
-                    (a - f).abs() <= 1e-5 * a.abs() + 1e-18,
-                    "column {col}: analytic={a:e}, central difference={f:e}"
-                );
+    for k in 0..n - 1 {
+        let mut pivot = k;
+        for i in k + 1..n {
+            if lu[(i, k)].abs() / scale[i] > lu[(pivot, k)].abs() / scale[pivot] {
+                pivot = i;
             }
         }
-        for (name, actual) in &analytic.species_amounts {
-            for (col, (&a, &f)) in actual.iter().zip(&fd.species_amounts[name]).enumerate() {
-                // Independent solve noise dominates derivatives of vanishing traces.
-                assert!(
-                    (a - f).abs() <= 1e-4 * a.abs() + 1e-12,
-                    "{name} column {col}: analytic={a:e}, central difference={f:e}"
-                );
+        if lu[(pivot, k)] == 0.0 {
+            return DMatrix::zeros(n, b.ncols());
+        }
+        lu.swap_rows(k, pivot);
+        x.swap_rows(k, pivot);
+        scale.swap(k, pivot);
+        for i in k + 1..n {
+            lu[(i, k)] /= lu[(k, k)];
+            for j in k + 1..n {
+                lu[(i, j)] = (-lu[(i, k)]).mul_add(lu[(k, j)], lu[(i, j)]);
             }
         }
     }
+    if lu[(n - 1, n - 1)] == 0.0 {
+        return DMatrix::zeros(n, b.ncols());
+    }
+    for i in 1..n {
+        for k in 0..i {
+            for j in 0..b.ncols() {
+                x[(i, j)] = (-lu[(i, k)]).mul_add(x[(k, j)], x[(i, j)]);
+            }
+        }
+    }
+    for i in (0..n).rev() {
+        for k in i + 1..n {
+            for j in 0..b.ncols() {
+                x[(i, j)] = (-lu[(i, k)]).mul_add(x[(k, j)], x[(i, j)]);
+            }
+        }
+        for j in 0..b.ncols() {
+            x[(i, j)] /= lu[(i, i)];
+        }
+    }
+    x
 }

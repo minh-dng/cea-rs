@@ -22,7 +22,6 @@
 //! with identical element weights. The requested Rust HP solve is blocked by
 //! missing named Li(cr) and nonconvergence even with an equivalent custom Li.
 use cea_rs::{
-    Error,
     solver::{Mode, Solver},
     thermo::Reactant,
 };
@@ -718,21 +717,6 @@ fn restricted_pool_transport_matches_native() {
             );
         }
     }
-}
-
-#[test]
-fn transport_rejects_invalid_temperature() {
-    let solver = Solver::new(
-        vec![Reactant::named("Ar").unwrap()],
-        false,
-        false,
-        None,
-        vec![],
-    )
-    .unwrap();
-    let mut state = solver.solve(Mode::TP(1000.0, 1e5), &[1.0]).unwrap();
-    state.temperature_k = f64::NAN;
-    assert!(matches!(state.transport(), Err(Error::Input(_))));
 }
 
 #[test]

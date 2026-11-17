@@ -298,7 +298,7 @@ impl Case<'_> {
     fn solve(&self) -> Result<DeckResult> {
         let d = self.deck;
         let solver = d.solver()?;
-        let output = match self.input {
+        let mut output = match self.input {
             CaseInput::Equilibrium(mode) => {
                 CaseOutput::Equilibrium(Box::new(solver.solve(mode, &self.weights)?))
             }
@@ -363,15 +363,43 @@ impl Case<'_> {
                             .ok_or_else(|| Error::Data("Missing requested rocket transport".into()))
                     })
                     .collect::<Result<_>>()?,
-                CaseOutput::Shock(r) => [&r.station1, &r.station2]
-                    .into_iter()
-                    .chain(r.station5.as_ref())
-                    .map(|s| s.state.transport())
+                CaseOutput::Shock(r) => std::iter::once(Ok(Transport::default()))
+                    .chain(
+                        std::iter::once(&r.station2)
+                            .chain(r.station5.as_ref())
+                            .map(|s| s.state.transport()),
+                    )
                     .collect::<Result<_>>()?,
             }
         } else {
             vec![]
         };
+        if d.output.transport {
+            match &mut output {
+                CaseOutput::Equilibrium(st) => {
+                    st.cp_frozen_j_kg_k = transport[0].cp_frozen_j_kg_k;
+                    st.cv_frozen_j_kg_k = st.cp_frozen_j_kg_k - crate::R * st.gas_moles;
+                }
+                CaseOutput::Detonation(r) => {
+                    r.burned.cp_frozen_j_kg_k = transport[0].cp_frozen_j_kg_k;
+                    r.burned.cv_frozen_j_kg_k =
+                        r.burned.cp_frozen_j_kg_k - crate::R * r.burned.gas_moles;
+                }
+                CaseOutput::Shock(r) => {
+                    r.station2.state.cp_frozen_j_kg_k = transport[1].cp_frozen_j_kg_k;
+                    r.station2.state.cv_frozen_j_kg_k =
+                        transport[1].cp_frozen_j_kg_k - crate::R * r.station2.state.gas_moles;
+                    if let Some(st) = &mut r.station5 {
+                        st.state.cp_frozen_j_kg_k = transport[2].cp_frozen_j_kg_k;
+                        if st.state.equilibrium {
+                            st.state.cv_frozen_j_kg_k =
+                                transport[2].cp_frozen_j_kg_k - crate::R * st.state.gas_moles;
+                        }
+                    }
+                }
+                CaseOutput::Rocket(_) => {}
+            }
+        }
         let volume = d
             .reactants
             .iter()

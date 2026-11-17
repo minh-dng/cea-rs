@@ -284,6 +284,8 @@ impl PySolver {
         })
     }
     /// Solve TP/HP/SP/TV/UV/SV in SI (K, Pa, J/kg, J/kg/K, m³/kg).
+    #[pyo3(signature=(mode, state1, state2, weights, *, start=None, transport=false))]
+    #[allow(clippy::too_many_arguments)]
     fn solve(
         &self,
         py: Python<'_>,
@@ -291,6 +293,8 @@ impl PySolver {
         state1: f64,
         state2: f64,
         weights: Vec<f64>,
+        start: Option<PyRef<'_, State>>,
+        transport: bool,
     ) -> PyResult<State> {
         let mode = match mode {
             "TP" => Mode::TP(state1, state2),
@@ -305,7 +309,16 @@ impl PySolver {
                 ));
             }
         };
-        Ok(py.detach(|| self.inner.solve(mode, &weights))?)
+        let start = start.map(|s| s.clone());
+        let mut solver = self.inner.clone();
+        solver.transport = transport;
+        Ok(py.detach(|| {
+            solver.solve_with_start(
+                mode,
+                &weights,
+                start.as_ref().and_then(|s| s.equilibrium_seed.as_ref()),
+            )
+        })?)
     }
     /// Return stream enthalpy in J/kg at specified reactant temperatures.
     fn reactant_enthalpy(&self, weights: Vec<f64>, temperatures_k: Vec<f64>) -> PyResult<f64> {
@@ -327,7 +340,7 @@ impl PySolver {
         })?)
     }
     /// Incident/reflected shock: mass weights, K, Pa, and exactly one speed input.
-    #[pyo3(signature=(weights,temperature_k,pressure_pa, *, u1=None,mach1=None,reflected=false,incident_frozen=false,reflected_frozen=false))]
+    #[pyo3(signature=(weights,temperature_k,pressure_pa, *, u1=None,mach1=None,reflected=false,incident_frozen=false,reflected_frozen=false,transport=false))]
     #[allow(clippy::too_many_arguments)]
     fn shock(
         &self,
@@ -340,6 +353,7 @@ impl PySolver {
         reflected: bool,
         incident_frozen: bool,
         reflected_frozen: bool,
+        transport: bool,
     ) -> PyResult<crate::shock::ShockResult> {
         use crate::shock::ShockSpeed;
         let speed = match (u1, mach1) {
@@ -347,8 +361,10 @@ impl PySolver {
             (None, Some(m)) => ShockSpeed::Mach(m),
             _ => return Err(PyValueError::new_err("Specify exactly one of u1 or mach1")),
         };
+        let mut solver = self.inner.clone();
+        solver.transport = transport;
         Ok(py.detach(|| {
-            self.inner.shock(
+            solver.shock(
                 &weights,
                 temperature_k,
                 pressure_pa,
@@ -455,6 +471,26 @@ impl PySolver {
 #[pymethods]
 impl State {
     #[getter]
+    fn converged(&self) -> bool {
+        self.converged
+    }
+    #[getter]
+    fn last_error(&self) -> i32 {
+        self.last_error
+    }
+    #[getter]
+    fn _nasa_n(&self) -> f64 {
+        self.gas_moles
+    }
+    #[getter]
+    fn _nasa_post_processed(&self) -> bool {
+        self.post_processed
+    }
+    #[getter]
+    fn _nasa_abort_message(&self) -> Option<&str> {
+        self.abort_message.as_deref()
+    }
+    #[getter]
     fn _nasa_nj(&self) -> BTreeMap<String, f64> {
         self.amounts
             .iter()
@@ -482,11 +518,8 @@ impl State {
         crate::mixture::cv_frozen(self)
     }
     #[getter(cv_equilibrium_j_kg_k)]
-    fn cv_equilibrium_py(&self) -> PyResult<Option<f64>> {
-        self.equilibrium
-            .then(|| crate::mixture::cv_equilibrium(self))
-            .transpose()
-            .map_err(Into::into)
+    fn cv_equilibrium_py(&self) -> f64 {
+        self.cv_equilibrium_j_kg_k
     }
     #[getter(specific_volume_m3_kg)]
     fn specific_volume_py(&self) -> f64 {
@@ -529,8 +562,8 @@ impl State {
         self.entropy_j_kg_k
     }
     #[getter(cp_equilibrium_j_kg_k)]
-    fn cp_eq(&self) -> Option<f64> {
-        self.equilibrium.then_some(self.cp_equilibrium_j_kg_k)
+    fn cp_eq(&self) -> f64 {
+        self.cp_equilibrium_j_kg_k
     }
     #[getter(cp_frozen_j_kg_k)]
     fn cp_fr(&self) -> f64 {

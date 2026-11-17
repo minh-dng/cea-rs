@@ -1,38 +1,17 @@
-# Alpha2 nozzle-root performance evidence
+# Historical alpha2 performance evidence
 
-The released 0.1.0a1 artifacts remain unchanged. The reviewed nozzle-root
-change is released as version 0.1.0a2. No consumer dependency or production default changes.
+These artifacts describe released version 0.1.0a2 and reviewed source snapshot
+`4734f3d673d9ccabaf9329099762b4818b849fb7`. They are not measurements of the
+current NASA parity implementation. Consumer dependencies were unchanged.
 
-A sampled alpha1 NTO/Aerozine50 solve spends substantial time in repeated
-thermochemistry calls from bracketed roots. The private root search now uses
-secant interpolation with Illinois stationary-endpoint damping and a midpoint
-fallback. It preserves the bracket, 80-iteration cap, root tolerances, domain
-checks and final sonic/mass/energy closure. The thermochemical core and data
-are unchanged. Nonfinite bracket values now fail explicitly.
+The paired benchmark alternated alpha1 and alpha2 in separate processes for
+three rounds, using five warmups and 50 timed warm solves per case, plus fresh
+process samples. The raw results remain here. Across nine rocket cases,
+median paired speedup was 3.16–12.57 times over alpha1. Alpha2 remained a
+median of 7.06–22.37 times slower than native CEA across those rounds.
+OS cache and CPU thermal/scheduling state were not controlled.
 
-Three root tests check endpoint/failure behavior, a smooth pressure-like root
-with bounded evaluation count, and a strongly skewed polynomial. A nozzle
-integration test adds area ratios 1, 1.001 and 100 for all three flow modes.
-All existing checks and 146 isolated native comparison rows pass at the
-existing limits; maximum rocket station difference remains about 5.84e-5.
-Installed-wheel interleaving/thread/closure checks pass on Python 3.12.14 and
-3.15.1 outside source.
-
-The paired benchmark alternates released alpha1 and candidate in separate
-processes for three rounds, using the same interpreter and inputs, five
-warmups and 50 timed warm solves per case, plus fresh-process samples. It
-retains all raw results. Across the nine rocket cases, median paired speedup
-is 3.16–12.57 times relative to alpha1. The unchanged TP path gives approximately
-1.01–1.05 times, consistent with timing noise. Candidate rocket solves remain a median of
-7.06–22.37 times slower than native CEA across the three rounds. This is an
-improvement to the Rust port; a speed advantage over native CEA is unproven.
-OS cache and CPU thermal/scheduling state are not controlled.
-
-Independent free Poolside review completed with scoped approval and no
-blockers, against exported commit `4734f3d673d9ccabaf9329099762b4818b849fb7`
-without Git metadata. The only clarity note was to label the native timing
-ratio as a per-case median. No numerical source changed after that snapshot.
-An earlier review was cancelled because it checked out alpha1's rocket file
-into the shared worktree; that patch was preserved, the committed candidate
-restored, and its rebuilt extension proved byte-identical to the tested wheel.
-The cancelled review is not counted as approval.
+The bracketed root search and additional physical acceptance checks measured
+here have been removed to match NASA CEA 3.3.4. They are listed in
+[future improvements](../future-improvements.md). See [current validation](../verbatim-parity.md)
+for parity evidence and remaining gaps. No new performance benchmark ran.

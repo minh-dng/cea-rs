@@ -21,7 +21,6 @@ CASES = [
     "9",
     "10",
     "11",
-    "11-reference",
     "12-eq",
     "12-fr",
     "13",
@@ -220,59 +219,42 @@ def run_case(case: str) -> dict:
     native_finite = all(math.isfinite(v) for row in native_rows for v in row.values())
     result["native_finite"] = native_finite
     result["native"] = [
-        {k: v if math.isfinite(v) else None for k, v in row.items()}
+        {k: v if math.isfinite(v) else str(v) for k, v in row.items()}
         for row in native_rows
     ]
     try:
-        rust_names = names
-        if case == "11-reference":
-            # Li(cr)'s NASA record declares a reversed first interval and is omitted
-            # from this crate. Its standard-state reference enthalpy is exactly zero.
-            rust_names = [
-                cea_rs.Reactant(
-                    "Li-reference",
-                    formula={"Li": 1},
-                    molecular_weight=6.941,
-                    enthalpy_j_mol=0,
-                ),
-                "F2(L)",
-            ]
-            result["rust_reactant_override"] = (
-                "Li(cr) replaced by formula Li=1, M=6.941, H=0 J/mol at 298.15 K"
-            )
-        solver = cea_rs.Solver(rust_names, only=only, insert=insert, ions=ions)
+        solver = cea_rs.Solver(names, only=only, insert=insert, ions=ions)
         start = time.perf_counter()
         rust = solver.rocket(weights, temps, pc, **options)
         result["rust_seconds"] = time.perf_counter() - start
         result["rust_complete"] = rust.complete
         result["rust_stop_reason"] = rust.stop_reason
         rows, differences = [], []
+        nonfinite_match = True
         for i, station in enumerate(rust.stations):
             row = {key: float(getattr(station.state, key)) for key in STATE_FIELDS}
             row.update({key: float(getattr(station, key) or 0) for key in FLOW_FIELDS})
             row["velocity_m_s"] = station.velocity_m_s
             rows.append(row)
-            if native_finite and i < len(native_rows):
-                differences.append(
-                    {
-                        k: abs(v - native_rows[i][k])
-                        / max(abs(native_rows[i][k]), 1e-30)
-                        if native_rows[i][k]
-                        else abs(v)
-                        for k, v in row.items()
-                    }
-                )
+            if i < len(native_rows):
+                delta = {}
+                for k, value in row.items():
+                    expected = native_rows[i][k]
+                    if math.isfinite(value) and math.isfinite(expected):
+                        delta[k] = abs(value - expected) / abs(expected) if expected else abs(value)
+                    else:
+                        match = value == expected or (math.isnan(value) and math.isnan(expected))
+                        nonfinite_match &= match
+                        delta[k] = 0.0 if match else None
+                differences.append(delta)
         result.update(
-            rust=rows,
+            rust=[{k: v if math.isfinite(v) else str(v) for k, v in row.items()} for row in rows],
+            nonfinite_match=nonfinite_match,
             relative_differences=differences,
-            worst_relative_difference=(
-                max((v for d in differences for v in d.values()), default=0)
-                if native_finite
-                else None
-            ),
+            worst_relative_difference=max((v for d in differences for v in d.values() if v is not None), default=0),
         )
         result["passed"] = (
-            native_finite
+            nonfinite_match
             and len(rows) == len(native_rows)
             and result["worst_relative_difference"] <= 1e-4
             and (native.converged == rust.complete)

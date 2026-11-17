@@ -13,7 +13,7 @@ solver = Solver(["H2", "O2"])
 state = solver.solve("TP", 3000.0, 1e6, [1.0, 8.0])  # K, Pa, mass weights
 rocket = solver.rocket([1.0, 6.0], [298.15, 298.15], 3e6, 10.0,
                        flow="frozen_at_throat")
-print(state.temperature_k, rocket.cstar_m_s, rocket.vacuum_velocity_m_s)
+print(state.converged, state.temperature_k, rocket.complete, rocket.cstar_m_s)
 ```
 
 Implements TP/HP/SP/TV/UV/SV, experimental condensed/ion equilibrium,
@@ -26,27 +26,21 @@ migration does not republish them. See [GitHub CI and releases](docs/github.md)
 for the wheel targets and future release process.
 
 [Implementation matrix](docs/implementation-matrix.md) gives exact units,
-unsupported modes and failure behavior. [Validation](docs/validation.md)
-separates the initial native comparisons, packaging tests and performance evidence.
-[0.1.0a2 performance](docs/performance-0.1.0a2/README.md) records the reviewed
-nozzle-root optimization; [historical CI validation](docs/ci-validation.md)
+unsupported modes and failure behavior. [Validation](docs/verbatim-parity.md)
+records native comparisons, retained-state tests and remaining gaps.
+[0.1.0a2 performance](docs/performance-0.1.0a2/README.md) records historical
+measurements; [historical CI validation](docs/ci-validation.md)
 records local Linux checks and quota-blocked GitLab execution.
 [GitHub Actions](https://github.com/minh-dng/cea-rs/actions) runs the current CI.
 [Provenance](docs/provenance.md) identifies NASA and prior Rust sources/licenses.
 
 Version 0.1.0a2 was **slower than native CEA** in its measured workloads.
 Version 0.1.0a3 has not been benchmarked.
-Full CEA parity and drop-in consumer compatibility are unproven. In particular,
-N2O at Hybrid's 298.15 K input is rejected because its NASA fit starts at 300 K.
-
-## Nozzle phase initialization
-
-Equilibrium nozzle solves reuse the chamber's active condensed phases as
-initial guesses. Phase removal, iteration budgets, equations, fitted-data and
-closure checks remain unchanged. This fixes a carbon-bearing nozzle
-initialization failure; it does not repair every standalone unseeded SP solve
-or confer numerical acceptance. Consumers must update their exact version
-guards and pins before loading alpha.3.
+The target is verbatim NASA CEA 3.3.4 behavior, including its quirks, failures
+and false positives. Check returned convergence/status fields. A reported
+success is not a proof of conservation or phase stability. Unsupported NASA
+features raise NotImplementedError by name; see the implementation matrix.
+The port does not call Fortran or the native wheel at runtime.
 
 ## Released consumers
 
@@ -88,95 +82,10 @@ The parser covers NASA's sample `problem`, `reactants`, `only`/`omit`/`insert`,
 `output` and `end` datasets, mixed units, custom formulas/enthalpies, mixture
 ratios and station schedules. Unknown keywords or units fail by name.
 Formatting/plot preferences are retained as metadata. Frozen detonation is
-unsupported. No NASA report formatter or CLI is included. Existing solver
-numerics are unchanged.
+unsupported. No NASA report formatter or CLI is included. The numerical target is NASA CEA 3.3.4.
 
-All 55 cases in NASA's 14 main-interface decks solve. The table gives strict
-`1e-4` relative comparison results against native 3.3.4 reports (example 6
-uses NASA's complete historical report). Fractions >=1e-5 are compared;
-zero-reference enthalpy has a 1e-3 J/kg absolute allowance.
-
-| Example deck | Status | Worst relative difference |
-|---|---|---:|
-| 1: TP | Pass | 1.61392e-9 |
-| 2: TV + transport | Pass | 6.74146e-8 |
-| 3: HP | Pass | 4.40289e-10 |
-| 4: UV | Pass | 1.39425e-10 |
-| 5: custom binder | Pass | 1.48335e-5 |
-| 6: detonation + transport | Pass | 4.11214e-5 |
-| 7: equilibrium/frozen shock | Pass | 8.81075e-6 |
-| 8: IAC schedules | Pass | 6.96275e-5 |
-| 9: FAC contraction | Pass | 6.85920e-5 |
-| 10: FAC mass flux | Pass | 6.68535e-5 |
-| 11: ions + transport | Pass | 3.20473e-5 |
-| 12: equilibrium + frozen | Fail: two trace fractions at area 75; nozzle stopping difference | 1.73452e-4 |
-| 13: BeO insertion | Pass | 2.12241e-5 |
-| 14: water condensation | Pass | 2.04574e-9 |
-| Standalone sample 1 | Pass | 1.61392e-9 |
-| Combined RP-1311 sample | 56/57 solve; known 1000 m/s shock failure and example 12 trace differences | 1.73455e-4 among successful cases |
-| Frozen detonation | Unsupported; explicit error | — |
-
-The unchanged historical reports are also tested. Examples 1, 7–11 contain
-small historical differences above `1e-4`; example 12 covers only its frozen
-branch. The suite records bounded exceptions for named cells and fails on
-new differences. [Deck validation](docs/input-decks.md) gives both reference
-tables, exact numbers, known NASA reporting/stopping limits and overlap with
-existing hand-entered tests. [Fixture provenance](tests/data/nasa/README.md)
-records NASA's notice, hashes and regeneration steps.
-
-## NASA Python API
-
-Install the optional adapter dependencies with
-`pip install 'cea-keplr-rs[nasa]'`. For supported NASA `cea==3.3.4` calling
-code, change the import to:
-
-```python
-from cea_rs import nasa as cea
-import numpy as np
-
-reactants = cea.Mixture(["H2", "O2"])
-products = cea.Mixture(["H2", "O2"], products_from_reactants=True)
-solver = cea.EqSolver(products, reactants=reactants)
-solution = cea.EqSolution(solver)
-solver.solve(solution, cea.TP, 3000.0, 10.0, np.array([1.0, 8.0]))
-print(solution.T, solution.P, solution.enthalpy)  # K, bar, kJ/kg
-```
-
-The submodule provides `Reactant`, `Mixture`, `EqSolver`/`EqSolution`,
-`EqDerivatives`, `RocketSolver`/`RocketSolution`, `ShockSolver`/`ShockSolution`
-and `DetonationSolver`/`DetonationSolution`, with NASA's defaults and NumPy
-array shapes. Only this submodule requires NumPy; the base `cea_rs` package
-works without it and continues to use SI. NASA itself is not a runtime dependency.
-
-The [complete member inventory and status](docs/nasa-python-api.md) records
-units, unsupported options and numerical limits. Smoothing, arbitrary initial
-guesses, custom binary databases, frozen detonation and MATLAB wrappers raise
-named `NotImplementedError`s. Failed verification raises a typed error and
-clears the solution. Native retained/invalid states are not returned. The
-known nozzle, frozen-Cv and condensed-phase differences remain explicit.
-The worst compared difference, including the named RP-1311 example 12
-exception, is 1.73451869e-4 (CO mass fraction at area 75, bounded at 1.8e-4).
-Other valid compared outputs meet 1e-4; their worst difference is 7.0467525e-5.
-
-`tests/test_nasa_api.py` uses the same calls for both implementations when
-NASA 3.3.4 is installed. Without it, stored native values and independent
-checks still cover all problem types; CI exercises that path from the wheel.
-
-## Build
-
-Use Rust 1.99.1, Python >=3.12 and maturin 1.15.0:
-
-```sh
-cargo +1.99.1 test --locked
-python -m pip install maturin==1.15.0
-maturin build --locked --release --out dist
-```
-
-The existing `mise.toml` is the maintainer's T7 checkout configuration and keeps
-caches, temporary files and build outputs on that drive. Set `CARGO_HOME` after
-mise resolves Rust. Use copy-mode Python installs on exFAT; its AppleDouble
-sidecars can confuse tools that scan script directories.
-
-This independent Keplr project is not endorsed by NASA. Apache-2.0; original
-NASA and Bit Mango notices and license texts are retained. No consumer imports
-or production defaults are changed by installing this separate package.
+The 14 main-interface decks and combined RP-1311 sample are checked against
+the pinned native reports. The 1000 m/s shock retains its native error code and
+values; example 12 keeps the native area stop. Native false positives, frozen
+workspaces and transport behavior are also covered by stored wheel snapshots.
+[Current validation and remaining gaps](docs/verbatim-parity.md).

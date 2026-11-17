@@ -9,11 +9,10 @@ Install `cea-keplr-rs[nasa]` to use this adapter. NumPy is optional for the
 base package: `import cea_rs` and its SI API work without it. Importing
 `cea_rs.nasa` without NumPy raises ImportError naming that extra.
 
-The largest compared relative difference, including named exceptions, is
-**1.73451869e-4**: RP-1311 example 12's CO mass fraction at area 75, within
-its 1.8e-4 bound. The worst other valid compared output is 7.0467525e-5.
-Fixed-constraint finite-difference noise and invalid native states have the
-separate bounds described below.
+The adapter targets NASA behavior verbatim. It retains failures and false
+positives. [Current validation](verbatim-parity.md) records the measured
+comparisons; [remaining gaps](implementation-matrix.md) are explicit unsupported
+features, not alternate numerical policies.
 
 ## Conventions
 
@@ -28,7 +27,8 @@ separate bounds described below.
 - Mixture.calc_property: H/U/G J/kg, scalar-temperature S J/(kg K), Cp/Cv J/(kg K).
   In 3.3.4 array-temperature S is divided by 1000; array-temperature G retains
   the supplied weight scale and divides bar pressure by 1e5; V/DENSITY retain legacy ×1000/×0.001 relative to SI.
-- Weights are masses normalized by the solver; mole inputs require moles_to_weights.
+- Equilibrium weights are normalized masses; mole inputs require moles_to_weights.
+  Shock initialization retains NASA's `n=1/sum(weights)` quirk, so weight scale matters.
   Conversion helpers preserve amount scale and return float64 NumPy arrays.
 - Products are selected from all reactant elements, including zero-weight reactants.
   omit applies only to generated products; explicit Mixture names are the only pool.
@@ -43,8 +43,10 @@ separate bounds described below.
   n_frz is one-based and counts the FAC infinity station; 0 means equilibrium.
   Shock stations are [1,2] or [1,2,5]; ratio properties are scalar floats.
 - All solve methods mutate the solution and return None. converged is bool;
-  last_error is an integer code. This port raises on failed verification and clears
-  the old solution, instead of exposing NASA retained or nonconverged values.
+  last_error is an integer code. This port keeps NASA's available values, sets the native error code, and warns
+  on numerical nonconvergence. A failed solve does not clear the report.
+  Fortran aborts raise RuntimeError after updating the solution, retaining
+  converged=True, code 10 and the working iterate for the next solve.
 
 ## Classes, methods and properties
 
@@ -91,7 +93,7 @@ visible `omit=[]` default and never mutates that list.
 
 ### EqSolver
 
-Constructor: `EqSolver(products, *, reactants=<products>, transport=False, ions=False, trace=-1.0, insert=[], smooth_truncation=False, truncation_width=-1.0)`. Default constructor implemented. smooth_truncation=True or truncation_width>0 raises NotImplementedError.
+Constructor: `EqSolver(products, *, reactants=<products>, transport=False, ions=False, trace=-1.0, insert=[], smooth_truncation=False, truncation_width=-1.0)`. Default constructor implemented. smooth_truncation=True or nondefault truncation_width raises NotImplementedError.
 
 | Member | Signature / return convention | Status |
 |---|---|---|
@@ -105,7 +107,7 @@ Constructor: `EqSolver(products, *, reactants=<products>, transport=False, ions=
 
 ### EqSolution
 
-Constructor: `EqSolution(solver, T_init=None, nj_init=None)`. Default constructor implemented. T_init or nj_init raises NotImplementedError.
+Constructor: `EqSolution(solver, T_init=None, nj_init=None)`. T_init and nj_init are implemented, including native pre-solve fields and constructor-seed restoration on the first solve.
 
 | Member | Signature / return convention | Status |
 |---|---|---|
@@ -117,7 +119,7 @@ Constructor: `EqSolution(solver, T_init=None, nj_init=None)`. Default constructo
 | T | Temperature in K. | Implemented |
 | conductivity_eq | Equilibrium thermal conductivity in mW/(cm·K) (native docstring incorrectly says µW). | Implemented |
 | conductivity_fr | Frozen thermal conductivity in mW/(cm·K) (native docstring incorrectly says µW). | Implemented |
-| converged | Convergence status of the solution. | Implemented; failure clears old results and raises instead of retaining invalid native values |
+| converged | Convergence status of the solution. | Implemented; native status and retained values |
 | cp | Equilibrium specific heat at constant pressure in kJ/(kg·K). | Implemented |
 | cp_eq | Equilibrium specific heat at constant pressure in kJ/(kg·K). | Implemented |
 | cp_fr | Frozen specific heat at constant pressure in kJ/(kg·K). | Implemented |
@@ -143,14 +145,10 @@ Constructor: `EqSolution(solver, T_init=None, nj_init=None)`. Default constructo
 
 Constructor: `EqDerivatives(solver, solution)`. Default constructor implemented.
 
-NASA's `check_closure_defect=True` evaluates the internal residual
-`J * du/dx + Rx`; it does not change the returned derivatives. Its Python
-docstring mentions logging, but the Fortran check stores the residual without
-printing unless verbose output is requested separately. Rust already evaluates
-the same residual and rejects a scaled defect above 1e-10 on every analytic
-solve. The adapter's explicit flag verifies that the core supplied a finite
-defect within that bound, raising ConvergenceError otherwise. The default
-retains the core's existing validation.
+NASA's `check_closure_defect=True` stores a diagnostic residual without
+rejecting derivatives. The adapter follows that behavior. Singular analytic
+systems use NASA's zero-update convention. The core still exposes the defect
+as a diagnostic to its own Rust/Python users.
 
 | Member | Signature / return convention | Status |
 |---|---|---|
@@ -220,13 +218,13 @@ Constructor: `RocketSolution(solver)`. Default constructor implemented.
 | coefficient_of_thrust | Thrust coefficient at each station. | Implemented |
 | conductivity_eq | Equilibrium thermal conductivity in mW/(cm·K) (native docstring incorrectly says µW). | Implemented |
 | conductivity_fr | Frozen thermal conductivity in mW/(cm·K) (native docstring incorrectly says µW). | Implemented |
-| converged | Convergence status of the solution. | Implemented; failure clears old results and raises instead of retaining invalid native values |
+| converged | Convergence status of the solution. | Implemented; native status and retained values |
 | cp | Equilibrium specific heat at constant pressure in kJ/(kg·K). | Implemented |
 | cp_eq | Equilibrium specific heat at constant pressure in kJ/(kg·K). | Implemented |
 | cp_fr | Frozen specific heat at constant pressure in kJ/(kg·K). | Implemented |
-| cv | Equilibrium specific heat at constant volume in kJ/(kg·K). | Differs after freezing: current Cv instead of retained/zero native fields |
-| cv_eq | Equilibrium specific heat at constant volume in kJ/(kg·K). | Differs after freezing: current Cv instead of retained/zero native fields |
-| cv_fr | Frozen specific heat at constant volume in kJ/(kg·K). | Differs after freezing: current Cv instead of retained/zero native fields |
+| cv | Equilibrium specific heat at constant volume in kJ/(kg·K). | Implemented; retains native earlier or zero frozen fields |
+| cv_eq | Equilibrium specific heat at constant volume in kJ/(kg·K). | Implemented; retains native earlier or zero frozen fields |
+| cv_fr | Frozen specific heat at constant volume in kJ/(kg·K). | Implemented; retains native earlier or zero frozen fields |
 | density | Density at each station in kg/m³. | Implemented |
 | energy | Specific internal energy at each station in kJ/kg. | Implemented |
 | enthalpy | Specific enthalpy at each station in kJ/kg. | Implemented |
@@ -234,7 +232,7 @@ Constructor: `RocketSolution(solver)`. Default constructor implemented.
 | gamma_s | Isentropic exponent \gamma_s at each station. | Implemented |
 | gibbs_energy | Specific Gibbs energy at each station in kJ/kg. | Implemented |
 | last_error | int | Implemented |
-| ln_nj | Natural logarithm of gas phase species concentrations at each station (gasses only). NOTE: ln_nj /= log(nj) because nj is truncated for trace species, while ln_nj preserves small amounts. | NotImplementedError when any station lacks retained equilibrium logs (all shocks include station 1) |
+| ln_nj | Natural logarithm of gas phase species concentrations at each station (gasses only). NOTE: ln_nj /= log(nj) because nj is truncated for trace species, while ln_nj preserves small amounts. | NotImplementedError for unported frozen rocket logs |
 | mass_fractions | Species mass fractions at each station. | Implemented |
 | mole_fractions | Species mole fractions at each station. | Implemented |
 | n | Total moles at each station. | Implemented |
@@ -265,13 +263,13 @@ Constructor: `ShockSolution(solver, reflected=True)`. Default constructor implem
 | T52 | Temperature ratio across the reflected shock (T5/T2). | Implemented |
 | conductivity_eq | Equilibrium thermal conductivity at each shock state in mW/(cm·K) (native docstring incorrectly says µW). | Implemented |
 | conductivity_fr | Frozen thermal conductivity at each shock state in mW/(cm·K) (native docstring incorrectly says µW). | Implemented |
-| converged | Convergence status of the solution. | Implemented; failure clears old results and raises instead of retaining invalid native values |
-| cp | Equilibrium specific heat at constant pressure at each shock state in kJ/(kg·K). | Differs at frozen station 5: computes defined Cp/Cv instead of uninitialized native fields |
-| cp_eq | Equilibrium specific heat at constant pressure at each shock state in kJ/(kg·K). | Differs at frozen station 5: computes defined Cp/Cv instead of uninitialized native fields |
-| cp_fr | Frozen specific heat at constant pressure at each shock state in kJ/(kg·K). | Differs at frozen station 5: computes defined Cp/Cv instead of uninitialized native fields |
-| cv | Equilibrium specific heat at constant volume at each shock state in kJ/(kg·K). | Differs at frozen station 5: computes defined Cp/Cv instead of uninitialized native fields |
-| cv_eq | Equilibrium specific heat at constant volume at each shock state in kJ/(kg·K). | Differs at frozen station 5: computes defined Cp/Cv instead of uninitialized native fields |
-| cv_fr | Frozen specific heat at constant volume at each shock state in kJ/(kg·K). | Differs at frozen station 5: computes defined Cp/Cv instead of uninitialized native fields |
+| converged | Convergence status of the solution. | Implemented; native status and retained values |
+| cp | Equilibrium specific heat at constant pressure at each shock state in kJ/(kg·K). | Implemented; retains native frozen workspaces and incident Cp basis |
+| cp_eq | Equilibrium specific heat at constant pressure at each shock state in kJ/(kg·K). | Implemented; retains native frozen workspaces and incident Cp basis |
+| cp_fr | Frozen specific heat at constant pressure at each shock state in kJ/(kg·K). | Implemented; retains native frozen workspaces and incident Cp basis |
+| cv | Equilibrium specific heat at constant volume at each shock state in kJ/(kg·K). | Implemented; retains native frozen workspaces and incident Cp basis |
+| cv_eq | Equilibrium specific heat at constant volume at each shock state in kJ/(kg·K). | Implemented; retains native frozen workspaces and incident Cp basis |
+| cv_fr | Frozen specific heat at constant volume at each shock state in kJ/(kg·K). | Implemented; retains native frozen workspaces and incident Cp basis |
 | density | Density at each shock state in kg/m³. | Implemented |
 | energy | Specific internal energy at each shock state in kJ/kg. | Implemented |
 | enthalpy | Specific enthalpy at each shock state in kJ/kg. | Implemented |
@@ -279,11 +277,11 @@ Constructor: `ShockSolution(solver, reflected=True)`. Default constructor implem
 | gamma_s | Isentropic exponent \gamma_s at each shock state. | Implemented |
 | gibbs_energy | Gibbs energy at each shock state in kJ/kg. | Implemented |
 | last_error | int | Implemented |
-| ln_nj | Natural logarithm of gas phase species concentrations at each station (gasses only). NOTE: ln_nj /= log(nj) because nj is truncated for trace species, while ln_nj preserves small amounts. | NotImplementedError when any station lacks retained equilibrium logs (all shocks include station 1) |
+| ln_nj | Natural logarithm of gas phase species concentrations at each station (gasses only). NOTE: ln_nj /= log(nj) because nj is truncated for trace species, while ln_nj preserves small amounts. | Implemented native quirk: raises AttributeError for missing _get_size |
 | mass_fractions | Species mass fractions at each station. | Implemented |
 | mole_fractions | Species mole fractions at each station. | Implemented |
-| n | Total moles at each station. | Differs: returns documented arrays; native getter raises AttributeError |
-| nj | Species concentrations (kg-mol of species j per kg of mixture) at each index. | Differs: returns documented arrays; native getter raises AttributeError |
+| n | Total moles at each station. | Implemented native quirk: raises AttributeError for missing _get_size |
+| nj | Species concentrations (kg-mol of species j per kg of mixture) at each index. | Implemented native quirk: raises AttributeError for missing _get_size |
 | rho12 | Density ratio across the incident shock (ρ1/ρ2). | Implemented |
 | rho52 | Density ratio across the reflected shock (ρ5/ρ2). | Implemented |
 | sonic_velocity | Reported sound speed in m/s: ``sqrt(R * T * gamma_s / M)``. | Implemented |
@@ -315,7 +313,7 @@ Constructor: `DetonationSolution(solver)`. Default constructor implemented.
 | T_T1 | Temperature ratio T/T1. | Implemented |
 | conductivity_eq | Equilibrium thermal conductivity in mW/(cm·K) (native docstring incorrectly says µW). | Implemented |
 | conductivity_fr | Frozen thermal conductivity in mW/(cm·K) (native docstring incorrectly says µW). | Implemented |
-| converged | Convergence status of the solution. | Implemented; failure clears old results and raises instead of retaining invalid native values |
+| converged | Convergence status of the solution. | Implemented; native status and retained values |
 | cp_eq | Equilibrium specific heat at constant pressure in kJ/(kg·K). | Implemented |
 | cp_fr | Frozen specific heat at constant pressure in kJ/(kg·K). | Implemented |
 | cv_eq | Equilibrium specific heat at constant volume in kJ/(kg·K). | Implemented |
@@ -341,7 +339,7 @@ Constructor: `DetonationSolution(solver)`. Default constructor implemented.
 
 ### RocketSolver
 
-Constructor: `RocketSolver(products, *, reactants=<products>, transport=False, ions=False, trace=-1.0, insert=[], smooth_truncation=False, truncation_width=-1.0)`. Default constructor implemented. smooth_truncation=True or truncation_width>0 raises NotImplementedError.
+Constructor: `RocketSolver(products, *, reactants=<products>, transport=False, ions=False, trace=-1.0, insert=[], smooth_truncation=False, truncation_width=-1.0)`. Default constructor implemented. smooth_truncation=True or nondefault truncation_width raises NotImplementedError.
 
 | Member | Signature / return convention | Status |
 |---|---|---|
@@ -354,7 +352,7 @@ Constructor: `RocketSolver(products, *, reactants=<products>, transport=False, i
 
 ### ShockSolver
 
-Constructor: `ShockSolver(products, *, reactants=<products>, transport=False, ions=False, trace=-1.0, insert=[], smooth_truncation=False, truncation_width=-1.0)`. Default constructor implemented. smooth_truncation=True or truncation_width>0 raises NotImplementedError.
+Constructor: `ShockSolver(products, *, reactants=<products>, transport=False, ions=False, trace=-1.0, insert=[], smooth_truncation=False, truncation_width=-1.0)`. Default constructor implemented. smooth_truncation=True or nondefault truncation_width raises NotImplementedError.
 
 | Member | Signature / return convention | Status |
 |---|---|---|
@@ -367,7 +365,7 @@ Constructor: `ShockSolver(products, *, reactants=<products>, transport=False, io
 
 ### DetonationSolver
 
-Constructor: `DetonationSolver(products, *, reactants=<products>, transport=False, ions=False, trace=-1.0, insert=[], smooth_truncation=False, truncation_width=-1.0)`. Default constructor implemented. smooth_truncation=True or truncation_width>0 raises NotImplementedError.
+Constructor: `DetonationSolver(products, *, reactants=<products>, transport=False, ions=False, trace=-1.0, insert=[], smooth_truncation=False, truncation_width=-1.0)`. Default constructor implemented. smooth_truncation=True or nondefault truncation_width raises NotImplementedError.
 
 | Member | Signature / return convention | Status |
 |---|---|---|
@@ -386,15 +384,15 @@ Constructor: `DetonationSolver(products, *, reactants=<products>, transport=Fals
 | init_thermo | `init_thermo(thermofile)` | NotImplementedError: embedded databases only |
 | init_trans | `init_trans(transfile)` | NotImplementedError: embedded databases only |
 | is_initialized | `is_initialized()` | Implemented |
-| set_log_level | `set_log_level(level)` | Silent levels accepted; debug/info raises NotImplementedError (no native logger) |
+| set_log_level | `set_log_level(level)` | LOG_NONE accepted; other levels raise NotImplementedError naming diagnostic logging |
 | eq_solve | `eq_solve(eq_type, reactants, T: 'Optional[double]' = None, H: 'Optional[double]' = None, S: 'Optional[double]' = None, U: 'Optional[double]' = None, P: 'Optional[double]' = None, V: 'Optional[double]' = None, T_reac: 'Optional[list \| np.ndarray \| double]' = None, fuel_amounts: 'Optional[list \| np.ndarray]' = None, oxid_amounts: 'Optional[list \| np.ndarray]' = None, moles=False, of_ratio: 'Optional[list \| np.ndarray \| double]' = None, phi: 'Optional[list \| np.ndarray \| double]' = None, r_eq: 'Optional[list \| np.ndarray \| double]' = None, pct_fuel: 'Optional[list \| np.ndarray \| double]' = None, only: 'Optional[list]' = None, omit: 'Optional[list]' = None, insert: 'Optional[list]' = None, trace: 'Optional[double]' = None, transport=False, ions=False)` | Implemented legacy root helper; preserves actual H/S/U-to-state1 behavior, despite J-based docstrings |
-| lib_version | `lib_version()` | Differs: reports actual Rust version |
-| lib_version_major | `lib_version_major()` | Differs: reports actual Rust version |
-| lib_version_minor | `lib_version_minor()` | Differs: reports actual Rust version |
-| lib_version_patch | `lib_version_patch()` | Differs: reports actual Rust version |
+| lib_version | `lib_version()` | Implemented: NASA compatibility version 3.3.4 |
+| lib_version_major | `lib_version_major()` | Implemented: NASA compatibility version 3.3.4 |
+| lib_version_minor | `lib_version_minor()` | Implemented: NASA compatibility version 3.3.4 |
+| lib_version_patch | `lib_version_patch()` | Implemented: NASA compatibility version 3.3.4 |
 
-__version__ is the Python distribution version; lib_version* identify the actual
-backend. The adapter reports its own Rust version, never claims to be NASA 3.3.4.
+`cea_rs.nasa.__version__` and its lib_version helpers identify the emulated
+NASA API, 3.3.4. `cea_rs.__version__` identifies the actual Rust distribution.
 
 ## Constants
 
@@ -575,15 +573,15 @@ eq_solve, rocket_solve, shock_solve and detonation_solve, returning flattened
 SimpleNamespace objects; its Matlab*Solution stub types carry the same fields
 as their corresponding solutions. MATLAB wrappers, sample plotting and file
 outputs are outside this adapter. Access raises a named NotImplementedError.
-The native __all__ also accidentally exports os and importlib_resources;
-these helper modules are not re-exported.
+The native __all__ also exports os and importlib_resources; the adapter keeps
+those names, using the standard-library resource module.
 
 ## Version, exports and optional wrappers
 
 | Member | Status |
 |---|---|
-| __version__ | Differs: actual cea-keplr-rs distribution version |
-| __all__ | Implemented supported API; excludes accidental native os/importlib_resources exports |
+| __version__ | Implemented: NASA compatibility version 3.3.4 |
+| __all__ | Implemented, including native os/importlib_resources exports |
 | constants | Implemented selector facts and R |
 | units | Implemented all 22 helpers |
 | lib / lib.libcea | Implemented re-exports; no Fortran shared library |
@@ -599,128 +597,39 @@ namespace, not root aliases. Their unsupported names raise NotImplementedError.
 | shock_solve | `(reactants: 'list[str]', T0: 'SupportsFloat', p0: 'SupportsFloat', *, u1: 'Optional[SupportsFloat \| VectorLike]' = None, Mach1: 'Optional[SupportsFloat \| VectorLike]' = None, fuel_amounts: 'Optional[VectorLike]' = None, oxid_amounts: 'Optional[VectorLike]' = None, moles: 'bool' = False, of_ratio: 'Optional[SupportsFloat \| VectorLike]' = None, phi: 'Optional[SupportsFloat \| VectorLike]' = None, r_eq: 'Optional[SupportsFloat \| VectorLike]' = None, pct_fuel: 'Optional[SupportsFloat \| VectorLike]' = None, only: 'Optional[list[str]]' = None, omit: 'Optional[list[str]]' = None, insert: 'Optional[list[str]]' = None, trace: 'Optional[float]' = None, transport: 'bool' = False, ions: 'bool' = False, reflected: 'bool' = True, incident_frozen: 'bool' = False, reflected_frozen: 'bool' = False) -> 'SimpleNamespace'` | NotImplementedError: MATLAB wrapper |
 | detonation_solve | `(reactants: 'list[str]', T1: 'SupportsFloat', p1: 'SupportsFloat', *, fuel_amounts: 'Optional[VectorLike]' = None, oxid_amounts: 'Optional[VectorLike]' = None, moles: 'bool' = False, of_ratio: 'Optional[SupportsFloat \| VectorLike]' = None, phi: 'Optional[SupportsFloat \| VectorLike]' = None, r_eq: 'Optional[SupportsFloat \| VectorLike]' = None, pct_fuel: 'Optional[SupportsFloat \| VectorLike]' = None, only: 'Optional[list[str]]' = None, omit: 'Optional[list[str]]' = None, insert: 'Optional[list[str]]' = None, trace: 'Optional[float]' = None, transport: 'bool' = False, ions: 'bool' = False, frozen: 'bool' = False) -> 'SimpleNamespace'` | NotImplementedError: MATLAB wrapper |
 
-## Limits and bounded exceptions
+## Remaining gaps and native quirks
 
-The adapter changes units and data layout, not numerical methods. The original
-cea_rs API and solver validation remain in force. There is no fallback to NASA.
-Before the first successful solve, or after a failed solve, reading solution
-properties raises RuntimeError; converged remains False. In contrast, native
-CEA initializes numeric workspaces and can retain an older failed solution.
-Its printed report, CLI, sample plotting and file outputs are not reproduced.
+The implementation matrix lists every currently named unsupported feature.
+They include smoothing, binary databases, fitted-reactant overrides,
+frozen-reactant rockets, frozen detonation, MATLAB wrappers, diagnostic logging,
+frozen rocket logs and some derivative systems. Those calls raise
+NotImplementedError naming the feature. Incompatible single-product element
+inventories are also unsupported: the reference wheel can crash on them.
+Unsolved flow report fields and uncomputed derivative workspaces also raise
+NotImplementedError. Native flow fields can contain uninitialized memory or
+crash before the first solve; there is no deterministic value to reproduce.
 
-- RP-1311 example 12, equilibrium area 75 only: CO/OH and H2 mole fractions
-  exceed 1e-4 relative because native stops at area 74.99733854. The tests bound
-  these exact species/area cells at 1.8e-4, including corresponding mass fractions
-  and nj. H2 is newly visible in this API comparison because the historical
-  example-12 report uses mass fractions below the reporting threshold for H2.
-- RP-1311 example 7 at 1000 m/s: native returns LAST_VALID_SOLUTION=9 and
-  converged=False. Rust raises ConvergenceError, leaving no readable stale state.
-- Reflected-frozen station 5: native Cp/Cv fields are uninitialized. Rust uses
-  current frozen composition/temperature for Cp and Cv, checked independently.
-  With transport enabled, native cp_fr is populated and compares normally.
-  Native gamma and sound speed retain the station-2 Cp basis in both backends.
-  Shock cv_eq is zero at initial/frozen stations, following the native sentinel.
-  Transport is zero at station 1; equilibrium conductivity/Prandtl are zero
-  at frozen shock stations, matching NASA.
-- Frozen rockets: native Cv can retain an earlier value or become zero. Rust
-  returns current Cv; tests check Cp-R*n independently and bound native values
-  to zero or an earlier equilibrium Cv. The chamber equilibrium Cp is preserved
-  for n_frz=1, including NASA subsonic schedule behavior.
-- RP-1311 example 9 at n_frz=3: native error8 retains seven stations. Rust
-  returns ten complete verified stations. Tests require that exact native failure
-  and independently check Rust stagnation enthalpy. Other tested FAC freeze
-  indices (4/5) compare at 1e-4.
-- Air/Jet-A(L), O/F25, 20 MPa, area80: NASA reports success with 14–15 kJ/kg
-  energy error and 18–19% mass-flux error using its own reported properties.
-  Rust reaches water coexistence at 273.121944 K and 9971.217844 Pa, with
-  independently checked entropy/energy/mass closure. This exact case is a
-  bounded exception, not a comparison against NASA invalid output.
-- Condensed transitions: native error8 at Ar/Hg HP, Ar/water TP273.15 K, and
-  Ar/NaCN TP288.5 K is bounded by exact input and Rust temperature/phase values
-  from independent checks in condensed-phase-insertion.md. Ar/Br2 TP262 K
-  omits the solid in native because of its reversed interval; Rust returns
-  solid mass fraction 0.943263839016. RP14 water condensation and RP13 BeO
-  coexistence compare normally. Cv_eq=0 at Cp_eq=0 phase coexistence follows
-  the native reporting convention, avoiding a singular derivative query.
-- NASA ShockSolution.n/nj/ln_nj call a missing _get_size method and raise
-  AttributeError. Rust returns n/nj with the documented shapes, checked against
-  native fraction/molar-mass sums. Untruncated frozen ln_nj is unavailable here
-  and explicitly raises NotImplementedError; log(nj) is not substituted.
-  Element-reduced pools also raise if an untruncated log is unavailable.
-- Transport Cp is the native gas-only value; unsupported fits/transport failures
-  still raise this port’s typed errors. Native estimates can sometimes continue.
-- FD derivatives of an assigned H/U/S with respect to the other input or
-  weights are mathematically zero. At h=1e-5 both native and Rust amplify
-  forward-solve residuals: tests bound these exact HP/SP/UV/SV responses at
-  1e-3 (kJ-based H/U) or 1e-5 (kJ-based S), and compare other FD responses
-  normally at 1e-4 relative. Analytic responses agree directly.
-- Other unsupported features raise NotImplementedError by name: arbitrary
-  initial guesses, smooth truncation, fitted named-reactant overrides (which
-  would require preserving/altering their polynomial fits), n_frz=-1 frozen
-  reactant rockets, frozen detonation, custom binary databases, MATLAB wrappers
-  and verbose derivative diagnostics. Analytic derivative limits of the core
-  (ions, element-reduced systems and UV/SV with condensates) still apply.
-- Nominal fit metadata do not extend this port’s validated domains. In
-  particular N2O at 298.15 K can still be rejected where native extrapolates.
-  The complete pre-existing limits remain in implementation-matrix.md.
+EqSolution fields exist before a solve. T_init and nj_init update that exposed
+initial guess. NASA's Python setters do not update the saved constructor seed;
+the first solve restores that seed. The adapter keeps this quirk.
 
-Comparison policy: relative tolerance 1e-4 on thermodynamic/performance outputs
-and species with mole fraction >=1e-5. Exact zeros use explicit, small absolute
-allowances. Derivative near-zero noise has separate absolute bounds. Exceptions
-are restricted to named inputs/fields with independent identities or exact
-failure codes; no test is skipped. All helper calls are identical for both
-backends; the adapter never imports the native package.
+The NASA ShockSolution.n/nj/ln_nj getters raise AttributeError because their
+wrapper lacks _get_size. The adapter reproduces that error. Root Rust/SI
+states still expose their composition normally.
 
-## Validation on 2026-11-17
+Native false positives and failures are tested directly, including Ar/Hg HP,
+water and NaCN transitions, Br2 supersaturation, Air/Jet-A at 20 MPa, the
+1000 m/s shock, example 12's area stop, and a FAC early-freeze partial result
+with NaNs. The 300 K AP/Al case reports success with NaN thermodynamic fields
+and zero transport. Fixed temperatures outside 160–22000 K retain populated
+fields with code 8. Frozen heat capacities retain native zero or earlier fields.
+Transport uses only the gas species and replaces frozen Cp where NASA does so.
 
-macOS arm64; Rust 1.99.1, maturin 1.16.0, NumPy 2.5.5. The installed wheel
-was tested outside the source tree with isolated Python imports.
+Comparisons use 1e-4 relative tolerance on nonzero thermodynamic/performance
+values and species with mole fraction at least 1e-5. Exact zeros and trace
+noise have explicit absolute tolerances. NaN locations and failure codes must
+match. Assigned-constraint finite differences can amplify the forward solver's
+finite residual; the tests retain the existing named absolute bounds for those
+near-zero derivatives.
 
-| Problem type | Worst relative difference | Member |
-|---|---:|---|
-| TP | 3.7932151e-10 | cv_eq |
-| HP | 3.560231e-11 | cv_eq |
-| SP | 3.6130657e-11 | cv_eq |
-| TV | 2.1268467e-09 | cv_fr |
-| UV | 3.5188364e-11 | cv_eq |
-| SV | 3.5204482e-11 | cv_eq |
-| IAC equilibrium | 7.0467525e-05 | mass_fractions.NO |
-| IAC frozen | 1.5181817e-05 | P |
-| FAC equilibrium | 6.8592549e-05 | mass_fractions.H |
-| FAC frozen | 3.1813676e-05 | P |
-| shock | 1.8963376e-06 | cv_fr |
-| detonation | 4.1122016e-05 | energy |
-| condensed TP | 2.0456017e-09 | nj |
-| mixture | 7.5634463e-16 | calc_property 7 ndarray |
-| derivatives | 2.2131531e-12 | TV.dnj_dstate2 |
-| native derivative FD | 3.7132636e-07 | UV.dH_dstate2_fd |
-
-The separate RP12 exception is 1.73451869e-4 relative (CO mass fraction at
-area75), below its named 1.8e-4 bound. All other table rows meet 1e-4.
-Fixed-constraint FD noise and invalid native states are bounded separately
-as described above; the table does not claim parity for those values.
-
-| Check | Result |
-|---|---|
-| cargo test --release | 70 passed, 0 failed, 1 ignored (existing diagnostic) |
-| Clippy, default, --release --all-targets -- -D warnings | Passed |
-| Clippy, --features python, same options | Passed |
-| cargo fmt --check | Passed |
-| uvx maturin build --release | Passed; cp312-abi3 macosx_11_0_arm64 |
-| Wheel contents | Python adapter, stubs, py.typed and optional nasa/NumPy extra verified |
-| Python 3.12.14, neither NumPy nor cea installed | test_wheel: 8 passed; 0 failures/skips |
-| Python 3.15.1, neither NumPy nor cea installed | test_wheel: 8 passed; 0 failures/skips |
-| Python 3.12.14, with cea==3.3.4 and NumPy | test_nasa_api: 9 passed; 0 failures/skips |
-| Python 3.15.1, with NumPy, cea confirmed absent | test_nasa_api: 9 passed; 0 failures/skips |
-
-[Raw results, named exceptions and exact check commands](nasa-python-api-results.json).
-The fallback suite checks 41 stored NASA-only snapshots, covering all successful
-compared rocket schedules, shock flag combinations, detonation cases and RP14
-condensation points.
-Known stale/uninitialized native heat capacities are excluded from snapshots;
-their independent identities and live-native exception checks remain in place.
-[Snapshot provenance](../tests/data/nasa/README.md) records the source and inputs.
-CI installs the base wheel with `--no-deps`, runs its tests, then installs the
-`nasa` extra into a separate directory for adapter tests without NASA itself
-on Python 3.12 and 3.15.
-Linux/Windows wheels and production consumers were not tested locally.
+[Validation and regeneration commands](verbatim-parity.md).

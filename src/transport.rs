@@ -16,7 +16,7 @@ use thermo_species::{Constituent, Species};
     feature = "python",
     pyo3::pyclass(frozen, get_all, skip_from_py_object)
 )]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Transport {
     pub viscosity_pa_s: f64,
     pub cp_frozen_j_kg_k: f64,
@@ -155,7 +155,7 @@ fn coefficient(sp: Species, element: Constituent) -> f64 {
 }
 
 /// Rebuild NASA's abundance-selected, row-reduced gas component basis.
-fn basis(gas: &[(f64, Species)]) -> Result<(Vec<usize>, DMatrix<f64>)> {
+fn basis(gas: &[(f64, Species)], atomic: bool) -> Result<(Vec<usize>, DMatrix<f64>)> {
     let elements: BTreeSet<_> = gas
         .iter()
         .flat_map(|(_, s)| s.data().constituents())
@@ -186,6 +186,9 @@ fn basis(gas: &[(f64, Species)]) -> Result<(Vec<usize>, DMatrix<f64>)> {
                 .or_else(|| (0..ng).find(|&j| a[(i, j)].abs() > 1e-10))
                 .ok_or_else(|| Error::Convergence("Missing gas transport component".into()))?,
         );
+    }
+    if atomic {
+        return Ok((components, a));
     }
     let initial = components.clone();
     let mut work: Vec<_> = gas.iter().map(|(n, _)| *n).collect();
@@ -264,17 +267,6 @@ fn basis(gas: &[(f64, Species)]) -> Result<(Vec<usize>, DMatrix<f64>)> {
 /// reaction-model diagnostic even when the supplied composition is frozen.
 pub fn transport(state: &State) -> Result<Transport> {
     let t = state.temperature_k;
-    if !t.is_finite()
-        || t <= 0.0
-        || state
-            .amounts
-            .iter()
-            .any(|(n, _)| !n.is_finite() || *n < 0.0)
-    {
-        return Err(Error::Input(
-            "Invalid transport temperature or composition".into(),
-        ));
-    }
     let db = database()?;
     let gas: Vec<_> = state
         .amounts
@@ -284,12 +276,14 @@ pub fn transport(state: &State) -> Result<Transport> {
         .collect();
     let ng = gas.len();
     let total_gas: f64 = gas.iter().map(|(n, _)| n).sum();
-    if ng == 0 || !total_gas.is_finite() || total_gas <= 0.0 {
-        return Err(Error::Domain(
-            "Transport requires a positive gas amount".into(),
-        ));
+    if ng == 0 || total_gas <= 0.0 {
+        return Ok(Transport {
+            cp_frozen_j_kg_k: state.cp_frozen_j_kg_k,
+            cp_equilibrium_j_kg_k: state.cp_equilibrium_j_kg_k,
+            ..Transport::default()
+        });
     }
-    let (components, a) = basis(&gas)?;
+    let (components, a) = basis(&gas, state.transport_atomic)?;
     let mut selected = components.clone();
     let mut total: f64 = selected.iter().map(|&i| gas[i].0).sum();
     let mut threshold = total_gas / ng as f64;
@@ -445,20 +439,6 @@ pub fn transport(state: &State) -> Result<Transport> {
         prandtl_frozen: viscosity * cp_frozen / frozen,
         prandtl_equilibrium: viscosity * cp_equilibrium / equilibrium,
     };
-    if [
-        result.viscosity_pa_s,
-        frozen,
-        equilibrium,
-        result.prandtl_frozen,
-        result.prandtl_equilibrium,
-    ]
-    .iter()
-    .any(|v| !v.is_finite() || *v <= 0.0)
-    {
-        return Err(Error::Convergence(
-            "Nonphysical gas transport result".into(),
-        ));
-    }
     Ok(result)
 }
 
@@ -550,28 +530,15 @@ fn reactions(
             g += contribution;
         }
     }
-    let solve = |matrix: DMatrix<f64>| -> Result<f64> {
-        let x = matrix
-            .clone()
-            .lu()
-            .solve(&dh)
-            .ok_or_else(|| Error::Convergence("Singular transport reaction system".into()))?;
-        if x.iter().any(|v| !v.is_finite())
-            || (&matrix * &x - &dh).amax() > 1e-7 * dh.amax().max(1.0)
-        {
-            return Err(Error::Convergence(
-                "Transport reaction system failed closure".into(),
-            ));
-        }
-        let value = (R * 1e-3) * dh.dot(&x);
-        if !value.is_finite() || value < 0.0 {
-            return Err(Error::Convergence(
-                "Invalid transport reaction contribution".into(),
-            ));
-        }
-        Ok(value)
+    let solve = |matrix: DMatrix<f64>| {
+        let mut augmented = DMatrix::zeros(nr, nr + 1);
+        augmented.view_mut((0, 0), (nr, nr)).copy_from(&matrix);
+        augmented.column_mut(nr).copy_from(&dh);
+        // NASA uses the overwritten right-hand side even when elimination fails.
+        let _ = crate::equilibrium_core::gauss(&mut augmented);
+        (R * 1e-3) * dh.dot(&augmented.column(nr))
     };
-    Ok((solve(g)?, 0.6 * solve(diffusion)?))
+    Ok((solve(g), 0.6 * solve(diffusion)))
 }
 
 impl State {

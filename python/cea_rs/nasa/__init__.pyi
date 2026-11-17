@@ -1,6 +1,9 @@
 """Typed NASA-compatible public interface; see nasa-python-api.md for units."""
 
 from __future__ import annotations
+
+import os as os
+from importlib import resources as importlib_resources
 from typing import Sequence
 import numpy as np
 from numpy.typing import NDArray

@@ -119,12 +119,12 @@ pub trait AnySpeciesData {
     fn cp_over_r(&self, temperature_k: f64) -> f64 {
         let (_, _, coeff) = find_coefficients(self.temperature_data(), temperature_k);
         let mut cp = coeff[6];
-        cp = temperature_k * cp + coeff[5];
-        cp = temperature_k * cp + coeff[4];
-        cp = temperature_k * cp + coeff[3];
-        cp = temperature_k * cp + coeff[2];
-        cp = temperature_k * cp + coeff[1];
-        cp = temperature_k * cp + coeff[0];
+        cp = temperature_k.mul_add(cp, coeff[5]);
+        cp = temperature_k.mul_add(cp, coeff[4]);
+        cp = temperature_k.mul_add(cp, coeff[3]);
+        cp = temperature_k.mul_add(cp, coeff[2]);
+        cp = temperature_k.mul_add(cp, coeff[1]);
+        cp = temperature_k.mul_add(cp, coeff[0]);
 
         cp / (temperature_k * temperature_k)
     }
@@ -132,27 +132,27 @@ pub trait AnySpeciesData {
     fn h_over_r(&self, temperature_k: f64) -> f64 {
         let (_, _, coeff) = find_coefficients(self.temperature_data(), temperature_k);
         let mut h = coeff[6] / 5.0;
-        h = temperature_k * h + coeff[5] / 4.0;
-        h = temperature_k * h + coeff[4] / 3.0;
-        h = temperature_k * h + coeff[3] / 2.0;
-        h = temperature_k * h + coeff[2];
-        h = temperature_k * h + coeff[7];
-        h = temperature_k * h - coeff[0];
+        h = temperature_k.mul_add(h, coeff[5] / 4.0);
+        h = temperature_k.mul_add(h, coeff[4] / 3.0);
+        h = temperature_k.mul_add(h, coeff[3] / 2.0);
+        h = temperature_k.mul_add(h, coeff[2]);
+        h = temperature_k.mul_add(h, coeff[7]);
+        h = temperature_k.mul_add(h, -(coeff[0]));
 
-        h / temperature_k + coeff[1] * temperature_k.ln()
+        coeff[1].mul_add(temperature_k.ln(), h / temperature_k)
     }
 
     fn s_over_r(&self, temperature_k: f64) -> f64 {
         let (_, _, coeff) = find_coefficients(self.temperature_data(), temperature_k);
         let mut s = coeff[6] / 4.0;
-        s = temperature_k * s + coeff[5] / 3.0;
-        s = temperature_k * s + coeff[4] / 2.0;
-        s = temperature_k * s + coeff[3];
-        s = temperature_k * s + coeff[8];
-        s = temperature_k * s - coeff[1];
-        s = temperature_k * s - coeff[0] / 2.0;
+        s = temperature_k.mul_add(s, coeff[5] / 3.0);
+        s = temperature_k.mul_add(s, coeff[4] / 2.0);
+        s = temperature_k.mul_add(s, coeff[3]);
+        s = temperature_k.mul_add(s, coeff[8]);
+        s = temperature_k.mul_add(s, -(coeff[1]));
+        s = temperature_k.mul_add(s, -(coeff[0] / 2.0));
 
-        s / (temperature_k * temperature_k) + coeff[2] * temperature_k.ln()
+        coeff[2].mul_add(temperature_k.ln(), s / (temperature_k * temperature_k))
     }
 
     fn u_over_r(&self, temperature_k: f64) -> f64 {

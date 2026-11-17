@@ -1,0 +1,43 @@
+# Future improvements
+
+The current target is NASA CEA 3.3.4 behavior at commit `2f79a647e85737742fb08a127da00d1ea1d069da`, including failures and false positives. These corrections were removed or left unsupported. They can return later as separate, opt-in work.
+
+- Start failed cold HP/SP problems from a condensed solution at 160 K.
+- Retry fixed-temperature failures with unrestricted nonzero pivots, validated inserted phases and a gas-untruncation pass.
+- Reject zero or nonfinite final Gaussian diagonals instead of performing NASA's unchecked division.
+- Use sibling ranks for phase adjacency, so multi-interval phases can coexist.
+- Select a lower-Gibbs sibling at fixed temperature without NASA's coexistence step.
+- Restrict sibling Gibbs comparisons to each phase's fit range.
+- Treat a reversed condensed interval as usable below its upper bound, including Br2(cr).
+- Park and pin disabled ions below the reporting cutoff rather than using NASA's SMNOL and update rules.
+- Stop runaway gas-mole iterates early and impose a separate total iteration cap.
+- Apply the high-temperature condensed fallback on an exhausted Newton epoch. NASA's fallback is after the convergence gate, while condensed changes reset its iteration counter.
+- Reject equilibrium results after independent element, constraint, finite-value and physical-property checks.
+- Raise on numerical nonconvergence and clear the report instead of warning with NASA's status and retained fields. Fortran aborts already raise after updating the solution.
+- Clear the converged flag and restore a saved seed after a Fortran abort instead of retaining NASA's working iterate.
+- Reset the electron-polish correction when its charge sum underflows instead of carrying NASA's previous correction.
+- Derive shock gas moles from normalized species amounts instead of NASA's weight-scale-dependent `1/sum(weights)`.
+- Reject fixed temperatures outside 160–22000 K before solving rather than returning NASA's post-processed code 8 state.
+- Reject NaN residuals during convergence checks and NaN condensed amounts before transport.
+- Refine sonic throats and assigned areas beyond NASA's stopping tests, with a bracketed area search.
+- Solve frozen entropy with a bracket, tighter tolerance and more iterations.
+- Reconcile frozen FAC combustor and throat mass flow until they agree.
+- Recompute a detonation's thermodynamic fields after NASA's final temperature update.
+- Reject shock and detonation results after independent jump and sonic closure checks.
+- Stop reflection after a nonconverged incident shock, even when NASA retains a positive temperature.
+- Stop detonation when an internal temperature or pressure becomes nonfinite rather than continuing NASA's eight updates.
+- Honor Python EqSolution initial guesses on the first solve rather than restoring the default seed saved before NASA's Python setters run.
+- Use flow velocity consistently for rocket pressure schedules rather than NASA's sonic-velocity throat basis in its pi/p routines.
+- Recompute frozen-station Cv rather than retaining NASA's earlier or zero values.
+- Mark frozen equilibrium Cp/Cv unavailable instead of returning NASA's stored workspace values.
+- Recompute volume, M/MW and Gibbs energy from the current iterate instead of retaining NASA's report fields, including shock volume after density is cleared.
+- Fill the reflected-frozen shock Cp workspace from its current temperature rather than retaining NASA's fields.
+- Keep a station's thermodynamic frozen Cp separate from NASA's transport Cp replacement.
+- Use the assigned chamber enthalpy for rocket performance instead of NASA's recomputed chamber value.
+- Recompute frozen gas moles and fractions from species amounts rather than retaining NASA's reference values.
+- Return the throat directly for a FAC contraction ratio of one rather than running NASA's combustor iteration.
+- Reject nonfinite transport states or singular/nonphysical reaction estimates rather than continuing with NASA's arithmetic and overwritten matrix values.
+- Reject derivative closure defects or nonfinite derivative outputs and use a different LU pivot rule.
+- Repair the missing `_get_size` method used by NASA's shock amount getters.
+- Provide initialized flow reports and derivative workspaces before the first solve, rather than exposing native uninitialized storage.
+- Handle incompatible single-product element inventories safely; the reference wheel can crash on them.

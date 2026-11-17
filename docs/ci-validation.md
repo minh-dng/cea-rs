@@ -1,3 +1,5 @@
+> Historical record. Current behavior follows NASA CEA 3.3.4 verbatim. See [current validation](verbatim-parity.md), [remaining gaps](implementation-matrix.md) and [removed improvements](future-improvements.md).
+
 # CI validation layer
 
 The GitLab pipeline runs Rust tests and strict Clippy, then separately builds

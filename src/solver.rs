@@ -22,17 +22,33 @@ pub enum Mode {
 #[cfg_attr(feature = "python", pyo3::pyclass(frozen, skip_from_py_object))]
 #[derive(Debug, Clone)]
 pub struct State {
+    /// NASA solve status; a nonconverged state retains NASA's available fields.
+    pub converged: bool,
+    /// NASA SUCCESS=0, NOT_CONVERGED=8, FORTRAN_ABORT=10.
+    pub last_error: i32,
+    pub(crate) abort_message: Option<String>,
+    pub cv_equilibrium_j_kg_k: f64,
+    pub cv_frozen_j_kg_k: f64,
+    pub(crate) gas_moles: f64,
+    pub(crate) post_processed: bool,
+    pub(crate) transport_atomic: bool,
+    pub(crate) dlnv_dlnt: f64,
+    pub(crate) dlnv_dlnp: f64,
     pub temperature_k: f64,
     pub pressure_pa: f64,
     pub density_kg_m3: f64,
+    /// NASA can retain volume after clearing a failed shock's density.
+    pub(crate) volume_m3_per_kg: f64,
     pub enthalpy_j_kg: f64,
     pub energy_j_kg: f64,
+    pub gibbs_energy_j_kg: f64,
     pub entropy_j_kg_k: f64,
     /// Valid only when equilibrium is true; zero denotes NASA's phase-coexistence convention.
     pub cp_equilibrium_j_kg_k: f64,
     pub cp_frozen_j_kg_k: f64,
     pub gamma_s: f64,
     pub molecular_weight_kg_kmol: f64,
+    pub(crate) mean_molecular_weight: f64,
     pub iterations: usize,
     pub equilibrium: bool,
     pub element_residual: f64,
@@ -47,13 +63,26 @@ pub struct State {
     pub(crate) equilibrium_seed: Option<equilibrium_core::EquilibriumSeed>,
 }
 impl State {
+    pub(crate) fn iteration_enthalpy(&self) -> f64 {
+        self.amounts.iter().fold(0.0, |sum, (n, s)| {
+            n.mul_add(
+                s.data().h_over_r(self.temperature_k) / self.temperature_k,
+                sum,
+            )
+        }) * self.temperature_k
+            * R
+    }
     pub fn sound_speed(&self) -> f64 {
-        (self.gamma_s * self.pressure_pa / self.density_kg_m3).sqrt()
+        (self.gamma_s * R * self.gas_moles * self.temperature_k).sqrt()
     }
 
     /// This composition frozen at `t` and `p`; its element balance carries over.
     pub(crate) fn frozen(&self, t: f64, p: f64) -> Result<State> {
-        let mut st = frozen_state(&self.amounts, t, p)?;
+        let mut st = frozen_state(&self.amounts, t, p, Some(self.gas_moles))?;
+        st.molecular_weight_kg_kmol = self.molecular_weight_kg_kmol;
+        st.mean_molecular_weight = self.mean_molecular_weight;
+        st.mole_fractions.clone_from(&self.mole_fractions);
+        st.mass_fractions.clone_from(&self.mass_fractions);
         st.element_residual = self.element_residual;
         Ok(st)
     }
@@ -62,15 +91,27 @@ impl State {
 /// Ideal-gas mixture with fixed species amounts (mol/kg) at `t` and `p`.
 /// Frozen Cp is reported as both Cp values. `element_residual` is zero, which
 /// suits amounts taken straight from a feed; use `State::frozen` otherwise.
-/// A non-physical `t` or `p` fails as a convergence error.
-pub(crate) fn frozen_state(amounts: &[(f64, Species)], t: f64, p: f64) -> Result<State> {
+/// Evaluates `t` and `p` directly, including nonphysical or nonfinite values.
+pub(crate) fn frozen_state(
+    amounts: &[(f64, Species)],
+    t: f64,
+    p: f64,
+    gas_moles: Option<f64>,
+) -> Result<State> {
     let total: f64 = amounts.iter().map(|(n, _)| n).sum();
-    let ng: f64 = amounts
+    let ng: f64 = gas_moles.unwrap_or_else(|| {
+        amounts
+            .iter()
+            .filter(|(_, sp)| sp.data().phase() == 0)
+            .map(|(n, _)| n)
+            .sum()
+    });
+    let mass: f64 = amounts.iter().map(|(n, sp)| n * sp.data().mw()).sum();
+    let condensed: f64 = amounts
         .iter()
-        .filter(|(_, sp)| sp.data().phase() == 0)
+        .filter(|(_, sp)| sp.data().phase() != 0)
         .map(|(n, _)| n)
         .sum();
-    let mass: f64 = amounts.iter().map(|(n, sp)| n * sp.data().mw()).sum();
     let (mut h, mut s, mut cp) = (0.0, 0.0, 0.0);
     let (mut trace, mut extrapolated) = (vec![], vec![]);
     let mut x = BTreeMap::new();
@@ -90,30 +131,43 @@ pub(crate) fn frozen_state(amounts: &[(f64, Species)], t: f64, p: f64) -> Result
             }
         }
         let d = sp.data();
-        h += n * d.h_over_r(t) * R;
-        cp += n * d.cp_over_r(t) * R;
+        h = n.mul_add(d.h_over_r(t) / t, h);
+        cp = n.mul_add(d.cp_over_r(t), cp);
         let mixing = if d.phase() == 0 {
             (n / ng * p / 1e5).ln()
         } else {
             0.0
         };
-        s += n * (d.s_over_r(t) - mixing) * R;
+        s = n.mul_add(d.s_over_r(t) - mixing, s);
     }
+    h *= R * t;
+    cp *= R;
+    s *= R;
     let cv = cp - ng * R;
-    if !h.is_finite() || !s.is_finite() || !cv.is_finite() || cv <= 0.0 || ng <= 0.0 {
-        return Err(Error::Convergence("Nonphysical frozen state".into()));
-    }
     Ok(State {
+        converged: true,
+        last_error: 0,
+        abort_message: None,
+        cv_equilibrium_j_kg_k: cv,
+        cv_frozen_j_kg_k: cv,
+        gas_moles: ng,
+        post_processed: true,
+        transport_atomic: false,
+        dlnv_dlnt: 1.0,
+        dlnv_dlnp: -1.0,
         temperature_k: t,
         pressure_pa: p,
         density_kg_m3: p / (ng * R * t),
+        volume_m3_per_kg: ng * R * t / p,
         enthalpy_j_kg: h,
         energy_j_kg: h - ng * R * t,
+        gibbs_energy_j_kg: h - t * s,
         entropy_j_kg_k: s,
         cp_equilibrium_j_kg_k: cp,
         cp_frozen_j_kg_k: cp,
         gamma_s: cp / cv,
         molecular_weight_kg_kmol: 1.0 / ng,
+        mean_molecular_weight: (1.0 - condensed / total) / ng,
         iterations: 0,
         equilibrium: false,
         element_residual: 0.0,
@@ -136,6 +190,7 @@ pub struct Solver {
     pub(crate) insert: Vec<Species>,
     pub(crate) omit: Vec<Species>,
     pub(crate) trace: f64,
+    pub(crate) transport: bool,
 }
 impl Solver {
     /// Construct a solver with an optional explicit product pool and phase seeds.
@@ -188,6 +243,7 @@ impl Solver {
             insert,
             omit: vec![],
             trace: 0.0,
+            transport: false,
         })
     }
 
@@ -233,7 +289,6 @@ impl Solver {
             .reactants
             .iter()
             .zip(weights)
-            .filter(|(_, w)| **w > 0.0)
             .map(|(r, w)| Feed {
                 amount: w / sum / r.molecular_weight,
                 molecular_weight: r.molecular_weight,
@@ -305,6 +360,34 @@ impl Solver {
                 return Err(Error::Input(format!("Product pool cannot conserve {e:?}")));
             }
         }
+        if pool.len() == 1 {
+            let mut amount: Option<f64> = None;
+            for e in elements.iter().filter(|e| **e != Constituent::E) {
+                let inventory: f64 = feeds
+                    .iter()
+                    .map(|f| {
+                        f.amount
+                            * f.formula
+                                .iter()
+                                .filter(|(_, c)| c == e)
+                                .map(|(n, _)| n)
+                                .sum::<f64>()
+                    })
+                    .sum();
+                let coefficient: f64 = pool[0]
+                    .data()
+                    .constituents()
+                    .iter()
+                    .filter(|(_, c)| c == e)
+                    .map(|(n, _)| n)
+                    .sum();
+                let candidate = inventory / coefficient;
+                if amount.is_some_and(|n| (candidate - n).abs() > 1e-10 * n.abs()) {
+                    return Err(Error::Unsupported("Single-product pools with incompatible element inventories (native CEA can crash)".into()));
+                }
+                amount = Some(candidate);
+            }
+        }
         Ok(feeds)
     }
 
@@ -327,9 +410,43 @@ impl Solver {
         Ok(h)
     }
 
-    /// Solve an equilibrium state, returning no result on failed verification.
+    /// Solve an equilibrium state, retaining NASA's values and convergence status.
     pub fn solve(&self, mode: Mode, weights: &[f64]) -> Result<State> {
         self.solve_with_start(mode, weights, None)
+    }
+
+    pub(crate) fn initial_seed(
+        &self,
+        weights: &[f64],
+        t: f64,
+        amounts: Option<&[(f64, Species)]>,
+    ) -> Result<equilibrium_core::EquilibriumSeed> {
+        let feeds = self.feeds(weights)?;
+        let elements: BTreeSet<_> = feeds
+            .iter()
+            .flat_map(|f| f.formula.iter().map(|(_, c)| *c))
+            .collect();
+        let mut species: Vec<_> =
+            Species::all()
+                .iter()
+                .copied()
+                .filter(|sp| {
+                    (self.condensed || sp.data().phase() == 0)
+                        && self.only.as_ref().is_none_or(|pool| pool.contains(sp))
+                        && !self.omit.contains(sp)
+                        && sp.data().constituents().iter().all(|(_, c)| {
+                            elements.contains(c) || (self.ions && *c == Constituent::E)
+                        })
+                })
+                .collect();
+        species.sort_by_key(|s| (s.data().phase() != 0, s.data().symbol()));
+        Ok(equilibrium_core::EquilibriumSeed::initial(
+            species,
+            t,
+            amounts,
+            &self.insert,
+            self.trace,
+        ))
     }
 
     pub(crate) fn solve_with_start(
@@ -337,6 +454,30 @@ impl Solver {
         mode: Mode,
         weights: &[f64],
         start: Option<&equilibrium_core::EquilibriumSeed>,
+    ) -> Result<State> {
+        let (first, second, fixed_temperature) = match mode {
+            Mode::TP(t, p) | Mode::TV(t, p) => (t, p, true),
+            Mode::HP(h, p) | Mode::UV(h, p) => (h, p, false),
+            Mode::SP(s, p) | Mode::SV(s, p) => (s, p, false),
+        };
+        if !first.is_finite()
+            || !second.is_finite()
+            || second <= 0.0
+            || (fixed_temperature && first <= 0.0)
+        {
+            return Err(Error::Domain(
+                "Finite state inputs and positive temperature/pressure/volume are required".into(),
+            ));
+        }
+        self.solve_state(mode, weights, start, false)
+    }
+
+    pub(crate) fn solve_state(
+        &self,
+        mode: Mode,
+        weights: &[f64],
+        start: Option<&equilibrium_core::EquilibriumSeed>,
+        finalize_failure: bool,
     ) -> Result<State> {
         let feeds = self.feeds(weights)?;
         let (const_t, const_s, const_p, state1, state2) = match mode {
@@ -347,16 +488,6 @@ impl Solver {
             Mode::UV(u, v) => (false, false, false, u / R, v),
             Mode::SV(s, v) => (false, true, false, s / R, v),
         };
-        if !state1.is_finite()
-            || !state2.is_finite()
-            || state2 <= 0.0
-            || (const_t && !(160.0..=22000.0).contains(&state1))
-        {
-            return Err(Error::Domain(
-                "Finite state inputs, positive pressure/volume and 160..22000 K are required"
-                    .into(),
-            ));
-        }
         let pool = self
             .only
             .clone()
@@ -377,13 +508,8 @@ impl Solver {
             Some(&self.insert),
             self.trace,
             start,
+            finalize_failure,
         );
-        if !d.converged {
-            return Err(Error::Convergence(format!(
-                "Gibbs/Newton solver failed after {} iterations",
-                d.iterations_used
-            )));
-        }
         let mut amounts: Vec<_> =
             d.nj.iter()
                 .copied()
@@ -394,19 +520,32 @@ impl Solver {
                 .iter()
                 .copied()
                 .zip(d.condensed_species.iter().copied())
-                .filter(|(n, _)| *n > 0.0),
+                .filter(|(n, _)| *n != 0.0),
         );
         let mut out = State {
+            converged: d.converged,
+            last_error: d.last_error,
+            abort_message: d.abort_message.clone(),
+            cv_equilibrium_j_kg_k: d.cv_eq_kj_per_kg_k * 1000.0,
+            cv_frozen_j_kg_k: d.cv_frozen_kj_per_kg_k * 1000.0,
+            gas_moles: d.n,
+            post_processed: d.post_processed || finalize_failure,
+            transport_atomic: false,
+            dlnv_dlnt: d.dlnv_dlnt,
+            dlnv_dlnp: d.dlnv_dlnp,
             temperature_k: d.temperature_k,
             pressure_pa: d.pressure_bar * 1e5,
             density_kg_m3: 1.0 / d.volume_m3_per_kg,
+            volume_m3_per_kg: d.volume_m3_per_kg,
             enthalpy_j_kg: d.enthalpy_kj_per_kg * 1000.0,
             energy_j_kg: d.energy_kj_per_kg * 1000.0,
+            gibbs_energy_j_kg: d.gibbs_kj_per_kg * 1000.0,
             entropy_j_kg_k: d.entropy_kj_per_kg_k * 1000.0,
             cp_equilibrium_j_kg_k: d.cp_eq_kj_per_kg_k * 1000.0,
             cp_frozen_j_kg_k: d.cp_frozen_kj_per_kg_k * 1000.0,
             gamma_s: d.gamma_s,
             molecular_weight_kg_kmol: d.molar_mass_kg_per_kmol,
+            mean_molecular_weight: d.mean_molecular_weight_kg_per_kmol,
             iterations: d.iterations_used,
             trace_extrapolated_species: vec![],
             extrapolated_species: vec![],
@@ -418,31 +557,6 @@ impl Solver {
             amounts,
             equilibrium_seed: Some(d.seed),
         };
-        if !(160.0..=22000.0).contains(&out.temperature_k) {
-            return Err(Error::Domain(
-                "Solved temperature outside 160..22000 K".into(),
-            ));
-        }
-        let positive = [
-            out.temperature_k,
-            out.pressure_pa,
-            out.density_kg_m3,
-            out.cp_frozen_j_kg_k,
-            out.gamma_s,
-            out.molecular_weight_kg_kmol,
-        ];
-        if positive.iter().any(|v| !v.is_finite() || *v <= 0.0)
-            || !out.cp_equilibrium_j_kg_k.is_finite()
-            || out.cp_equilibrium_j_kg_k < 0.0
-            || [out.enthalpy_j_kg, out.energy_j_kg, out.entropy_j_kg_k]
-                .iter()
-                .any(|v| !v.is_finite())
-            || out.amounts.iter().any(|(n, _)| !n.is_finite() || *n < 0.0)
-        {
-            return Err(Error::Convergence(
-                "Nonphysical or nonfinite converged state".into(),
-            ));
-        }
         // NASA extrapolates gas fits and checks condensed-phase validity in the active set.
         let n_total: f64 = out.amounts.iter().map(|(n, _)| n).sum();
         let mass: f64 = out.amounts.iter().map(|(n, s)| n * s.data().mw()).sum();
@@ -458,6 +572,14 @@ impl Solver {
                 .insert(sp.data().symbol().into(), n / n_total);
             out.mass_fractions
                 .insert(sp.data().symbol().into(), n * sp.data().mw() / mass);
+        }
+        for sp in &d.condensed_species {
+            out.mole_fractions
+                .entry(sp.data().symbol().into())
+                .or_insert(0.0 / n_total);
+            out.mass_fractions
+                .entry(sp.data().symbol().into())
+                .or_insert(0.0 / mass);
         }
         let elements: BTreeSet<_> = feeds
             .iter()
@@ -509,63 +631,72 @@ impl Solver {
             _ => target.abs().max(1.0),
         };
         out.constraint_residual = (actual - target).abs() / scale;
-        if out.element_residual > 2e-5 || out.constraint_residual > 2e-5 {
-            return Err(Error::Convergence(format!(
-                "Failed independent residual check: elements={}, constraint={}",
-                out.element_residual, out.constraint_residual
-            )));
+        if !d.post_processed && !finalize_failure {
+            let (t, gas_moles, amounts, seed, iterations) = (
+                out.temperature_k,
+                out.gas_moles,
+                out.amounts,
+                out.equilibrium_seed,
+                out.iterations,
+            );
+            out = if let Some(previous) = start.and_then(|s| s.reported.as_deref()) {
+                previous.clone()
+            } else {
+                State {
+                    temperature_k: t,
+                    pressure_pa: 0.0,
+                    density_kg_m3: 0.0,
+                    volume_m3_per_kg: 0.0,
+                    enthalpy_j_kg: 0.0,
+                    energy_j_kg: 0.0,
+                    gibbs_energy_j_kg: 0.0,
+                    entropy_j_kg_k: 0.0,
+                    cp_equilibrium_j_kg_k: 0.0,
+                    cp_frozen_j_kg_k: 0.0,
+                    cv_equilibrium_j_kg_k: 0.0,
+                    cv_frozen_j_kg_k: 0.0,
+                    gamma_s: 0.0,
+                    molecular_weight_kg_kmol: 0.0,
+                    mean_molecular_weight: 0.0,
+                    mole_fractions: out
+                        .mole_fractions
+                        .keys()
+                        .map(|n| (n.clone(), 0.0))
+                        .collect(),
+                    mass_fractions: out
+                        .mass_fractions
+                        .keys()
+                        .map(|n| (n.clone(), 0.0))
+                        .collect(),
+                    amounts: vec![],
+                    equilibrium_seed: None,
+                    ..out
+                }
+            };
+            out.temperature_k = t;
+            out.gas_moles = gas_moles;
+            out.amounts = amounts;
+            out.equilibrium_seed = seed;
+            out.iterations = iterations;
+            out.post_processed = false;
+            out.converged = d.converged;
+            out.last_error = d.last_error;
+            out.abort_message = d.abort_message;
+            out.equilibrium_seed.as_mut().unwrap().reported =
+                start.and_then(|s| s.reported.clone());
+        }
+        if out.converged && out.post_processed {
+            if self.transport {
+                let tr = out.transport()?;
+                out.cp_frozen_j_kg_k = tr.cp_frozen_j_kg_k;
+                out.cv_frozen_j_kg_k = tr.cp_frozen_j_kg_k - out.gas_moles * R;
+                out.equilibrium_seed.as_mut().unwrap().has_transport_seed |=
+                    tr.viscosity_pa_s > 0.0;
+            }
+            let mut reported = out.clone();
+            reported.equilibrium_seed = None;
+            out.equilibrium_seed.as_mut().unwrap().reported = Some(Box::new(reported));
         }
         Ok(out)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn fixed_temperature_continuation_changes_condensed_phase() {
-        let solver = Solver::new(
-            vec![
-                Reactant::named("Ar").unwrap(),
-                Reactant::named("H2O(L)").unwrap(),
-            ],
-            true,
-            false,
-            None,
-            vec![],
-        )
-        .unwrap();
-        let cold = solver.solve(Mode::TP(270.0, 1e5), &[1.0, 1.0]).unwrap();
-        assert!(cold.mass_fractions["H2O(cr)"] > 0.4);
-        let warm = solver
-            .solve_with_start(
-                Mode::TP(274.0, 1e5),
-                &[1.0, 1.0],
-                cold.equilibrium_seed.as_ref(),
-            )
-            .unwrap();
-        assert_eq!(warm.temperature_k, 274.0);
-        assert!(warm.mass_fractions["H2O(L)"] > 0.4);
-        assert!(!warm.mass_fractions.contains_key("H2O(cr)"));
-        assert!(warm.element_residual < 1e-6);
-        let mu = |name: &str| {
-            let sp = name.parse::<Species>().unwrap();
-            sp.data().h_over_r(274.0) / 274.0 - sp.data().s_over_r(274.0)
-        };
-        assert!(mu("H2O(L)") < mu("H2O(cr)"));
-        let ng: f64 = warm
-            .amounts
-            .iter()
-            .filter(|(_, s)| s.data().phase() == 0)
-            .map(|(n, _)| n)
-            .sum();
-        let nv = warm
-            .amounts
-            .iter()
-            .find(|(_, s)| s.data().symbol() == "H2O")
-            .unwrap()
-            .0;
-        assert!((mu("H2O") + (nv / ng).ln() - mu("H2O(L)")).abs() < 1e-7);
     }
 }

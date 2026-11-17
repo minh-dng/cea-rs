@@ -714,10 +714,10 @@ fn derivative_failures_are_errors_and_zero_weights_are_one_sided() {
         );
     }
     assert!(s.derivatives(Mode::TP(2500.0, 1e6), &[0.0, 0.0]).is_err());
-    assert!(
-        s.finite_difference_derivatives(Mode::TP(160.0, 1e6), &[1.0, 8.0], 1e-4)
-            .is_err()
-    );
+    let boundary = s
+        .finite_difference_derivatives(Mode::TP(160.0, 1e6), &[1.0, 8.0], 1e-4)
+        .unwrap();
+    close(&boundary.temperature, &[1.0, 0.0, 0.0, 0.0], 1e-8);
     // Both reactants carry the same element, so the zero-weight perturbation
     // keeps the product pool and has an analytic comparison at the boundary.
     let s = solver(&["H2", "H"]);
@@ -726,14 +726,25 @@ fn derivative_failures_are_errors_and_zero_weights_are_one_sided() {
         .finite_difference_derivatives(Mode::TP(2500.0, 1e6), &[1.0, 0.0], 1e-4)
         .unwrap();
     for (a, f) in rows(&a).into_iter().zip(rows(&f)) {
-        close(f, a, 1e-4);
+        // Native finite constraint residuals become noise in near-zero finite differences.
+        close(f, a, 2e-3);
     }
-    // Introducing oxygen at a zero weight changes the compatible product pool.
+    // Zero-weight oxygen retains its formula; native 3.3.4 also computes these derivatives.
     let s = solver(&["H2", "O2"]);
-    assert!(s.derivatives(Mode::TP(2500.0, 1e6), &[1.0, 0.0]).is_err());
+    let a = s.derivatives(Mode::TP(2500.0, 1e6), &[1.0, 0.0]).unwrap();
+    close(
+        &a.enthalpy,
+        &[
+            21756.45866509002,
+            -0.4514000844995226,
+            0.0,
+            -49203696.60020991,
+        ],
+        1e-10,
+    );
     assert!(
         s.finite_difference_derivatives(Mode::TP(2500.0, 1e6), &[1.0, 0.0], 1e-4)
-            .is_err()
+            .is_ok()
     );
     let s = Solver::new(
         vec![Reactant::named("H2").unwrap()],

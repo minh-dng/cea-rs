@@ -2,12 +2,14 @@
 
 Use ``from cea_rs import nasa as cea``. This module uses bar, K and NASA's
 kJ-based solution properties; the parent cea_rs API continues to use SI.
-See docs/nasa-python-api.md for the member inventory and bounded differences.
+See docs/nasa-python-api.md for the member inventory and remaining gaps.
 """
 
 from __future__ import annotations
 
 import warnings as _warnings
+import os
+import importlib.resources as importlib_resources
 
 try:
     import numpy as _np
@@ -24,7 +26,7 @@ from cea_rs._cea_rs import _nasa_species
 from . import constants, units
 from .constants import *
 
-__version__ = _rs.__version__
+__version__ = "3.3.4"
 _DATABASE = {name: (mw, phase, formula) for name, mw, phase, formula in _nasa_species()}
 _ATOMIC_MASSES = {
     next(iter(f)): mw
@@ -78,9 +80,9 @@ def set_log_level(level):
         LOG_CRITICAL,
     ):
         raise ValueError("Unknown NASA log level")
-    if level in (LOG_DEBUG, LOG_INFO):
+    if level != LOG_NONE:
         raise NotImplementedError("NASA debug/info logging")
-    # Rust has no native logger; Python failures still raise their typed errors.
+
 
 
 def _vector(values, length, name="weights", *, positive=False):
@@ -365,7 +367,7 @@ class _Solver:
             reactants is not None and not isinstance(reactants, Mixture)
         ):
             raise TypeError("products and reactants must be Mixture objects")
-        if smooth_truncation or truncation_width > 0:
+        if smooth_truncation or truncation_width != -1.0:
             raise NotImplementedError("smooth_truncation / truncation_width")
         self._products = products
         self._reactants = products if reactants is None else reactants
@@ -375,7 +377,7 @@ class _Solver:
             ions=ions,
             only=products.species_names,
             insert=list(insert),
-            trace=0 if trace < 0 else trace,
+            trace=(5e-9 if type(self).__name__ == "ShockSolver" else 0) if trace < 0 else trace,
         )
 
     @property
@@ -401,19 +403,21 @@ class _Solver:
     def _begin(self, soln):
         if soln._solver is not self:
             raise ValueError("Solution belongs to a different solver")
-        soln._states = []
-        soln._extra = {}
-        soln.last_error = NOT_CONVERGED
 
-    def _finish(self, soln, states, transports=None):
+    def _finish(self, soln, states, transports=None, status=SUCCESS):
         values = (
             transports
             if transports is not None
-            else [s.transport() if self._transport else None for s in states]
+            else [
+                s.transport() if self._transport and s._nasa_post_processed else
+                (soln._transports[i] if self._transport and i < len(soln._transports) else None)
+                for i, s in enumerate(states)
+            ]
         )
         soln._transports = values
         soln._states = states
-        soln.last_error = SUCCESS
+        soln._extra = {}
+        soln.last_error = status
 
 
 class EqSolver(_Solver):
@@ -424,9 +428,27 @@ class EqSolver(_Solver):
     def solve(self, soln, eq_type, state1, state2, amounts):
         self._begin(soln)
         w = _vector(amounts, self.num_reactants, positive=True)
-        state = self._inner.solve(*_state_inputs(eq_type, state1, state2), w.tolist())
-        self._finish(soln, [state])
+        previous_cv = soln.cv_fr
+        previous_transport = {name: soln._get(name) for name in _TRANSPORT_FIELDS} if self._transport else {}
+        state = self._inner._inner.solve(
+            *_state_inputs(eq_type, state1, state2), w.tolist(),
+            start=soln._start, transport=self._transport,
+        )
+        self._finish(soln, [state], status=state.last_error)
+        if not state._nasa_post_processed:
+            soln._extra["cv_fr"] = previous_cv
+        if self._transport:
+            amounts = state._nasa_nj
+            has_gas = any(amounts.get(name, 0.0) > 0 for name, gas in zip(self._products._names, self._products._gas) if gas)
+            if not state._nasa_post_processed or not has_gas:
+                soln._extra.update(previous_transport)
+        if state.converged:
+            soln._start = state
         soln._inputs = (eq_type, float(state1), float(state2), w.copy())
+        if state.last_error == FORTRAN_ABORT:
+            raise RuntimeError("EqSolver.solve failed with CEA_FORTRAN_ABORT: " + state._nasa_abort_message)
+        if not state.converged:
+            _warnings.warn("EqSolver.solve: CEA_NOT_CONVERGED", RuntimeWarning, stacklevel=2)
 
 
 class RocketSolver(_Solver):
@@ -533,7 +555,7 @@ class ShockSolver(_Solver):
         w = _vector(weights, self.num_reactants, positive=True)
         if bool(reflected) != soln._reflected:
             raise ValueError("ShockSolution reflected must match ShockSolver.solve")
-        result = self._inner.shock(
+        result = self._inner._inner.shock(
             w.tolist(),
             _scalar32(T0),
             _scalar32(p0) * 1e5,
@@ -542,21 +564,25 @@ class ShockSolver(_Solver):
             reflected=reflected,
             incident_frozen=incident_frozen,
             reflected_frozen=reflected_frozen,
+            transport=self._transport,
         )
         stations = [result.station1, result.station2]
         if result.station5 is not None:
             stations.append(result.station5)
         states = [s.state for s in stations]
         cv = _np.array(
-            [s.cv_equilibrium_j_kg_k / 1000 if s.equilibrium else 0.0 for s in states]
+            [s.cv_equilibrium_j_kg_k / 1000 if s.equilibrium or (reflected_frozen and s is states[-1] and reflected) else 0.0 for s in states]
         )
         self._finish(
             soln,
             states,
             [None]
-            + [s.state.transport() if self._transport else None for s in stations[1:]],
+            + [s.state.transport() if self._transport and s.state.temperature_k > 0 else None for s in stations[1:]],
         )
         soln._extra["cv_eq"] = cv
+        soln.last_error = result.last_error
+        if not result.converged:
+            _warnings.warn("ShockSolver.solve: CEA_LAST_VALID_SOLUTION" if result.last_error == LAST_VALID_SOLUTION else "ShockSolver.solve: CEA_NOT_CONVERGED", RuntimeWarning, stacklevel=2)
         for name in ("conductivity_eq", "Pr_eq"):
             attr, scale = _TRANSPORT_FIELDS[name]
             soln._extra[name] = _np.array(
@@ -574,7 +600,7 @@ class ShockSolver(_Solver):
         }.items():
             soln._extra[name] = _np.array([getattr(s, attr) for s in stations])
         soln._extra.update(
-            rho12=1 / result.rho2_rho1,
+            rho12=1 / result.rho2_rho1 if result.rho2_rho1 else 0.0,
             rho52=result.rho5_rho2 or 0.0,
             P21=result.p2_p1,
             P52=result.p5_p2 or 0.0,
@@ -594,7 +620,9 @@ class DetonationSolver(_Solver):
         result = self._inner.detonation(
             w.tolist(), _scalar32(T1), _scalar32(p1) * 1e5, frozen=frozen
         )
-        self._finish(soln, [result.burned])
+        self._finish(soln, [result.burned], status=result.last_error)
+        if not result.converged:
+            _warnings.warn("DetonationSolver.solve: CEA_NOT_CONVERGED", RuntimeWarning, stacklevel=2)
         u = result.unburned
         soln._extra.update(
             P1=u.pressure_pa / 1e5,
@@ -605,7 +633,7 @@ class DetonationSolver(_Solver):
             sonic_velocity1=u.sound_speed_m_s,
             Mach=result.mach,
             velocity=result.velocity_m_s,
-            sonic_velocity=result.burned.sound_speed_m_s,
+            sonic_velocity=result.sonic_velocity_m_s,
             P_P1=result.pressure_ratio,
             T_T1=result.temperature_ratio,
             M_M1=result.molecular_weight_ratio,
@@ -661,12 +689,16 @@ class _Solution:
         return _np.array(values, dtype=_np.float64) if self._array else float(values[0])
 
     def _get(self, name):
-        if not self._states:
-            raise RuntimeError(f"{type(self).__name__}.{name}: no verified solution")
         name = {"cp": "cp_eq", "cv": "cv_eq"}.get(name, name)
         if name in self._extra:
             value = self._extra[name]
             return value.copy() if isinstance(value, _np.ndarray) else value
+        if not self._states:
+            if not isinstance(self, EqSolution):
+                raise NotImplementedError("Unsolved flow-solution report fields (native storage is uninitialized)")
+            if name == "T": return getattr(self, "_t_init", 3800.0)
+            if name == "n": return 0.1 if getattr(self, "_nj_init", None) is None else float(self._initial_nj()[self._solver._products._gas].sum())
+            return _np.zeros(10 if isinstance(self, RocketSolution) else (3 if getattr(self, "_reflected", False) else 2)) if self._array else 0.0
         if name in _TRANSPORT_FIELDS:
             attr, scale = _TRANSPORT_FIELDS[name]
             return self._shape(
@@ -680,10 +712,8 @@ class _Solution:
         for state, tr in zip(self._states, self._transports):
             if name == "cp_fr" and tr is not None:
                 value = tr.cp_frozen_j_kg_k
-            elif name == "cp_eq" and not state.equilibrium:
-                value = state.cp_frozen_j_kg_k
-            elif name == "cv_eq" and not state.equilibrium:
-                value = state.cv_frozen_j_kg_k
+            elif name == "cv_fr" and tr is not None and state.equilibrium and state._nasa_post_processed:
+                value = tr.cp_frozen_j_kg_k - R * state._nasa_n
             elif name == "cv_eq" and state.cp_equilibrium_j_kg_k == 0:
                 value = 0.0
             else:
@@ -694,15 +724,23 @@ class _Solution:
     @property
     def n(self):
         return (
-            self._shape([1 / s.M for s in self._states])
+            self._shape([s._nasa_n for s in self._states])
             if self._states
             else self._get("n")
         )
 
+    def _initial_nj(self):
+        if not isinstance(self, EqSolution):
+            raise NotImplementedError("Unsolved flow-solution composition (native storage is uninitialized)")
+        gas = self._solver._products._gas
+        if getattr(self, "_nj_init", None) is None:
+            return _np.where(gas, 0.1 / gas.sum(), 0.0)
+        return _np.where(gas & (self._nj_init <= 0), 1e-6, self._nj_init)
+
     @property
     def nj(self):
         if not self._states:
-            raise RuntimeError("nj: no verified solution")
+            return self._initial_nj()
         rows = [
             [s._nasa_nj.get(n, 0.0) for n in self._solver._products._names]
             for s in self._states
@@ -712,7 +750,11 @@ class _Solution:
     @property
     def ln_nj(self):
         if not self._states:
-            raise RuntimeError("ln_nj: no verified solution")
+            gas = self._solver._products._gas
+            values = _np.log(self._initial_nj()[gas])
+            if getattr(self, "_nj_init", None) is not None:
+                values[self._nj_init[gas] <= 0] = -13.815511
+            return values
         logs = [s._nasa_ln_nj for s in self._states]
         if any(row is None for row in logs):
             raise NotImplementedError("untruncated ln_nj for frozen stations")
@@ -730,7 +772,9 @@ class _Solution:
 
     def _fractions(self, name):
         if not self._states:
-            raise RuntimeError(f"{name}: no verified solution")
+            if not isinstance(self, EqSolution):
+                raise NotImplementedError("Unsolved flow-solution fractions (native storage is uninitialized)")
+            return {n: 0.0 for n in self._solver._products._names}
         rows = [getattr(s, name) for s in self._states]
         return {
             n: self._shape([row.get(n, 0.0) for row in rows])
@@ -747,10 +791,19 @@ class _Solution:
 
 
 class EqSolution(_Solution):
+    @property
+    def converged(self):
+        return bool(self._states) and self._states[0].converged
+
     def __init__(self, solver, T_init=None, nj_init=None):
-        if T_init is not None or nj_init is not None:
-            raise NotImplementedError("EqSolution T_init / nj_init initial guesses")
         super().__init__(solver)
+        self._t_init = 3800.0 if T_init is None else float(T_init)
+        if not _np.isfinite(self._t_init) or self._t_init <= 0:
+            raise ValueError("T_init must be positive and finite")
+        self._nj_init = None if nj_init is None else _np.asarray(nj_init, dtype=_np.float64).copy()
+        if self._nj_init is not None and (self._nj_init.shape != (solver.num_products,) or not _np.all(_np.isfinite(self._nj_init))):
+            raise ValueError("nj_init must be finite and have solver.num_products entries")
+        self._start = None
 
 
 class RocketSolution(_Solution):
@@ -758,11 +811,23 @@ class RocketSolution(_Solution):
 
     @property
     def num_pts(self):
-        return len(self._states)
+        return len(self._states) if self._states else 10
 
 
 class ShockSolution(_Solution):
     _array = True
+
+    @property
+    def n(self):
+        return self._get_size()
+
+    @property
+    def nj(self):
+        return self._get_size()
+
+    @property
+    def ln_nj(self):
+        return self._get_size()
 
     def __init__(self, solver, reflected=True):
         super().__init__(solver)
@@ -848,20 +913,13 @@ class EqDerivatives:
 
     def compute_derivatives(self, check_closure_defect=False):
         if not self._solution.converged:
-            raise ValueError("EqDerivatives needs a converged solution")
+            raise NotImplementedError("EqDerivatives for a non-converged solution")
         eq_type, first, second, w = self._solution._inputs
         mode, a, b = _state_inputs(eq_type, first, second)
         self._results.clear()
         self.last_error = NOT_CONVERGED
         d = self._solver._inner.derivatives(mode, a, b, w.tolist())
-        if check_closure_defect and (
-            d.closure_defect is None
-            or not _np.isfinite(d.closure_defect)
-            or d.closure_defect > 1e-10
-        ):
-            raise _rs.ConvergenceError(
-                f"Equilibrium derivative closure defect {d.closure_defect}"
-            )
+        # NASA computes a diagnostic defect without rejecting the returned derivatives.
         scale = _np.array(
             [
                 1 if mode.startswith("T") else R,
@@ -945,7 +1003,7 @@ class EqDerivatives:
 
     def _get(self, name):
         if name not in self._results:
-            raise RuntimeError(f"EqDerivatives.{name}: compute derivatives first")
+            raise NotImplementedError(f"Uncomputed EqDerivatives workspace: {name}")
         v = self._results[name]
         return v.copy() if isinstance(v, _np.ndarray) else v
 
@@ -1046,6 +1104,8 @@ def eq_solve(
 
 __all__ = [
     *constants.__all__,
+    "os",
+    "importlib_resources",
     "__version__",
     "units",
     "lib_version",

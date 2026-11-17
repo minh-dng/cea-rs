@@ -1,54 +1,78 @@
-# NASA input decks and reports
+# NASA input decks, reports and snapshots
 
-Source: [NASA CEA 2f79a647e85737742fb08a127da00d1ea1d069da](https://github.com/nasa/cea/tree/2f79a647e85737742fb08a127da00d1ea1d069da),
-version 3.3.4, Apache-2.0. `NOTICE` is an unchanged copy of upstream `NOTICE.txt`.
-See the repository's root LICENSE, NOTICE and `docs/provenance.md`.
+Reference: [NASA CEA 3.3.4, commit 2f79a647e85737742fb08a127da00d1ea1d069da](https://github.com/nasa/cea/tree/2f79a647e85737742fb08a127da00d1ea1d069da),
+Apache-2.0. `NOTICE` is an unchanged copy of upstream `NOTICE.txt`.
+See the root LICENSE and [provenance](../../../docs/provenance.md).
 
-| Local files | Upstream source |
+| Local files | Source |
 |---|---|
 | `example1.inp` … `example14.inp` | `test/main_interface/example*.inp` |
 | `example1.out` … `example14.out` | `test/main_interface/reference_output/example*.out` |
 | `rp1311_examples.inp` | `samples/rp1311_examples.inp` |
 | `sample-example1.inp` | `samples/example1.inp` |
-| `native-3.3.4/example*.out` | Unmodified NASA executable, run on the corresponding local `.inp` |
-| `native-3.3.4/sample-shock.out` | Combined sample's seventh block, with `output long` added |
-| `native-3.3.4/sample-12.out` | Combined sample's twelfth block (additional HNO2 product), with `output long` added |
-| `shock-reflected-transport.inp` | Additional regression: example 7 mixture at 1400 m/s, incident/reflected equilibrium/frozen modes and transport |
-| `native-3.3.4/shock-reflected-transport.out` | Unmodified pinned NASA executable, run on that regression deck |
-| `python-api-3.3.4.json` | Successful calls to PyPI cea==3.3.4 through the Python test helpers; no Rust-generated expected values |
+| `native-3.3.4/example*.out` | Pinned NASA executable, run on each corresponding input |
+| `native-3.3.4/sample-shock.out` | Combined sample block 7, with `output long` added |
+| `native-3.3.4/sample-12.out` | Combined sample block 12, with `output long` added |
+| `shock-reflected-transport.inp` | Example 7 mixture at 1400 m/s, reflected/frozen modes and transport |
+| `native-3.3.4/shock-reflected-transport.out` | Pinned NASA executable, run on that regression deck |
+| `python-api-3.3.4.json` | 41 successful native Python calls |
+| `retained-3.3.4.json` | 31 native failure, false-positive, retained-state and control-flow calls |
 
-Original decks/reports are copied byte-for-byte, including trailing spaces,
-missing final newlines and line endings. `.gitattributes` preserves those bytes.
-`SHA256SUMS` covers all `.inp`, `.out` and the NASA notice.
-No NASA runtime or network is needed to run the Rust tests.
+Original NASA inputs/reports are copied byte for byte, including line endings,
+trailing spaces and missing final newlines. `.gitattributes` preserves them.
+`SHA256SUMS` covers the `.inp`, `.out` and NASA notice files. Rust tests do not
+need a NASA runtime or network.
 
-The Python snapshot was captured on 2026-11-17 with CPython 3.12.14, NumPy
-2.5.5 and macOS arm64. Its metadata includes the NASA source-distribution hash.
-It contains the 11 successful compared `test_rocket_schedules` inputs through
-`rp_rocket(native, ...)`,
-all 16 `test_shock_and_detonation` flag combinations through `shock(native, ...)`,
-and that test's four `(temperature, pressure)` detonation inputs through
-`detonation(native, ...)`. The remaining ten cases are the explicit RP1 TP/RP2
-TV inputs and eight RP14 temperatures in
-`test_rp_equilibrium_and_condensed_exceptions` in `tests/test_nasa_api.py`.
-Each snapshot records the native solution's THERMO fields and application/
-transport fields used by that test. Frozen rocket Cv and reflected-frozen
-shock Cp/Cv are omitted because NASA retains or leaves those fields
-uninitialized; they are never replaced by Rust values. All native calls
-converged with `last_error == 0`. Regenerate only by rerunning those same
-helpers and inputs against NASA 3.3.4 and serializing its numeric properties.
-Both live-native and NASA-free test runs compare these stored values.
+## Python snapshots
 
-The historical reports identify CEA2 (2004). They differ from the modern
-executable in a few cells. Example 12's historical report echoes a frozen-only
-input; the newer `.inp` requests both equilibrium and frozen branches.
-Both sets are retained. The tests record individual known differences and
-enforce `1e-4` on every other compared value. See `docs/input-decks.md` for
-the passing/failing table, exact differences and comparison policy.
+The snapshots were captured with the independent `cea==3.3.4` wheel on
+2026-11-17, CPython 3.12.14, NumPy 2.5.5, macOS arm64. Native values are never
+replaced by Rust output. Both native-installed and NASA-free test runs compare
+them through `tests/test_nasa_api.py`.
 
-To regenerate modern reports, check out the pinned NASA source outside this
-repository. Build with C bindings enabled: this version's Fortran executable
-needs its C abort support even when no Python binding is built.
+The successful snapshot covers RP1 TP/RP2 TV, eight RP14 temperatures, eleven
+rocket schedules, all sixteen shock flag combinations and four detonations.
+The tests define the precise inputs and shared helpers. Frozen Cp/Cv retain
+NASA's zero or earlier workspace fields; live comparisons check those fields
+as well as transport Cp replacement.
+
+The retained snapshot records every helper name, positional argument and keyword
+argument in its metadata. It includes the 1000 m/s incident shock and its
+continued reflection, AP/Al's NaN success, reused water-solution failure,
+100 K argon, Hg/NaCN/water failures, Br2 supersaturation, Air/Jet-A's false
+positive and FAC early freezing. Additional calls cover the reduced NaCN
+singular exit, cleared reflected/incident shock failures, frozen temperature
+caps, a mercury last-valid incident state, the atomic incident transport
+basis, nonfinite detonations and Python constructor-guess restoration. The review
+regressions add cold N2 ions, zero-weight oxygen, Ar/water abort and reuse,
+Br2 transport restoration, unnormalized shock weights and singular air
+transport. Shock snapshots include volume even when density is zero.
+Nonfinite values are encoded as strings such as `"nan"`; tests require
+matching locations and status codes.
+
+The N2/CH4 ion-shock call compares status and positive finite fields only.
+Its native temperature and pressure are saved as diagnostic values because
+the retained numerical trajectory still differs in Rust. The mercury case
+provides a full numerical comparison of the last-valid recovery path.
+
+Regenerate the retained snapshot from NASA only, after building/installing the
+candidate wheel so the test helpers can be imported:
+
+```sh
+python scripts/record_retained_states.py --installed /external/wheel-site \
+  --output tests/data/nasa/retained-3.3.4.json
+```
+
+The candidate is imported to share input helpers; expected values are read only
+from the native package. Successful snapshots are regenerated by the corresponding
+`rp_rocket(native, ...)`, `shock(native, ...)`, `detonation(native, ...)` and
+RP equilibrium helpers in the test file, using their THERMO, TRANSPORT and
+PERFORMANCE fields.
+
+## Fortran reports
+
+Build the pinned source outside the repository. This version needs the C abort
+support even when its Python binding is disabled.
 
 ```sh
 cmake -S "$NASA_SOURCE" -B "$NASA_BUILD" \
@@ -59,37 +83,29 @@ cmake -S "$NASA_SOURCE" -B "$NASA_BUILD" \
 cmake --build "$NASA_BUILD" -j 4
 ```
 
-Copy the original 14 decks to a temporary working directory, then run each
-there (the `.out` file is written beside its input):
+Copy each input to scratch space and run it there. NASA writes the report next
+to the input:
 
 ```sh
 "$NASA_BUILD/source/cea" -t "$NASA_BUILD/thermo.lib" \
   -r "$NASA_BUILD/trans.lib" example1.inp
 ```
 
-Repeat for examples 2–14 and copy the reports into `native-3.3.4/`. For the
-combined sample's shock report, extract its seventh `end`-terminated block
-unchanged, insert `output long` immediately before `end`, name that temporary
-input `sample-shock.inp`, and run the same command. Its 1000 m/s equilibrium
-column is explicitly marked nonconverged by NASA; the tests exclude only that
-column and compare the other 13 shock cases. Repeat this extraction for the
-twelfth block as `sample-12.inp`; its additional HNO2 product requires its own
-report rather than using the main-interface example 12 report.
+Repeat for examples 2–14 and the reflected transport regression. Extract the
+seventh and twelfth `end`-terminated blocks of the combined sample, adding only
+`output long`, to regenerate `sample-shock.out` and `sample-12.out`.
+The 1000 m/s equilibrium shock is compared as its native retained code-9 result.
 
-Run `shock-reflected-transport.inp` through the same executable to regenerate
-its report. It adds the reflected and transport rows absent from the shipped
-shock decks. NASA prints equilibrium reflection in a separate section without
-repeating the incident state. Its frozen reflected header Cp retains the
-incident value; the separate transport Cp uses the reflected temperature.
-Both header differences are bounded explicitly in the regression test.
+The original CEA2 (2004) reports contain old rounded values and pressure
+conversions. They have explicit, bounded exceptions in the regression reader;
+modern reports have no cell exemptions. The modern example-6 printer mislabels
+its unburned table, so the complete historical report and native Python
+snapshots provide the complementary checks.
 
-The modern example 6 report is retained for provenance but is not an oracle:
-its `UNBURNED GAS` table contains burned properties, followed by a rounded
-duplicate labeled `BURNED GAS`. Tests use the complete historical long report
-for example 6 instead.
-
-Run the comparisons, including the recorded discrepancies:
+Run the report comparisons with:
 
 ```sh
 cargo test --release --test nasa_decks -- --nocapture --test-threads=1
 ```
+
+[Current results and remaining gaps](../../../docs/verbatim-parity.md).
