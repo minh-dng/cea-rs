@@ -734,7 +734,12 @@ fn derivative_failures_are_errors_and_zero_weights_are_one_sided() {
     let a = s.derivatives(Mode::TP(2500.0, 1e6), &[1.0, 0.0]).unwrap();
     close(
         &a.enthalpy,
-        &[21756.45866509002, -0.4514000844995226, 0.0, -49203696.60020991],
+        &[
+            21756.45866509002,
+            -0.4514000844995226,
+            0.0,
+            -49203696.60020991,
+        ],
         1e-10,
     );
     assert!(
