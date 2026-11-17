@@ -71,6 +71,7 @@ PERFORMANCE = (
     "Isp",
     "Isp_vacuum",
 )
+SHOCK_FIELDS = ("Mach", "velocity", "sonic_velocity", "rho12", "rho52", "P21", "P52", "T21", "T52", "M21", "M52", "v2", "u5_p_v2")
 RP1_PRODUCTS = (
     "Ar C CO CO2 H H2 H2O HNO HO2 HNO2 HNO3 N NH NO N2 N2O3 O O2 OH O3".split()
 )
@@ -198,11 +199,11 @@ def detonation(api, temperature=298.15, pressure=1.0, *, transport=False):
     return soln, prod, solver
 
 
-def condensed(api, name, mode, first, weights):
+def condensed(api, name, mode, first, weights, *, pressure=1.0):
     reac, prod = mixtures(api, ["Ar", name])
     solver = api.EqSolver(prod, reactants=reac)
     soln = api.EqSolution(solver)
-    solver.solve(soln, getattr(api, mode), first, 1.0, np.array(weights))
+    solver.solve(soln, getattr(api, mode), first, pressure, np.array(weights))
     return soln, prod, solver
 
 
@@ -240,6 +241,41 @@ def argon_below_range(api):
     solver = api.EqSolver(prod, reactants=reac)
     soln = api.EqSolution(solver)
     solver.solve(soln, api.TP, 100.0, 1.0, np.array([1.0]))
+    return soln, prod, solver
+
+
+def shock_edge(api, case):
+    names, moles, temperature, pressure, options = {
+        "reflected-failure": (["Ar"], [1.0], 100.0, 1.0, {"Mach1": 1.01, "reflected": True}),
+        "incident-failure": (["Hg"], [1.0], 100.0, 1.0, {"Mach1": 1.01, "reflected": False}),
+        "atomic-transport": (["N2", "O2"], [0.79, 0.21], 300.0, 1.0, {"Mach1": 6.0, "reflected": True, "reflected_frozen": True}),
+        "incident-cap": (["Ar"], [1.0], 300.0, 1.0, {"Mach1": 100.0, "reflected": False, "incident_frozen": True}),
+        "reflected-cap": (["Ar"], [1.0], 300.0, 1.0, {"Mach1": 12.0, "reflected": True, "incident_frozen": True, "reflected_frozen": True}),
+        "last-valid": (["Hg"], [1.0], 500.0, 1.0, {"Mach1": 1.01, "reflected": False}),
+        "ion-last-valid": (["N2", "CH4"], [0.985, 0.015], 291.0, api.units.mmhg_to_bar(0.224), {"u1": 1200.0, "reflected": False}),
+    }[case]
+    ions = case == "ion-last-valid"
+    reac, prod = mixtures(api, names, ions=ions)
+    solver = api.ShockSolver(prod, reactants=reac, ions=ions, transport=case in ("ion-last-valid", "atomic-transport"), trace=1e-10 if ions else -1.0)
+    soln = api.ShockSolution(solver, reflected=options["reflected"])
+    solver.solve(soln, reac.moles_to_weights(np.array(moles)), temperature, pressure, **options)
+    return soln, prod, solver
+
+
+def nonfinite_detonation(api, hot=False):
+    names = ["H2", "O2"] if hot else ["Hg"]
+    reac, prod = mixtures(api, names)
+    solver = api.DetonationSolver(prod, reactants=reac)
+    soln = api.DetonationSolution(solver)
+    solver.solve(soln, np.ones(len(names)), 5000.0 if hot else 300.0, 1.0)
+    return soln, prod, solver
+
+
+def initial_guess_failure(api):
+    reac, prod = mixtures(api, ["H2", "O2"])
+    solver = api.EqSolver(prod, reactants=reac)
+    soln = api.EqSolution(solver, T_init=1200.0, nj_init=np.zeros(solver.num_products))
+    solver.solve(soln, api.HP, -3000.0, 10.0, np.array([1.0, 8.0]))
     return soln, prod, solver
 
 
@@ -569,7 +605,7 @@ class NasaApiTests(unittest.TestCase):
                     self.assertEqual(actual.last_error, expected.last_error)
                     for field in THERMO + ("volume", "n", "nj", "ln_nj"):
                         self.close(key, field, getattr(actual, field), getattr(expected, field), atol=1e-25 if field == "nj" else 0)
-        for key, run in (("ap-al-nan", ap_al), ("ap-al-retained-transport", lambda api: ap_al(api, True)), ("water-reuse", reused_failure), ("argon-low-temperature", argon_below_range)):
+        for key, run in (("ap-al-nan", ap_al), ("ap-al-retained-transport", lambda api: ap_al(api, True)), ("water-reuse", reused_failure), ("argon-low-temperature", argon_below_range), ("nacn-reduced", lambda api: condensed(api, "NaCN", "TP", 300.0, [1.0, 1.0], pressure=1e20))):
             with self.subTest(case=key), warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 actual = run(rust)[0]
@@ -622,6 +658,9 @@ class NasaApiTests(unittest.TestCase):
             with self.subTest(example=example, n_frz=nf):
                 actual = rp_rocket(rust, example, nf, transport=transport)
                 self.stored(f"rocket-{example}-{nf or 0}", actual[0])
+                if example == 8 and nf is None:
+                    # NASA's pi/p schedules rebuild their throat flux from sonic velocity.
+                    self.close("rocket pressure flux", "ae_at", actual[0].ae_at[2:5], NATIVE_VALUES["rocket-8-0"]["ae_at"][2:5], tolerance=1e-8)
                 if native:
                     self.compare(
                         ("FAC frozen" if nf else "FAC equilibrium")
@@ -711,6 +750,44 @@ class NasaApiTests(unittest.TestCase):
                     ),
                 )
 
+    def test_flow_recovery_and_atomic_transport(self):
+        for case in ("reflected-failure", "incident-failure", "atomic-transport", "last-valid", "incident-cap", "reflected-cap"):
+            with self.subTest(case=case), warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                actual = shock_edge(rust, case)[0]
+                self.retained("shock-singular-last-valid" if case == "last-valid" else "shock-" + case, actual)
+                if native:
+                    expected = shock_edge(native, case)[0]
+                    self.assertEqual(actual.last_error, expected.last_error)
+                    for field in THERMO + TRANSPORT + SHOCK_FIELDS:
+                        self.close(case, field, getattr(actual, field), getattr(expected, field))
+                if case == "atomic-transport":
+                    # This mixture differs by only 1.3e-7 when the atomic basis is skipped.
+                    self.close(
+                        case, "atomic conductivity", actual.conductivity_eq,
+                        RETAINED_VALUES["shock-atomic-transport"]["values"]["conductivity_eq"],
+                        tolerance=1e-9,
+                    )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            # Singular ion solves take different numerical paths; the native contract is
+            # a positive retained state and status 9 instead of an exception.
+            actual = shock_edge(rust, "ion-last-valid")[0]
+            self.retained("shock-ion-last-valid", actual)
+            for field in ("T", "P", "velocity", "sonic_velocity"):
+                self.assertTrue(np.all(np.isfinite(getattr(actual, field))))
+                self.assertTrue(np.all(getattr(actual, field) > 0.0))
+            if native:
+                expected = shock_edge(native, "ion-last-valid")[0]
+                self.assertEqual(actual.last_error, expected.last_error)
+                self.assertEqual(actual.converged, expected.converged)
+            for hot in (False, True):
+                self.retained("detonation-hot-nonfinite" if hot else "detonation-nonfinite", nonfinite_detonation(rust, hot)[0])
+                if native:
+                    expected = nonfinite_detonation(native, hot)[0]
+                    self.assertFalse(expected.converged)
+                    self.assertEqual(expected.last_error, native.NOT_CONVERGED)
+
     def test_failures_reuse_and_unsupported(self):
         s, _, solver = equilibrium(rust)
         for w in ([], [0, 0], [-1, 2], [float("nan"), 1]):
@@ -760,6 +837,7 @@ class NasaApiTests(unittest.TestCase):
             if native:
                 self.compare("shock retained reflection", actual, shock(native, speed=1000.0, reflected=True), THERMO + ("Mach", "velocity", "P52", "rho52"))
         # NASA's setters change the exposed guess; the first solve restores the constructor seed.
+        initial_solutions = []
         for api in (rust, native) if native else (rust,):
             r, p = mixtures(api, ["H2", "O2"])
             solver = api.EqSolver(p, reactants=r)
@@ -771,6 +849,17 @@ class NasaApiTests(unittest.TestCase):
             self.close("initial guesses", "gas nj", solution.nj[:solver.num_gas], np.full(solver.num_gas, 1e-6))
             solver.solve(solution, api.TP, 2500.0, 10.0, np.array([1.0, 8.0]))
             self.assertTrue(solution.converged)
+            initial_solutions.append((solution, p, solver))
+        if native:
+            self.compare("initial guess after solve", *initial_solutions)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            failed = initial_guess_failure(rust)[0]
+            self.retained("initial-guess-failure", failed)
+            if native:
+                expected = initial_guess_failure(native)[0]
+                for field in THERMO + ("n", "nj", "ln_nj"):
+                    self.close("initial guess failure", field, getattr(failed, field), getattr(expected, field), atol=1e-25 if field == "nj" else 0)
 
     def test_helpers_defaults_and_namespace(self):
         from cea_rs.nasa.lib import libcea

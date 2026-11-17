@@ -284,7 +284,7 @@ impl PySolver {
         })
     }
     /// Solve TP/HP/SP/TV/UV/SV in SI (K, Pa, J/kg, J/kg/K, m³/kg).
-    #[pyo3(signature=(mode, state1, state2, weights, *, start=None))]
+    #[pyo3(signature=(mode, state1, state2, weights, *, start=None, transport=false))]
     #[allow(clippy::too_many_arguments)]
     fn solve(
         &self,
@@ -294,6 +294,7 @@ impl PySolver {
         state2: f64,
         weights: Vec<f64>,
         start: Option<PyRef<'_, State>>,
+        transport: bool,
     ) -> PyResult<State> {
         let mode = match mode {
             "TP" => Mode::TP(state1, state2),
@@ -309,8 +310,10 @@ impl PySolver {
             }
         };
         let start = start.map(|s| s.clone());
+        let mut solver = self.inner.clone();
+        solver.transport = transport;
         Ok(py.detach(|| {
-            self.inner.solve_with_start(
+            solver.solve_with_start(
                 mode,
                 &weights,
                 start.as_ref().and_then(|s| s.equilibrium_seed.as_ref()),
@@ -337,7 +340,7 @@ impl PySolver {
         })?)
     }
     /// Incident/reflected shock: mass weights, K, Pa, and exactly one speed input.
-    #[pyo3(signature=(weights,temperature_k,pressure_pa, *, u1=None,mach1=None,reflected=false,incident_frozen=false,reflected_frozen=false))]
+    #[pyo3(signature=(weights,temperature_k,pressure_pa, *, u1=None,mach1=None,reflected=false,incident_frozen=false,reflected_frozen=false,transport=false))]
     #[allow(clippy::too_many_arguments)]
     fn shock(
         &self,
@@ -350,6 +353,7 @@ impl PySolver {
         reflected: bool,
         incident_frozen: bool,
         reflected_frozen: bool,
+        transport: bool,
     ) -> PyResult<crate::shock::ShockResult> {
         use crate::shock::ShockSpeed;
         let speed = match (u1, mach1) {
@@ -357,8 +361,10 @@ impl PySolver {
             (None, Some(m)) => ShockSpeed::Mach(m),
             _ => return Err(PyValueError::new_err("Specify exactly one of u1 or mach1")),
         };
+        let mut solver = self.inner.clone();
+        solver.transport = transport;
         Ok(py.detach(|| {
-            self.inner.shock(
+            solver.shock(
                 &weights,
                 temperature_k,
                 pressure_pa,

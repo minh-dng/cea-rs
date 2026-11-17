@@ -88,7 +88,7 @@ impl State {
 /// Ideal-gas mixture with fixed species amounts (mol/kg) at `t` and `p`.
 /// Frozen Cp is reported as both Cp values. `element_residual` is zero, which
 /// suits amounts taken straight from a feed; use `State::frozen` otherwise.
-/// A non-physical `t` or `p` fails as a convergence error.
+/// Evaluates `t` and `p` directly, including nonphysical or nonfinite values.
 pub(crate) fn frozen_state(
     amounts: &[(f64, Species)],
     t: f64,
@@ -180,6 +180,7 @@ pub struct Solver {
     pub(crate) insert: Vec<Species>,
     pub(crate) omit: Vec<Species>,
     pub(crate) trace: f64,
+    pub(crate) transport: bool,
 }
 impl Solver {
     /// Construct a solver with an optional explicit product pool and phase seeds.
@@ -232,6 +233,7 @@ impl Solver {
             insert,
             omit: vec![],
             trace: 0.0,
+            transport: false,
         })
     }
 
@@ -444,6 +446,20 @@ impl Solver {
         weights: &[f64],
         start: Option<&equilibrium_core::EquilibriumSeed>,
     ) -> Result<State> {
+        let (first, second, fixed_temperature) = match mode {
+            Mode::TP(t, p) | Mode::TV(t, p) => (t, p, true),
+            Mode::HP(h, p) | Mode::UV(h, p) => (h, p, false),
+            Mode::SP(s, p) | Mode::SV(s, p) => (s, p, false),
+        };
+        if !first.is_finite()
+            || !second.is_finite()
+            || second <= 0.0
+            || (fixed_temperature && first <= 0.0)
+        {
+            return Err(Error::Domain(
+                "Finite state inputs and positive temperature/pressure/volume are required".into(),
+            ));
+        }
         self.solve_state(mode, weights, start, false)
     }
 
@@ -463,12 +479,6 @@ impl Solver {
             Mode::UV(u, v) => (false, false, false, u / R, v),
             Mode::SV(s, v) => (false, true, false, s / R, v),
         };
-        if !state1.is_finite() || !state2.is_finite() || state2 <= 0.0 || (const_t && state1 <= 0.0)
-        {
-            return Err(Error::Domain(
-                "Finite state inputs and positive temperature/pressure/volume are required".into(),
-            ));
-        }
         let pool = self
             .only
             .clone()
@@ -489,6 +499,7 @@ impl Solver {
             Some(&self.insert),
             self.trace,
             start,
+            finalize_failure,
         );
         let mut amounts: Vec<_> =
             d.nj.iter()
@@ -660,6 +671,12 @@ impl Solver {
             out.last_error = d.last_error;
         }
         if out.converged {
+            if self.transport {
+                let tr = out.transport()?;
+                out.cp_frozen_j_kg_k = tr.cp_frozen_j_kg_k;
+                out.cv_frozen_j_kg_k = tr.cp_frozen_j_kg_k - out.gas_moles * R;
+                out.equilibrium_seed.as_mut().unwrap().has_transport_seed = tr.viscosity_pa_s > 0.0;
+            }
             let mut reported = out.clone();
             reported.equilibrium_seed = None;
             out.equilibrium_seed.as_mut().unwrap().reported = Some(Box::new(reported));

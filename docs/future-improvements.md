@@ -11,7 +11,7 @@ The current target is NASA CEA 3.3.4 behavior at commit `2f79a647e85737742fb08a1
 - Treat a reversed condensed interval as usable below its upper bound, including Br2(cr).
 - Park and pin disabled ions below the reporting cutoff rather than using NASA's SMNOL and update rules.
 - Stop runaway gas-mole iterates early and impose a separate total iteration cap.
-- Apply the high-temperature condensed fallback on every exhausted epoch rather than NASA's control path.
+- Apply the high-temperature condensed fallback on an exhausted Newton epoch. NASA's fallback is after the convergence gate, while condensed changes reset its iteration counter.
 - Reject equilibrium results after independent element, constraint, finite-value and physical-property checks.
 - Raise on numerical failure and clear the report instead of returning NASA's status and retained fields.
 - Reject fixed temperatures outside 160–22000 K before solving rather than returning NASA's post-processed code 8 state.
@@ -22,6 +22,9 @@ The current target is NASA CEA 3.3.4 behavior at commit `2f79a647e85737742fb08a1
 - Recompute a detonation's thermodynamic fields after NASA's final temperature update.
 - Reject shock and detonation results after independent jump and sonic closure checks.
 - Stop reflection after a nonconverged incident shock, even when NASA retains a positive temperature.
+- Stop detonation when an internal temperature or pressure becomes nonfinite rather than continuing NASA's eight updates.
+- Honor Python EqSolution initial guesses on the first solve rather than restoring the default seed saved before NASA's Python setters run.
+- Use flow velocity consistently for rocket pressure schedules rather than NASA's sonic-velocity throat basis in its pi/p routines.
 - Recompute frozen-station Cv rather than retaining NASA's earlier or zero values.
 - Mark frozen equilibrium Cp/Cv unavailable instead of returning NASA's stored workspace values.
 - Recompute volume, M/MW and Gibbs energy from the current iterate instead of retaining NASA's report fields.

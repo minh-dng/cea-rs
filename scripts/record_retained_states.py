@@ -53,19 +53,47 @@ def main():
         "fac-early-freeze": ("rp_rocket", [9, 3], {}),
         "shock-last-valid": ("shock", [], {"speed": 1000.0}),
         "shock-retained-reflection": ("shock", [], {"speed": 1000.0, "reflected": True}),
+        "nacn-reduced": ("condensed", ["NaCN", "TP", 300.0, [1.0, 1.0]], {"pressure": 1e20}),
+        "shock-reflected-failure": ("shock_edge", ["reflected-failure"], {}),
+        "shock-incident-failure": ("shock_edge", ["incident-failure"], {}),
+        "shock-atomic-transport": ("shock_edge", ["atomic-transport"], {}),
+        "shock-incident-cap": ("shock_edge", ["incident-cap"], {}),
+        "shock-reflected-cap": ("shock_edge", ["reflected-cap"], {}),
+        "shock-singular-last-valid": ("shock_edge", ["last-valid"], {}),
+        "shock-ion-last-valid": ("shock_edge", ["ion-last-valid"], {}),
+        "detonation-nonfinite": ("nonfinite_detonation", [], {}),
+        "detonation-hot-nonfinite": ("nonfinite_detonation", [], {"hot": True}),
+        "initial-guess-failure": ("initial_guess_failure", [], {}),
     }
     cases = {}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         for key, (name, positional, keyword) in inputs.items():
             solution, _, _ = helpers[name](api, *positional, **keyword)
+            if key == "shock-ion-last-valid":
+                # Compare status/validity: singular ion iterates differ numerically across solvers.
+                for field in ("T", "P", "velocity", "sonic_velocity"):
+                    value = getattr(solution, field)
+                    assert np.all(np.isfinite(value)) and np.all(value > 0.0)
+                cases[key] = {
+                    "converged": solution.converged,
+                    "last_error": solution.last_error,
+                    "values": {},
+                    "diagnostic_values": {
+                        field: clean(getattr(solution, field))
+                        for field in ("T", "P", "P21", "T21")
+                    },
+                }
+                continue
             fields = helpers["THERMO"] + helpers["TRANSPORT"]
             if name in ("rp_rocket", "air_jet_a"):
                 fields += helpers["PERFORMANCE"] + ("n", "nj")
-            elif name in ("condensed", "ap_al", "reused_failure", "argon_below_range"):
+            elif name in ("condensed", "ap_al", "reused_failure", "argon_below_range", "initial_guess_failure"):
                 fields += ("volume", "n", "nj", "ln_nj")
+            elif name == "nonfinite_detonation":
+                fields += ("Mach", "velocity", "sonic_velocity", "P_P1", "T_T1", "M_M1", "rho_rho1", "n", "nj", "ln_nj")
             else:
-                fields += ("Mach", "velocity", "sonic_velocity", "rho12", "rho52", "P21", "P52", "T21", "T52", "M21", "M52", "v2", "u5_p_v2")
+                fields += helpers["SHOCK_FIELDS"]
             values = {field: clean(getattr(solution, field)) for field in fields}
             values.update({field: clean(getattr(solution, field)) for field in ("mass_fractions", "mole_fractions")})
             cases[key] = {"converged": solution.converged, "last_error": solution.last_error, "values": values}

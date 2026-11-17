@@ -160,7 +160,8 @@ impl Solver {
         for _ in 0..8 {
             let t2 = temperature_k * tt1;
             let p2 = pressure_pa * pp1;
-            let mut state = self.solve_with_start(Mode::TP(t2, p2), weights, seed.as_ref())?;
+            // NASA continues its eight updates even when an internal TP iterate is nonfinite.
+            let mut state = self.solve_state(Mode::TP(t2, p2), weights, seed.as_ref(), false)?;
             if state.converged {
                 seed.clone_from(&state.equilibrium_seed);
             }
@@ -189,6 +190,7 @@ impl Solver {
             tt1 *= (x2 * damping).exp();
             // NASA updates T and wave speeds while retaining the preceding thermodynamic fields.
             state.temperature_k = temperature_k * tt1;
+            state.pressure_pa = p2;
             let sonic = (gamma * R * state.temperature_k / mw).sqrt();
             let velocity = rr1 * sonic;
             let converged = change < 0.5e-4;

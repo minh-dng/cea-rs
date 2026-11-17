@@ -16,7 +16,7 @@ See the root LICENSE and [provenance](../../../docs/provenance.md).
 | `shock-reflected-transport.inp` | Example 7 mixture at 1400 m/s, reflected/frozen modes and transport |
 | `native-3.3.4/shock-reflected-transport.out` | Pinned NASA executable, run on that regression deck |
 | `python-api-3.3.4.json` | 41 successful native Python calls |
-| `retained-3.3.4.json` | 13 native failures, false positives and retained-state calls |
+| `retained-3.3.4.json` | 24 native failure, false-positive, retained-state and control-flow calls |
 
 Original NASA inputs/reports are copied byte for byte, including line endings,
 trailing spaces and missing final newlines. `.gitattributes` preserves them.
@@ -40,8 +40,17 @@ The retained snapshot records every helper name, positional argument and keyword
 argument in its metadata. It includes the 1000 m/s incident shock and its
 continued reflection, AP/Al's NaN success, reused water-solution failure,
 100 K argon, Hg/NaCN/water failures, Br2 supersaturation, Air/Jet-A's false
-positive and FAC early freezing. Nonfinite values are encoded as strings such
-as `"nan"`; tests require matching locations and status codes.
+positive and FAC early freezing. Additional calls cover the reduced NaCN
+singular exit, cleared reflected/incident shock failures, frozen temperature
+caps, a mercury last-valid incident state, the atomic incident transport
+basis, nonfinite detonations and Python constructor-guess restoration.
+Nonfinite values are encoded as strings such as `"nan"`; tests require
+matching locations and status codes.
+
+The N2/CH4 ion-shock call compares status and positive finite fields only.
+Its native temperature and pressure are saved as diagnostic values because
+the retained numerical trajectory still differs in Rust. The mercury case
+provides a full numerical comparison of the last-valid recovery path.
 
 Regenerate the retained snapshot from NASA only, after building/installing the
 candidate wheel so the test helpers can be imported:

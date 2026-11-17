@@ -69,6 +69,74 @@
       "difference": 0.0,
       "member": "gas nj"
     },
+    "initial guess after solve": {
+      "difference": 3.68768356428228e-11,
+      "member": "cv_eq"
+    },
+    "initial-guess-failure": {
+      "difference": 5.734177219479949e-13,
+      "member": "ln_nj"
+    },
+    "initial guess failure": {
+      "difference": 5.734177219479949e-13,
+      "member": "ln_nj"
+    },
+    "shock-reflected-failure": {
+      "difference": 1.1041585446516624e-12,
+      "member": "v2"
+    },
+    "reflected-failure": {
+      "difference": 1.1041585446516624e-12,
+      "member": "v2"
+    },
+    "shock-incident-failure": {
+      "difference": 2.712571460517329e-16,
+      "member": "gibbs_energy"
+    },
+    "incident-failure": {
+      "difference": 2.712571460517329e-16,
+      "member": "gibbs_energy"
+    },
+    "shock-atomic-transport": {
+      "difference": 2.1140822599155505e-08,
+      "member": "cv_eq"
+    },
+    "atomic-transport": {
+      "difference": 2.1140822599155505e-08,
+      "member": "cv_eq"
+    },
+    "shock-singular-last-valid": {
+      "difference": 2.957329227318533e-15,
+      "member": "v2"
+    },
+    "last-valid": {
+      "difference": 2.957329227318533e-15,
+      "member": "v2"
+    },
+    "shock-incident-cap": {
+      "difference": 2.7728928929036084e-16,
+      "member": "density"
+    },
+    "incident-cap": {
+      "difference": 2.7728928929036084e-16,
+      "member": "density"
+    },
+    "shock-reflected-cap": {
+      "difference": 4.206389961882016e-16,
+      "member": "density"
+    },
+    "reflected-cap": {
+      "difference": 4.206389961882016e-16,
+      "member": "density"
+    },
+    "detonation-nonfinite": {
+      "difference": 0.0,
+      "member": "T"
+    },
+    "detonation-hot-nonfinite": {
+      "difference": 4.2885508822644913e-10,
+      "member": "cv_eq"
+    },
     "eq_solve": {
       "difference": 1.3677837775476616e-14,
       "member": "enthalpy"
@@ -125,9 +193,17 @@
       "difference": 3.697190523871471e-16,
       "member": "density"
     },
+    "nacn-reduced": {
+      "difference": 1.6384e-16,
+      "member": "P"
+    },
     "stored NASA rocket-8-0": {
       "difference": 1.1890975933232821e-10,
       "member": "cv_eq"
+    },
+    "rocket pressure flux": {
+      "difference": 3.110332555896152e-12,
+      "member": "ae_at"
     },
     "IAC equilibrium": {
       "difference": 3.712466258753133e-06,
@@ -238,7 +314,7 @@
       "member": "cv_eq"
     },
     "shock": {
-      "difference": 6.944607913366851e-10,
+      "difference": 1.8955418014176885e-06,
       "member": "cv_eq"
     },
     "stored NASA shock-0001": {
@@ -282,7 +358,7 @@
       "member": "cv_eq"
     },
     "stored NASA shock-1011": {
-      "difference": 6.973438441304676e-12,
+      "difference": 1.8955418014176885e-06,
       "member": "cv_eq"
     },
     "stored NASA shock-1100": {
@@ -333,7 +409,7 @@
     "UV.dU_dw0_fd at h=1e-5: exact-zero constraint derivative; both backends bounded absolutely at 0.001 in NASA units"
   ],
   "tests": {
-    "run": 9,
+    "run": 10,
     "failures": 0,
     "errors": 0,
     "skipped": 0

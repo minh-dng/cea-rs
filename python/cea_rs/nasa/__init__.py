@@ -432,7 +432,7 @@ class EqSolver(_Solver):
         previous_transport = {name: soln._get(name) for name in _TRANSPORT_FIELDS} if self._transport else {}
         state = self._inner._inner.solve(
             *_state_inputs(eq_type, state1, state2), w.tolist(),
-            start=soln._start,
+            start=soln._start, transport=self._transport,
         )
         self._finish(soln, [state], status=state.last_error)
         if not state._nasa_post_processed:
@@ -553,7 +553,7 @@ class ShockSolver(_Solver):
         w = _vector(weights, self.num_reactants, positive=True)
         if bool(reflected) != soln._reflected:
             raise ValueError("ShockSolution reflected must match ShockSolver.solve")
-        result = self._inner.shock(
+        result = self._inner._inner.shock(
             w.tolist(),
             _scalar32(T0),
             _scalar32(p0) * 1e5,
@@ -562,6 +562,7 @@ class ShockSolver(_Solver):
             reflected=reflected,
             incident_frozen=incident_frozen,
             reflected_frozen=reflected_frozen,
+            transport=self._transport,
         )
         stations = [result.station1, result.station2]
         if result.station5 is not None:
@@ -574,7 +575,7 @@ class ShockSolver(_Solver):
             soln,
             states,
             [None]
-            + [s.state.transport() if self._transport else None for s in stations[1:]],
+            + [s.state.transport() if self._transport and s.state.temperature_k > 0 else None for s in stations[1:]],
         )
         soln._extra["cv_eq"] = cv
         soln.last_error = result.last_error
@@ -597,7 +598,7 @@ class ShockSolver(_Solver):
         }.items():
             soln._extra[name] = _np.array([getattr(s, attr) for s in stations])
         soln._extra.update(
-            rho12=1 / result.rho2_rho1,
+            rho12=1 / result.rho2_rho1 if result.rho2_rho1 else 0.0,
             rho52=result.rho5_rho2 or 0.0,
             P21=result.p2_p1,
             P52=result.p5_p2 or 0.0,

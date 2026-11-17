@@ -56,35 +56,110 @@ pub struct ShockResult {
     pub u5_plus_v2_m_s: Option<f64>,
 }
 
+impl ShockResult {
+    fn failed(initial: State, failed: State, speed: f64, reflected: bool) -> Self {
+        let mut unused = fail_state(initial.clone());
+        unused.amounts.clear();
+        Self {
+            converged: false,
+            last_error: 8,
+            station1: station(initial, speed),
+            station2: station(fail_state(failed), 0.0),
+            station5: reflected.then(|| station(unused, 0.0)),
+            p2_p1: 0.0,
+            t2_t1: 0.0,
+            m2_m1: 0.0,
+            rho2_rho1: 0.0,
+            v2_m_s: 0.0,
+            p5_p2: reflected.then_some(0.0),
+            t5_t2: reflected.then_some(0.0),
+            m5_m2: reflected.then_some(0.0),
+            rho5_rho2: reflected.then_some(0.0),
+            u5_plus_v2_m_s: reflected.then_some(0.0),
+        }
+    }
+}
+
 fn station(state: State, velocity_m_s: f64) -> ShockStation {
-    let sonic_velocity_m_s = state.sound_speed();
+    let sonic_velocity_m_s = if state.temperature_k == 0.0 {
+        0.0
+    } else {
+        state.sound_speed()
+    };
     ShockStation {
         state,
         velocity_m_s,
-        mach: velocity_m_s / sonic_velocity_m_s,
+        mach: if sonic_velocity_m_s == 0.0 {
+            0.0
+        } else {
+            velocity_m_s / sonic_velocity_m_s
+        },
         sonic_velocity_m_s,
     }
 }
 
+// NASA clears the failed station's report but retains composition and stored M/MW/Cv_fr.
+fn fail_state(mut state: State) -> State {
+    if !state.equilibrium {
+        // Frozen shock reports are first filled after convergence.
+        state.molecular_weight_kg_kmol = 0.0;
+        state.mean_molecular_weight = 0.0;
+        state.cv_frozen_j_kg_k = 0.0;
+        state.mole_fractions.values_mut().for_each(|v| *v = 0.0);
+        state.mass_fractions.values_mut().for_each(|v| *v = 0.0);
+    }
+    state.converged = false;
+    state.last_error = 8;
+    state.post_processed = false;
+    state.temperature_k = 0.0;
+    state.gas_moles = 0.0;
+    state.pressure_pa = 0.0;
+    state.density_kg_m3 = 0.0;
+    state.enthalpy_j_kg = 0.0;
+    state.energy_j_kg = 0.0;
+    state.gibbs_energy_j_kg = 0.0;
+    state.entropy_j_kg_k = 0.0;
+    state.cp_frozen_j_kg_k = 0.0;
+    state.cp_equilibrium_j_kg_k = 0.0;
+    state.cv_equilibrium_j_kg_k = 0.0;
+    state.gamma_s = 0.0;
+    state.dlnv_dlnp = 0.0;
+    state.dlnv_dlnt = 0.0;
+    state
+}
+
 /// NASA's analytic log-pressure/log-temperature shock equations.
+#[allow(clippy::too_many_arguments)]
 fn solve_jump(
     up: &State,
     speed: f64,
     reflected: bool,
+    frozen: bool,
     mut p_ratio: f64,
     mut t_ratio: f64,
     mut state_at: impl FnMut(f64, f64) -> Result<State>,
-) -> Result<(State, bool, f64, f64, f64)> {
+) -> Result<(State, i32, f64, f64, f64)> {
     let wm = up.molecular_weight_kg_kmol;
     let t0 = up.temperature_k;
     let mu = wm * speed * speed / (R * t0);
     let h_init = up.enthalpy_j_kg / R;
     let mut last = None;
+    let mut last_valid = None;
     for iter in 1..=60 {
         let t = t_ratio * t0;
         let st = state_at(t, up.pressure_pa * p_ratio)?;
+        if !frozen
+            && (!(st.temperature_k > 0.0 && st.gas_moles > 0.0) || (reflected && !st.converged))
+        {
+            return Ok(if !reflected && let Some(last_valid) = last_valid {
+                last_valid
+            } else {
+                (fail_state(st), 8, 0.0, 0.0, 0.0)
+            });
+        }
         let wmk = 1.0 / st.gas_moles;
         let rho12 = wm * t_ratio / (p_ratio * wmk);
+        last_valid = Some((st.clone(), 9, p_ratio, t_ratio, rho12));
         let cp = st.cp_equilibrium_j_kg_k / R;
         let (vp, vt) = (st.dlnv_dlnp, st.dlnv_dlnt);
         let rho52 = 1.0 / rho12;
@@ -119,7 +194,7 @@ fn solve_jump(
         let mut dt = (a * g - c * f) / det;
         let correction = dp.abs().max(dt.abs());
         if correction < 5e-5 {
-            return Ok((st, true, p_ratio, t_ratio, rho12));
+            return Ok((st, 0, p_ratio, t_ratio, rho12));
         }
         let cap = if iter > 20 {
             0.04879016
@@ -136,9 +211,17 @@ fn solve_jump(
         }
         p_ratio = (p_ratio.ln() + dp).exp();
         t_ratio = (t_ratio.ln() + dt).exp();
-        last = Some((st, false, p_ratio, t_ratio, rho12));
+        if iter == 1 && t_ratio >= 21000.0 / t0 {
+            return Ok((fail_state(st), 8, 0.0, 0.0, 0.0));
+        }
+        last = Some((st, 9, p_ratio, t_ratio, rho12));
     }
-    Ok(last.unwrap())
+    let last = last.unwrap();
+    Ok(if reflected || frozen {
+        (fail_state(last.0), 8, 0.0, 0.0, 0.0)
+    } else {
+        last
+    })
 }
 
 impl Solver {
@@ -216,11 +299,14 @@ impl Solver {
             if hp.converged {
                 seed = hp.equilibrium_seed.clone().unwrap();
             }
+            if !(hp.temperature_k > 0.0 && hp.gas_moles > 0.0) {
+                return Ok(ShockResult::failed(initial, hp, u1, reflected));
+            }
             hp.temperature_k / temperature_k
         }
         .min(21000.0 / temperature_k);
-        let (mut incident, converged, p21, t21, rho12) =
-            solve_jump(&initial, u1, false, p21, t21, |t, p| {
+        let (mut incident, status, p21, t21, rho12) =
+            solve_jump(&initial, u1, false, incident_frozen, p21, t21, |t, p| {
                 if incident_frozen {
                     initial.frozen(t, p)
                 } else {
@@ -231,13 +317,17 @@ impl Solver {
                     Ok(st)
                 }
             })?;
+        if status == 8 {
+            return Ok(ShockResult::failed(initial, incident, u1, reflected));
+        }
         incident.pressure_pa = p21 * pressure_pa;
-        incident.transport_atomic = !incident.converged;
+        incident.transport_atomic =
+            !incident.converged || (!incident_frozen && reflected && reflected_frozen);
         let u2 = u1 * rho12;
         let v2 = u1 - u2;
         let mut result = ShockResult {
-            converged,
-            last_error: if converged { 0 } else { 9 },
+            converged: status == 0,
+            last_error: status,
             p2_p1: p21,
             t2_t1: t21,
             m2_m1: incident.molecular_weight_kg_kmol / initial.molecular_weight_kg_kmol,
@@ -258,20 +348,36 @@ impl Solver {
             let b = (1.0 + mu + 2.0) / 2.0;
             let p52 = b + (b * b - 2.0).sqrt();
             let mut seed = self.initial_seed(weights, up.temperature_k, Some(&up.amounts))?;
-            let (mut down, converged, p52, t52, rho25) =
-                solve_jump(up, v2, true, p52, 2.0, |t, p| {
+            let (mut down, status, p52, t52, rho25) = solve_jump(
+                up,
+                v2,
+                true,
+                reflected_frozen,
+                p52,
+                2.0_f64.min(21000.0 / up.temperature_k),
+                |t, p| {
                     if reflected_frozen {
                         up.frozen(t, p)
                     } else {
-                        let st = self.solve_with_start(Mode::TP(t, p), weights, Some(&seed))?;
+                        let st = self.solve_state(Mode::TP(t, p), weights, Some(&seed), false)?;
                         if st.converged {
                             seed = st.equilibrium_seed.clone().unwrap();
                         }
                         Ok(st)
                     }
-                })?;
-            result.converged = converged;
-            result.last_error = if converged { 0 } else { 8 };
+                },
+            )?;
+            result.converged = status == 0;
+            result.last_error = status;
+            if status == 8 {
+                result.p5_p2 = Some(0.0);
+                result.t5_t2 = Some(0.0);
+                result.m5_m2 = Some(0.0);
+                result.rho5_rho2 = Some(0.0);
+                result.u5_plus_v2_m_s = Some(0.0);
+                result.station5 = Some(station(down, 0.0));
+                return Ok(result);
+            }
             let ratio = 1.0 / rho25;
             let u5 = v2 / (ratio - 1.0);
             if reflected_frozen {

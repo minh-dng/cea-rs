@@ -83,6 +83,7 @@ pub(crate) struct EquilibriumSeed {
     esize: f64,
     pub(crate) converged_tsize: f64,
     pub(crate) elements_reduced: bool,
+    pub(crate) has_transport_seed: bool,
     /// Last reported fields; its continuation seed is cleared to keep this snapshot finite.
     pub(crate) reported: Option<Box<crate::solver::State>>,
 }
@@ -153,6 +154,7 @@ impl EquilibriumSeed {
             esize: (xsize + 6.90775528).min(80.0),
             converged_tsize: 18.420681,
             elements_reduced: false,
+            has_transport_seed: false,
             reported: None,
         }
     }
@@ -517,6 +519,7 @@ pub(crate) fn solve_for_products_debug_seeded(
         insert,
         0.0,
         None,
+        false,
     )
 }
 
@@ -534,6 +537,7 @@ pub(crate) fn solve_for_products_debug_with_start(
     insert: Option<&[Species]>,
     trace: f64,
     start: Option<&EquilibriumSeed>,
+    finalize_failure: bool,
 ) -> EquilibriumDebug {
     solve_equilibrium(
         reactants,
@@ -548,6 +552,7 @@ pub(crate) fn solve_for_products_debug_with_start(
         insert,
         trace,
         start,
+        finalize_failure,
     )
 }
 
@@ -582,6 +587,7 @@ fn solve_equilibrium(
     insert: Option<&[Species]>,
     trace: f64,
     start: Option<&EquilibriumSeed>,
+    finalize_failure: bool,
 ) -> EquilibriumDebug {
     let mut constituent_set: HashSet<Constituent> = HashSet::new();
     reactants.iter().for_each(|feed| {
@@ -832,6 +838,8 @@ fn solve_equilibrium(
     let mut iteration = 0i32;
     let mut last_error = 8;
     let mut times_singular = 0usize;
+    let mut max_iter_fallback_used = false;
+    let mut post_processed_on_limit = false;
     while iteration < max_iterations as i32 {
         iteration += 1;
         iterations_used += 1;
@@ -1458,6 +1466,7 @@ fn solve_equilibrium(
             continue;
         }
         if times_converged > 3 * ne_active {
+            // NASA returns here without finalizing the reported fields.
             break;
         }
 
@@ -1565,17 +1574,58 @@ fn solve_equilibrium(
         if changed {
             iteration = -1; // NASA restarts changed condensed sets at iteration zero.
             ions_converged = false; // the changed set needs a fresh polish.
-            continue;
+        } else {
+            converged = true;
         }
 
-        converged = true;
-        last_error = 0;
-        break;
+        if converged || iteration == max_iterations as i32 {
+            for j in 0..ng {
+                nj_stored[j] = if ln_nj[j] > -87.0 {
+                    ln_nj[j].exp()
+                } else {
+                    0.0
+                };
+            }
+            if !converged {
+                let gas_moles: f64 = nj_stored.iter().sum();
+                if !max_iter_fallback_used
+                    && ng > 0
+                    && (!(!const_t && !const_s && const_p) || temperature_k > 100.0)
+                    && active_ranked.len() == 1
+                    && gas_moles <= 1e-4
+                {
+                    max_iter_fallback_used = true;
+                    n = 0.1;
+                    nj_stored.fill(n / ng as f64);
+                    ln_nj[..ng].fill((n / ng as f64).ln());
+                    let c = is_active.iter().position(|active| *active).unwrap();
+                    is_active[c] = false;
+                    nj_c[c] = 0.0;
+                    active_ranked.retain(|&i| i != c);
+                    j_switch = Some(c);
+                    j_sol = None;
+                    j_liq = None;
+                    times_converged = 0;
+                    iteration = -1;
+                    continue;
+                }
+                post_processed_on_limit = true;
+            } else {
+                last_error = 0;
+            }
+            break;
+        }
     }
 
     // G.1: final sanity bounds — a "converged" T outside CEA's physical
     // range means the iterate ran away, not that the problem was solved.
-    let post_processed = converged || (times_singular > 8 && element_excluded.iter().any(|x| *x));
+    let computed_partials = converged || finalize_failure;
+    let post_processed = converged
+        || post_processed_on_limit
+        || (times_singular > MAX_SINGULAR_RETRIES
+            && element_excluded.iter().any(|x| *x)
+            && temperature_k > 0.0
+            && n > 0.0);
     if converged && (temperature_k < 160.0 || temperature_k > 22000.0) {
         converged = false;
         last_error = 8;
@@ -1584,10 +1634,12 @@ fn solve_equilibrium(
     // Section I: post-processing & thermodynamic derivatives. Runs once, at
     // the final state, independent of the main loop's per-iteration scoping.
     let active_condensed = active_ranked.clone();
-    let active_elements: Vec<usize> = (0..ne).filter(|&k| !element_excluded[k]).collect();
+    let active_elements: Vec<usize> = (0..ne)
+        .filter(|&k| !element_excluded[k] || (finalize_failure && !converged))
+        .collect();
     let ne_active = active_elements.len();
 
-    if post_processed {
+    if computed_partials && !finalize_failure {
         for j in 0..ng {
             nj_stored[j] = if ln_nj[j] > -87.0 {
                 ln_nj[j].exp()
@@ -1679,7 +1731,7 @@ fn solve_equilibrium(
         .sum();
     let mean_molecular_weight_kg_per_kmol = (1.0 - active_cond_mole_frac) / n;
 
-    let cp_frozen_kj_per_kg_k = ((0..ng)
+    let mut cp_frozen_kj_per_kg_k = ((0..ng)
         .map(|j| nj_stored[j] * final_thermo.cp[j])
         .sum::<f64>()
         + active_condensed
@@ -1688,7 +1740,7 @@ fn solve_equilibrium(
             .sum::<f64>())
         * R_CEA
         / 1000.0;
-    let cv_frozen_kj_per_kg_k = cp_frozen_kj_per_kg_k - n * R_CEA / 1000.0;
+    let mut cv_frozen_kj_per_kg_k = cp_frozen_kj_per_kg_k - n * R_CEA / 1000.0;
 
     // I.2: equilibrium partials — two linear systems sharing the converged
     // matrix's LHS (element rows + condensed rows + moles row, always
@@ -1755,11 +1807,19 @@ fn solve_equilibrium(
         Some(DVector::from_fn(neq2, |i, _| g[(i, neq2)]))
     };
 
-    let sol_t = solve_partial(&rhs_t);
-    let sol_p = solve_partial(&rhs_p);
+    let sol_t = if computed_partials || !post_processed {
+        solve_partial(&rhs_t)
+    } else {
+        None
+    };
+    let sol_p = if computed_partials || !post_processed {
+        solve_partial(&rhs_p)
+    } else {
+        None
+    };
 
     let dlnp = sol_p.as_ref().map_or(-1.0, |sp| -1.0 + sp[lnn_col2]);
-    let (dlnv_dlnt, dlnv_dlnp, cp_eq_over_r) = match (&sol_t, &sol_p) {
+    let (mut dlnv_dlnt, mut dlnv_dlnp, cp_eq_over_r) = match (&sol_t, &sol_p) {
         (_, _) if j_liq.is_some() => (0.0, dlnp, 0.0),
         (Some(st), _) => {
             let dlnn_dlnt = st[lnn_col2];
@@ -1797,17 +1857,55 @@ fn solve_equilibrium(
         _ => (1.0, dlnp, cp_frozen_kj_per_kg_k * 1000.0 / R_CEA),
     };
 
-    let gamma_s = if j_liq.is_some() {
+    let mut gamma_s = if j_liq.is_some() {
         -1.0 / dlnv_dlnp
     } else {
         -1.0 / (dlnv_dlnp + dlnv_dlnt * dlnv_dlnt * n / cp_eq_over_r)
     };
     let cv_eq_over_r = -cp_eq_over_r / (gamma_s * dlnv_dlnp);
-    let cp_eq_kj_per_kg_k = cp_eq_over_r * R_CEA / 1000.0;
-    let cv_eq_kj_per_kg_k = cv_eq_over_r * R_CEA / 1000.0;
+    let mut cp_eq_kj_per_kg_k = cp_eq_over_r * R_CEA / 1000.0;
+    let mut cv_eq_kj_per_kg_k = cv_eq_over_r * R_CEA / 1000.0;
+    if post_processed && !computed_partials {
+        // post_process(.false.) retains earlier partials and fills only missing Cp/gamma.
+        let previous = carried.and_then(|s| s.reported.as_deref());
+        let current_cp = cp_frozen_kj_per_kg_k;
+        cp_frozen_kj_per_kg_k = previous.map_or(current_cp, |s| {
+            if s.cp_frozen_j_kg_k / 1000.0 < 1e-10 {
+                current_cp
+            } else {
+                s.cp_frozen_j_kg_k / 1000.0
+            }
+        });
+        cp_eq_kj_per_kg_k = previous.map_or(0.0, |s| s.cp_equilibrium_j_kg_k / 1000.0);
+        if cp_eq_kj_per_kg_k < 1e-10 {
+            cp_eq_kj_per_kg_k = current_cp;
+        }
+        cv_frozen_kj_per_kg_k = cp_frozen_kj_per_kg_k - n * R_CEA / 1000.0;
+        cv_eq_kj_per_kg_k = previous.map_or(0.0, |s| s.cv_equilibrium_j_kg_k / 1000.0);
+        gamma_s = previous.map_or(0.0, |s| s.gamma_s);
+        if gamma_s < 1e-10 {
+            gamma_s = cp_eq_kj_per_kg_k / (cp_eq_kj_per_kg_k - n);
+        }
+        dlnv_dlnt = 0.0;
+        dlnv_dlnp = 0.0;
+    }
 
     // D.7's final reporting map: species below LOG_MIN are reported as
     // exactly 0 rather than denormal-ish exp() values.
+    if !converged
+        && (post_processed_on_limit || (times_singular > MAX_SINGULAR_RETRIES && !post_processed))
+        && let Some(start) = carried.filter(|s| s.has_transport_seed)
+    {
+        temperature_k = start.temperature_k;
+        n = start.n;
+        ln_nj.clone_from(&start.ln_nj);
+        nj_stored.clone_from(&start.nj_stored);
+        nj_c.clone_from(&start.condensed_nj);
+        is_active.clone_from(&start.condensed_active);
+        active_ranked.clone_from(&start.active_ranked);
+        j_sol = start.j_sol;
+        j_liq = start.j_liq;
+    }
     let nj = nj_stored.clone();
     EquilibriumDebug {
         seed: EquilibriumSeed {
@@ -1825,6 +1923,7 @@ fn solve_equilibrium(
             esize,
             converged_tsize,
             elements_reduced: element_excluded.iter().any(|excluded| *excluded),
+            has_transport_seed: carried.is_some_and(|s| s.has_transport_seed),
             reported: None,
         },
         assembled_first_iteration: assembled_first_iteration
