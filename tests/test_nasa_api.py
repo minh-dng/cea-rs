@@ -11,9 +11,7 @@ import json
 from itertools import product
 from pathlib import Path
 import sys
-from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
 import warnings
 
 parser = argparse.ArgumentParser()
@@ -46,6 +44,7 @@ HERE = Path(__file__).parent
 NATIVE_VALUES = json.loads(
     (HERE / "data" / "nasa" / "python-api-3.3.4.json").read_text()
 )["cases"]
+RETAINED_VALUES = json.loads((HERE / "data" / "nasa" / "retained-3.3.4.json").read_text())["cases"]
 THERMO = (
     "T",
     "P",
@@ -217,38 +216,40 @@ def air_jet_a(api):
     return soln, prod, solver
 
 
-class NasaApiTests(unittest.TestCase):
-    def test_derivative_closure_check(self):
-        solution, _, solver = equilibrium(rust)
-        derivatives = rust.EqDerivatives(solver, solution)
-        derivatives.compute_derivatives()
-        expected = derivatives.dnj_dw0
-        derivatives.compute_derivatives(check_closure_defect=True)
-        np.testing.assert_array_equal(derivatives.dnj_dw0, expected)
-        core = solver._inner.derivatives("TP", 2500.0, 1e6, [1.0, 8.0])
-        rows = {
-            name: getattr(core, name)
-            for name in (
-                "temperature", "total_moles", "enthalpy", "energy",
-                "gibbs_energy", "entropy", "species_amounts",
-            )
-        }
-        for defect in (None, float("nan"), 1e-4):
-            with self.subTest(defect=defect):
-                with patch.object(
-                    solver._inner,
-                    "derivatives",
-                    return_value=SimpleNamespace(**rows, closure_defect=defect),
-                ):
-                    with self.assertRaisesRegex(cea_rs.ConvergenceError, "closure defect"):
-                        derivatives.compute_derivatives(check_closure_defect=True)
+def ap_al(api, warm_start=False):
+    reac, prod = mixtures(api, ["NH4CLO4(I)", "AL(cr)"])
+    solver = api.EqSolver(prod, reactants=reac, transport=True)
+    soln = api.EqSolution(solver)
+    if warm_start:
+        solver.solve(soln, api.TP, 3000.0, 1.0, np.array([4.0, 1.0]))
+    solver.solve(soln, api.TP, 300.0, 1.0, np.array([4.0, 1.0]))
+    return soln, prod, solver
 
+
+def reused_failure(api):
+    reac, prod = mixtures(api, ["Ar", "H2O"])
+    solver = api.EqSolver(prod, reactants=reac, transport=True)
+    soln = api.EqSolution(solver)
+    for temperature in (400.0, 273.15):
+        solver.solve(soln, api.TP, temperature, 1.0, np.array([1.0, 1.0]))
+    return soln, prod, solver
+
+
+def argon_below_range(api):
+    reac, prod = mixtures(api, ["Ar"])
+    solver = api.EqSolver(prod, reactants=reac)
+    soln = api.EqSolution(solver)
+    solver.solve(soln, api.TP, 100.0, 1.0, np.array([1.0]))
+    return soln, prod, solver
+
+
+class NasaApiTests(unittest.TestCase):
     def close(self, group, label, actual, expected, tolerance=1e-4, atol=0):
-        a, b = np.asarray(actual), np.asarray(expected)
+        a, b = np.asarray(actual, dtype=float), np.asarray(expected, dtype=float)
         self.assertEqual(a.shape, b.shape, label)
-        self.assertTrue(np.all(np.isfinite(a)), label)
+        np.testing.assert_array_equal(np.isfinite(a), np.isfinite(b), err_msg=label)
         relative = np.abs(a - b) / np.maximum(np.abs(b), 1e-300)
-        meaningful = np.abs(b) > atol
+        meaningful = (np.abs(b) > atol) & np.isfinite(b)
         worst = float(np.max(np.where(meaningful, relative, 0))) if a.size else 0.0
         if worst > REPORT["worst_relative"].get(group, {}).get("difference", -1):
             REPORT["worst_relative"][group] = {"difference": worst, "member": label}
@@ -288,46 +289,6 @@ class NasaApiTests(unittest.TestCase):
             self.assertIs(type(av), type(bv), f"{group}.{name} return type")
             if isinstance(av, np.ndarray):
                 self.assertEqual(av.dtype, np.float64)
-            if frozen and name in ("cv_fr", "cv_eq"):
-                # NASA retains a previous Cv or zero after freezing. Check the
-                # returned Rust Cv independently; bound the native legacy values.
-                self.close(
-                    group + " frozen Cv identity",
-                    name,
-                    a.cv_fr,
-                    a.cp_fr - rust.R * a.n / 1000,
-                    atol=1e-6,
-                )
-                eq = np.array([s.equilibrium for s in a._states])
-                self.close(group, name + " equilibrium stations", av[eq], bv[eq])
-                for i in np.flatnonzero(~eq):
-                    retained = np.r_[0.0, bv[: i + 1][eq[: i + 1]], bv[0]]
-                    self.assertTrue(
-                        np.any(np.isclose(bv[i], retained, rtol=1e-4, atol=1e-12)), name
-                    )
-                REPORT["exceptions"].append(
-                    f"{group}.{name}: native frozen Cv retains a previous value or zero; Rust evaluates current Cv"
-                )
-                continue
-            if (
-                reflected_frozen
-                and name in ("cp_fr", "cp_eq", "cv_fr", "cv_eq")
-                and not (name == "cp_fr" and b.viscosity[-1] > 0)
-            ):
-                self.close(group, name + " stations 1/2", av[:2], bv[:2], atol=1e-12)
-                masses = np.array([a.mass_fractions[n][-1] for n in ap.species_names])
-                cp = ap.calc_property(rust.FROZEN_CP, masses, float(a.T[-1])) / 1000
-                self.close(group + " station5 Cp", "Cp identity", a.cp_fr[-1], cp)
-                self.close(
-                    group + " station5 Cv",
-                    "Cv identity",
-                    a.cv_fr[-1],
-                    cp - rust.R * a.n[-1] / 1000,
-                )
-                REPORT["exceptions"].append(
-                    f"{group}.{name}[2]: native reflected-frozen heat capacity is uninitialized; independent fixed-mixture check"
-                )
-                continue
             self.close(
                 group, name, av, bv, atol=1e-10 if name in ("enthalpy", "energy") else 0
             )
@@ -343,22 +304,13 @@ class NasaApiTests(unittest.TestCase):
                     )
                     >= 1e-5
                 )
-                if example12 and species in ("CO", "OH", "H2"):
-                    at75 = np.isclose(a.ae_at, 75.0, rtol=0, atol=1e-8)
-                    normal = mask & ~at75
-                    self.close(group, f"{fractions}.{species}", av[normal], bv[normal])
-                    self.close(
-                        "RP12 bounded trace exception",
-                        f"{fractions}.{species}[area75]",
-                        av[mask & at75],
-                        bv[mask & at75],
-                        tolerance=1.8e-4,
-                    )
-                    REPORT["exceptions"].append(
-                        f"RP12 {fractions}.{species} at area75: native stops at area74.99733854; bound 1.8e-4"
-                    )
-                else:
-                    self.close(group, f"{fractions}.{species}", av[mask], bv[mask])
+                self.close(group, f"{fractions}.{species}", av[mask], bv[mask])
+        if isinstance(a, rust.ShockSolution):
+            for name in ("n", "nj", "ln_nj"):
+                for soln in (a, b):
+                    with self.assertRaisesRegex(AttributeError, "_get_size"):
+                        getattr(soln, name)
+            return
         self.assertEqual(
             a.nj.shape,
             (
@@ -370,27 +322,8 @@ class NasaApiTests(unittest.TestCase):
             ),
         )
         gas = ap._gas
-        if isinstance(a, rust.ShockSolution):
-            with self.assertRaisesRegex(AttributeError, "_get_size"):
-                _ = b.nj
-            amounts = np.array(
-                [
-                    b.mass_fractions[n] / r.molecular_weight
-                    for n, r in zip(ap.species_names, ap._reactants)
-                ]
-            ).T
-            self.close(
-                group,
-                "n reconstructed from native fractions",
-                a.n,
-                amounts[..., gas].sum(axis=-1),
-            )
-            REPORT["exceptions"].append(
-                "NASA ShockSolution.n/nj/ln_nj call missing _get_size; Rust returns n/nj arrays; independent native-fraction check"
-            )
-        else:
-            self.close(group, "n", a.n, b.n)
-            amounts = b.nj
+        self.close(group, "n", a.n, b.n)
+        amounts = b.nj
         mask = np.array(
             [
                 np.maximum(
@@ -402,18 +335,6 @@ class NasaApiTests(unittest.TestCase):
             ]
         ).T
         aa, bb = np.atleast_2d(a.nj), np.atleast_2d(amounts)
-        if example12:
-            for j, n in enumerate(ap.species_names):
-                if n in ("CO", "OH", "H2"):
-                    bounded = mask[:, j] & np.isclose(a.ae_at, 75.0, atol=1e-8, rtol=0)
-                    self.close(
-                        "RP12 bounded trace exception",
-                        "nj." + n,
-                        aa[bounded, j],
-                        bb[bounded, j],
-                        tolerance=1.8e-4,
-                    )
-                    mask[bounded, j] = False
         self.close(group, "nj", aa[mask], bb[mask])
         if all(s.equilibrium for s in a._states):
             self.assertEqual(
@@ -630,81 +551,59 @@ class NasaApiTests(unittest.TestCase):
                         weights,
                     ),
                 )
-        for name, mode, first, w, temperature, phase, fraction in (
-            (
-                "Hg",
-                "HP",
-                -15551.803948663037 / rust.R,
-                [1.0, 20.0],
-                234.28999933688,
-                "Hg(L)",
-                0.479137243881,
-            ),
-            ("H2O", "TP", 273.15, [1.0, 1.0], 273.15, "H2O(L)", 0.498612290857),
-            ("NaCN", "TP", 288.5, [1.0, 1.0], 288.5, "NaCN(III)", 0.499999999526),
+    def test_native_retained_states(self):
+        for key, name, mode, first, weights in (
+            ("hg-hp", "Hg", "HP", -15551.803948663037 / rust.R, [1.0, 20.0]),
+            ("water-transition", "H2O", "TP", 273.15, [1.0, 1.0]),
+            ("nacn-transition", "NaCN", "TP", 288.5, [1.0, 1.0]),
+            ("nacn-300", "NaCN", "TP", 300.0, [1.0, 1.0]),
+            ("br2-supersaturation", "Br2", "TP", 262.0, [1.0, 20.0]),
         ):
-            a = condensed(rust, name, mode, first, w)[0]
-            self.assertTrue(a.converged)
-            self.close("condensed stored", name + " T", a.T, temperature)
-            self.close(
-                "condensed stored", name + " phase", a.mass_fractions[phase], fraction
-            )
-            if native:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", RuntimeWarning)
-                    b = condensed(native, name, mode, first, w)[0]
-                self.assertFalse(b.converged)
-                self.assertEqual(b.last_error, native.NOT_CONVERGED)
-            REPORT["exceptions"].append(
-                f"condensed {name} {mode} {first}: native error8; Rust matches stored independent T/phase checks"
-            )
-        a = condensed(rust, "Br2", "TP", 262.0, [1.0, 20.0])[0]
-        self.close(
-            "condensed stored",
-            "Br2 solid mass",
-            a.mass_fractions["Br2(cr)"],
-            0.943263839016,
-        )
-        if native:
-            b = condensed(native, "Br2", "TP", 262.0, [1.0, 20.0])[0]
-            self.assertTrue(b.converged)
-            self.assertEqual(b.mass_fractions["Br2(cr)"], 0)
-            self.assertGreater(b.mole_fractions["Br2"], 10 * a.mole_fractions["Br2"])
-        REPORT["exceptions"].append(
-            "Br2 TP262K: native reversed interval omits solid; Rust solid mass0.943263839016 and lower saturated vapour"
-        )
+            with self.subTest(case=key), warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                actual = condensed(rust, name, mode, first, weights)[0]
+                self.retained(key, actual)
+                if native:
+                    expected = condensed(native, name, mode, first, weights)[0]
+                    self.assertEqual(actual.converged, expected.converged)
+                    self.assertEqual(actual.last_error, expected.last_error)
+                    for field in THERMO + ("volume", "n", "nj", "ln_nj"):
+                        self.close(key, field, getattr(actual, field), getattr(expected, field), atol=1e-25 if field == "nj" else 0)
+        for key, run in (("ap-al-nan", ap_al), ("ap-al-retained-transport", lambda api: ap_al(api, True)), ("water-reuse", reused_failure), ("argon-low-temperature", argon_below_range)):
+            with self.subTest(case=key), warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                actual = run(rust)[0]
+                self.retained(key, actual)
+                if native:
+                    expected = run(native)[0]
+                    self.assertEqual(actual.converged, expected.converged)
+                    self.assertEqual(actual.last_error, expected.last_error)
+                    for field in THERMO + TRANSPORT + ("volume", "n", "nj", "ln_nj"):
+                        self.close(key, field, getattr(actual, field), getattr(expected, field), atol=1e-25 if field == "nj" else 0)
+
+    def retained(self, key, solution):
+        expected = RETAINED_VALUES[key]
+        self.assertEqual(solution.converged, expected["converged"])
+        self.assertEqual(solution.last_error, expected["last_error"])
+        for field, value in expected["values"].items():
+            if field in ("mass_fractions", "mole_fractions"):
+                for name, fraction in value.items():
+                    self.close(key, field + "." + name, getattr(solution, field)[name], fraction, atol=1e-25)
+            else:
+                self.close(key, field, getattr(solution, field), value, atol=1e-25 if field == "nj" else 0)
 
     def test_air_jet_a_false_positive(self):
-        a, _, _ = air_jet_a(rust)
-        self.assertTrue(a.converged)
-        self.close("Air Jet-A stored", "exit T", a.T[-1], 273.121944437)
-        self.close("Air Jet-A stored", "exit P", a.P[-1], 0.09971217843957)
-        self.close("Air Jet-A invariants", "entropy", a.entropy[-1], a.entropy[0])
-        self.close(
-            "Air Jet-A invariants",
-            "energy",
-            a.enthalpy[-1] + a.Isp[-1] ** 2 / 2000,
-            a.enthalpy[0],
-            atol=1e-5,
-        )
-        self.close(
-            "Air Jet-A invariants",
-            "mass flux",
-            a.density[-1] * a.Isp[-1] * 80,
-            a.density[1] * a.Isp[1],
-        )
+        actual = air_jet_a(rust)
+        self.retained("air-jet-a", actual[0])
         if native:
-            b, _, _ = air_jet_a(native)
-            self.assertTrue(b.converged)
-            residual = b.enthalpy[-1] + b.Isp[-1] ** 2 / 2000 - b.enthalpy[0]
-            self.assertGreater(residual, 14.0)
-            self.assertLess(residual, 15.0)
-            flux = b.density[-1] * b.Isp[-1] * 80 / (b.density[1] * b.Isp[1]) - 1
-            self.assertGreater(flux, 0.18)
-            self.assertLess(flux, 0.19)
-        REPORT["exceptions"].append(
-            "Air/Jet-A 20MPa area80: NASA success has 14–15kJ/kg energy error and 18–19% mass-flux error; Rust independently closes both"
-        )
+            self.compare("Air Jet-A", actual, air_jet_a(native), THERMO + PERFORMANCE)
+        a = actual[0]
+        residual = a.enthalpy[-1] + a.Isp[-1] ** 2 / 2000 - a.enthalpy[0]
+        self.assertGreater(residual, 14.0)
+        self.assertLess(residual, 15.0)
+        flux = a.density[-1] * a.Isp[-1] * 80 / (a.density[1] * a.Isp[1]) - 1
+        self.assertGreater(flux, 0.18)
+        self.assertLess(flux, 0.19)
 
     def test_rocket_schedules(self):
         for example, nf, transport in (
@@ -736,28 +635,9 @@ class NasaApiTests(unittest.TestCase):
                         frozen=nf is not None,
                         example12=example == 12,
                     )
-        # Native's early FAC freeze fails and retains seven stations; accept
-        # only this exact failure and verify the complete Rust solution's energy.
-        a = rp_rocket(rust, 9, 3)[0]
-        self.assertTrue(a.converged)
-        self.assertEqual(a.num_pts, 10)
-        self.close(
-            "FAC early freeze invariant",
-            "stagnation enthalpy",
-            a.enthalpy[2:] + a.Isp[2:] ** 2 / 2000,
-            np.full(a.num_pts - 2, a.enthalpy[0]),
-            atol=1e-6,
-        )
-        if native:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", RuntimeWarning)
-                b = rp_rocket(native, 9, 3)[0]
-            self.assertFalse(b.converged)
-            self.assertEqual(b.last_error, native.NOT_CONVERGED)
-            self.assertEqual(b.num_pts, 7)
-        REPORT["exceptions"].append(
-            "RP9 n_frz=3: native error8 stops after seven stations; Rust returns ten verified stations with energy closure"
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            self.retained("fac-early-freeze", rp_rocket(rust, 9, 3)[0])
 
     def test_shock_and_detonation(self):
         for reflected, incident, reflection, transport in product(
@@ -836,10 +716,11 @@ class NasaApiTests(unittest.TestCase):
         for w in ([], [0, 0], [-1, 2], [float("nan"), 1]):
             with self.assertRaises(ValueError):
                 solver.solve(s, rust.TP, 3000.0, 10.0, np.array(w))
-            self.assertFalse(s.converged)
-            with self.assertRaisesRegex(RuntimeError, "no verified solution"):
-                _ = s.T
+            self.assertTrue(s.converged)
+            self.assertEqual(s.T, 2500.0)
         reac, prod = mixtures(rust, ["H2", "O2"])
+        with self.assertRaisesRegex(NotImplementedError, "Uncomputed EqDerivatives"):
+            _ = rust.EqDerivatives(solver, s).dT_dstate1
         for kwargs in ({"smooth_truncation": True}, {"truncation_width": 0.5}):
             with self.assertRaisesRegex(NotImplementedError, "truncation"):
                 rust.EqSolver(prod, reactants=reac, **kwargs)
@@ -847,11 +728,15 @@ class NasaApiTests(unittest.TestCase):
             (lambda: rust.init(path="anything"), "database"),
             (lambda: rust.init_thermo("thermo.lib"), "thermodynamic"),
             (lambda: rust.init_trans("trans.lib"), "transport"),
-            (lambda: rust.EqSolution(solver, T_init=2500), "T_init"),
         ):
             with self.assertRaisesRegex(NotImplementedError, feature):
                 call()
         ds = rust.DetonationSolver(prod, reactants=reac)
+        for prefix in ("Rocket", "Shock", "Detonation"):
+            solver = getattr(rust, prefix + "Solver")(prod, reactants=reac)
+            initial = getattr(rust, prefix + "Solution")(solver)
+            with self.assertRaisesRegex(NotImplementedError, "Unsolved flow-solution"):
+                _ = initial.T
         with self.assertRaisesRegex(NotImplementedError, "Frozen detonation"):
             ds.solve(
                 rust.DetonationSolution(ds),
@@ -860,40 +745,57 @@ class NasaApiTests(unittest.TestCase):
                 1.0,
                 frozen=True,
             )
-        with self.assertRaises(cea_rs.ConvergenceError):
-            shock(rust, speed=1000.0)
-        if native:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", RuntimeWarning)
-                n = shock(native, speed=1000.0)[0]
-            self.assertFalse(n.converged)
-            self.assertEqual(n.last_error, native.LAST_VALID_SOLUTION)
-        REPORT["exceptions"].append(
-            "RP7 1000 m/s equilibrium: native LAST_VALID_SOLUTION=9; Rust raises and exposes no state"
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            actual = shock(rust, speed=1000.0)[0]
+            self.retained("shock-last-valid", actual)
+            if native:
+                expected = shock(native, speed=1000.0)[0]
+                self.assertFalse(expected.converged)
+                self.assertEqual(expected.last_error, native.LAST_VALID_SOLUTION)
+                for name in THERMO:
+                    self.close("shock retained", name, getattr(actual, name), getattr(expected, name))
+            actual = shock(rust, speed=1000.0, reflected=True)
+            self.retained("shock-retained-reflection", actual[0])
+            if native:
+                self.compare("shock retained reflection", actual, shock(native, speed=1000.0, reflected=True), THERMO + ("Mach", "velocity", "P52", "rho52"))
+        # NASA's setters change the exposed guess; the first solve restores the constructor seed.
+        for api in (rust, native) if native else (rust,):
+            r, p = mixtures(api, ["H2", "O2"])
+            solver = api.EqSolver(p, reactants=r)
+            guess = np.zeros(solver.num_products)
+            solution = api.EqSolution(solver, T_init=1200.0, nj_init=guess)
+            self.assertEqual(solution.T, 1200.0)
+            self.assertFalse(solution.converged)
+            self.assertEqual(solution.last_error, 0)
+            self.close("initial guesses", "gas nj", solution.nj[:solver.num_gas], np.full(solver.num_gas, 1e-6))
+            solver.solve(solution, api.TP, 2500.0, 10.0, np.array([1.0, 8.0]))
+            self.assertTrue(solution.converged)
 
     def test_helpers_defaults_and_namespace(self):
         from cea_rs.nasa.lib import libcea
         from cea_rs.nasa import matlab
 
         self.assertIs(libcea.EqSolver, rust.EqSolver)
-        self.assertEqual(rust.lib_version(), cea_rs.__version__)
+        self.assertEqual(rust.lib_version(), "3.3.4")
         self.assertEqual(
             (
                 rust.lib_version_major(),
                 rust.lib_version_minor(),
                 rust.lib_version_patch(),
             ),
-            (0, 1, 0),
+            (3, 3, 4),
         )
         self.assertIn("nasa_python_api", cea_rs.capabilities())
         self.assertTrue(rust.is_initialized())
+        if native:
+            self.assertFalse(set(native.__all__) - set(rust.__all__))
         rust.init(trans=False)
         rust.set_log_level(rust.LOG_NONE)
         with self.assertRaisesRegex(NotImplementedError, "logging"):
             rust.set_log_level(rust.LOG_DEBUG)
         with self.assertRaisesRegex(NotImplementedError, "MATLAB"):
-            _ = matlab.rocket_solve
+            matlab.rocket_solve([], 1.0)
         with self.assertRaisesRegex(NotImplementedError, "fitted named reactant"):
             rust.Mixture([rust.Reactant("H2", enthalpy=1.0, enthalpy_units="kJ/mol")])
 
@@ -940,7 +842,7 @@ class NasaApiTests(unittest.TestCase):
         old = a[0].nj.copy()
         a[0].nj[:] = 0
         np.testing.assert_array_equal(a[0].nj, old)
-        with self.assertRaisesRegex(NotImplementedError, "frozen stations"):
+        with self.assertRaisesRegex(AttributeError, "_get_size"):
             _ = shock(rust)[0].ln_nj
 
         # omit acts only on generated products, including absent-name no-ops.

@@ -94,11 +94,11 @@ class Solver:
             weights: Nonnegative reactant masses, normalized internally.
 
         Returns:
-            A verified state. Failed solves raise ConvergenceError; fitted-data
-            domain violations raise DomainError. No stale state is returned.
+            A NASA state with converged and last_error fields. Numerical failures
+            retain the native values; malformed inputs still raise typed errors.
             Mole fractions follow NASA's reporting convention, with condensed
             moles included in the denominator; they are not gas-only fractions.
-            Frozen states expose equilibrium Cp as None. Out-of-fit trace
+            Frozen states retain NASA's stored heat capacities. Out-of-fit trace
             species at <= 1e-11 mole fraction are listed explicitly.
         """
         return self._inner.solve(mode, state1, state2, weights)
@@ -231,7 +231,7 @@ class Solver:
         n_frz counts stations from one, including FAC's infinity station; zero
         means equilibrium. Points upstream of the freeze point are omitted as
         in NASA CEA. A frozen fit-limit stop returns complete=False and only
-        verified stations, with stop_reason explaining the limit.
+        completed stations, with stop_reason explaining the limit.
 
         hc (J/kg) or tc (K) assigns the stagnation state instead of the reactant
         enthalpy. tc_est seeds a chamber temperature iteration. transport=True
@@ -280,9 +280,8 @@ class Solver:
 
         Station velocities use each shock's frame; v2_m_s uses the wall frame.
         Any incident/reflected frozen/equilibrium combination is supported.
-        Reflected-frozen sound speed and gamma retain NASA's station-2 Cp basis;
-        cp_frozen_j_kg_k is evaluated at the actual station temperature.
-        Failed solves raise an error and never return a retained earlier state.
+        Reflected-frozen sound speed and gamma retain NASA's station-2 Cp basis.
+        Numerical failures return the native status and retained fields.
         """
         return self._inner.shock(
             weights, temperature_k, pressure_pa, u1=u1, mach1=mach1,
