@@ -718,7 +718,7 @@ fn _cea_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::shock::ShockResult>()?;
     m.add("ConvergenceError", m.py().get_type::<ConvergenceError>())?;
     m.add("DomainError", m.py().get_type::<DomainError>())?;
-    m.add("__version__", "0.1.0a3")?;
+    m.add("__version__", "0.1.0a4")?;
     m.add("R", crate::R)?;
     Ok(())
 }

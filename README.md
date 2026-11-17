@@ -3,7 +3,7 @@
 Chemical equilibrium and rocket performance in Rust, with Python bindings.
 It copies the behaviour of [NASA CEA](https://github.com/nasa/cea) 3.3.4,
 including its quirks and failure codes, and needs no Fortran at runtime.
-Version 0.1.0a3 is an alpha.
+Version 0.1.0a4 is an alpha.
 
 ## Install
 
@@ -72,7 +72,7 @@ and NASA input decks (see below).
   [provenance and licences](docs/provenance.md).
 
 Version 0.1.0a2 was slower than native CEA in its measured workloads
-([measurements](docs/performance-0.1.0a2/README.md)); 0.1.0a3 has not been
+([measurements](docs/performance-0.1.0a2/README.md)); 0.1.0a4 has not been
 benchmarked.
 
 ## Released consumers
