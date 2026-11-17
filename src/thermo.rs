@@ -1,4 +1,5 @@
 //! Reactant properties and element bookkeeping in SI units.
+//! NASA CEA thermo/mixture rules are derived from Apache-2.0 NASA CEA; see provenance.
 use crate::{Error, R, Result};
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -55,7 +56,8 @@ fn constituent(symbol: &str) -> Result<Constituent> {
 #[derive(Clone, Debug)]
 struct Fit {
     lo: f64,
-    hi: f64,
+    /// Interval as written in the database; None for NASA's zero-filled padding.
+    nominal: Option<(f64, f64)>,
     a: [f64; 9],
 }
 
@@ -75,6 +77,29 @@ pub struct Reactant {
 }
 
 impl Reactant {
+    /// NASA's inclusive nominal range in K. Reference-only reactants report
+    /// T_ref ± 10 K; properties() still requires their exact reference state.
+    pub fn get_valid_temperature_range(&self) -> (f64, f64) {
+        if let Some(sp) = self.species {
+            return sp.data().valid_temperature_range();
+        }
+        if self.fits.is_empty() {
+            return (
+                self.reference_temperature - 10.0,
+                self.reference_temperature + 10.0,
+            );
+        }
+        // NASA reports its compiled gas intervals for a gaseous reactant.
+        if self.fits.len() == 3 && self.fits[2].lo == 6000.0 {
+            return (200.0, 20000.0);
+        }
+        let nominal = self.fits.iter().filter_map(|f| f.nominal);
+        (
+            nominal.clone().map(|r| r.0).fold(f64::INFINITY, f64::min),
+            nominal.map(|r| r.1).fold(f64::NEG_INFINITY, f64::max),
+        )
+    }
+
     /// Load a NASA species, including reference-only liquid fuels.
     pub fn named(name: &str) -> Result<Self> {
         if let Ok(sp) = Species::from_str(name) {
@@ -146,7 +171,6 @@ impl Reactant {
             ));
         }
         if let Some(sp) = self.species {
-            check_species_temperature(sp, t)?;
             let d = sp.data();
             return Ok((
                 Some(d.cp_over_r(t) * R / 1000.0),
@@ -155,9 +179,10 @@ impl Reactant {
             ));
         }
         if self.fits.is_empty() {
-            if (t - self.reference_temperature).abs() > 1e-7 {
+            // NASA's reported validity range for a reference-only reactant is T_ref ± 10 K.
+            if (t - self.reference_temperature).abs() > 10.0 {
                 return Err(Error::Domain(format!(
-                    "{} has enthalpy only at {} K; no heat capacity is available",
+                    "{} has enthalpy only near {} K; no heat capacity is available",
                     self.name, self.reference_temperature
                 )));
             }
@@ -166,13 +191,8 @@ impl Reactant {
         let f = self
             .fits
             .iter()
-            .find(|f| t >= f.lo && t <= f.hi)
-            .ok_or_else(|| {
-                Error::Domain(format!(
-                    "{}: {t} K is outside the fitted intervals",
-                    self.name
-                ))
-            })?;
+            .rfind(|f| t > f.lo)
+            .unwrap_or(&self.fits[0]);
         let a = f.a;
         let cp = a[0] / t.powi(2)
             + a[1] / t
@@ -198,15 +218,28 @@ impl Reactant {
             + a[8];
         Ok((Some(cp * R / 1000.0), h * R / 1000.0, Some(s * R / 1000.0)))
     }
+
+    pub(crate) fn enthalpy(&self, t: f64) -> Result<f64> {
+        // mixture_calc_enthalpy bypasses reference-only validity bounds in NASA's API.
+        if self.species.is_none() && self.fits.is_empty() && t.is_finite() && t > 0.0 {
+            Ok(self.reference_enthalpy)
+        } else {
+            self.properties(t).map(|p| p.1)
+        }
+    }
 }
 
 pub(crate) fn check_species_temperature(sp: Species, t: f64) -> Result<()> {
     if !t.is_finite()
+        || sp
+            .data()
+            .extrapolated_above()
+            .is_some_and(|limit| t > limit)
         || !sp
             .data()
             .temperature_data()
             .iter()
-            .any(|(lo, hi, _)| t >= *lo - 1e-9 && t <= *hi + 1e-9)
+            .any(|(lo, hi, _)| t >= *lo - 1e-3 && t <= *hi + 1e-3)
     {
         return Err(Error::Domain(format!(
             "{}: {t} K is outside the NASA fitted intervals",
@@ -245,6 +278,18 @@ fn parse_reactants() -> Result<Vec<Reactant>> {
             if !symbol.is_empty() && n != 0.0 {
                 formula.insert(symbol.to_string(), n);
             }
+        }
+        // NASA's database compiler restores Air's composition beyond the rounded input columns.
+        if header[..18].trim() == "Air" {
+            formula = [
+                ("N", 1.56168),
+                ("O", 0.419590),
+                ("AR", 0.009365),
+                ("C", 0.000319),
+            ]
+            .into_iter()
+            .map(|(e, n)| (e.into(), n))
+            .collect();
         }
         let mut r = Reactant::custom(
             header[..18].trim().into(),
@@ -289,11 +334,26 @@ fn parse_reactants() -> Result<Vec<Reactant>> {
                 for (i, j) in [0, 1, 3, 4].into_iter().enumerate() {
                     a[5 + i] = number(row2, 16 * j, 16 * (j + 1))?;
                 }
+                let lo = number(range, 0, 11)?;
                 r.fits.push(Fit {
-                    lo: number(range, 0, 11)?,
-                    hi: number(range, 11, 22)?,
+                    lo,
+                    nominal: Some((lo, number(range, 11, 22)?)),
                     a,
                 });
+            }
+            // NASA stores three fixed gas intervals; missing reactant intervals stay zero-filled.
+            if number(meta, 50, 52)? == 0.0 {
+                for (i, lo) in [200.0, 1000.0, 6000.0].into_iter().enumerate() {
+                    if let Some(fit) = r.fits.get_mut(i) {
+                        fit.lo = lo;
+                    } else {
+                        r.fits.push(Fit {
+                            lo,
+                            nominal: None,
+                            a: [0.0; 9],
+                        });
+                    }
+                }
             }
         }
         out.push(r);

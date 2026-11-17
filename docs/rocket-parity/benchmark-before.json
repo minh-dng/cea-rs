@@ -1,0 +1,541 @@
+{
+  "python": "3.15.0",
+  "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "native": "3.3.4",
+  "rust": "0.1.0a3",
+  "profile": "cargo --release",
+  "warmups": 5,
+  "repeats": 50,
+  "cache_conditions": "Same process and installed native libraries. First-call and construction recorded; warm repeats after five discarded calls. OS filesystem caches not flushed. Fresh native solution per call; no prior-solution warm start. Full validation remains enabled in Rust.",
+  "process_cold_cases": [
+    {
+      "mode": "TP",
+      "backend": "native",
+      "samples_ms": [
+        {
+          "import_init_ms": 126.860917,
+          "construction_ms": 0.205958,
+          "first_solve_ms": 0.039875
+        },
+        {
+          "import_init_ms": 124.609,
+          "construction_ms": 0.202917,
+          "first_solve_ms": 0.048542
+        },
+        {
+          "import_init_ms": 130.980125,
+          "construction_ms": 0.206458,
+          "first_solve_ms": 0.041167
+        },
+        {
+          "import_init_ms": 128.575083,
+          "construction_ms": 0.207084,
+          "first_solve_ms": 0.046083
+        },
+        {
+          "import_init_ms": 125.427084,
+          "construction_ms": 0.203708,
+          "first_solve_ms": 0.037667
+        }
+      ]
+    },
+    {
+      "mode": "TP",
+      "backend": "rust",
+      "samples_ms": [
+        {
+          "import_init_ms": 2.1855,
+          "construction_ms": 0.021292,
+          "first_solve_ms": 0.097083
+        },
+        {
+          "import_init_ms": 2.159791,
+          "construction_ms": 0.017167,
+          "first_solve_ms": 0.090667
+        },
+        {
+          "import_init_ms": 2.205125,
+          "construction_ms": 0.02025,
+          "first_solve_ms": 0.09175
+        },
+        {
+          "import_init_ms": 2.106208,
+          "construction_ms": 0.016834,
+          "first_solve_ms": 0.095166
+        },
+        {
+          "import_init_ms": 2.25175,
+          "construction_ms": 0.016792,
+          "first_solve_ms": 0.09325
+        }
+      ]
+    },
+    {
+      "mode": "equilibrium",
+      "backend": "native",
+      "samples_ms": [
+        {
+          "import_init_ms": 126.86575,
+          "construction_ms": 0.210541,
+          "first_solve_ms": 0.094875
+        },
+        {
+          "import_init_ms": 133.301458,
+          "construction_ms": 0.22175,
+          "first_solve_ms": 0.098
+        },
+        {
+          "import_init_ms": 125.562375,
+          "construction_ms": 0.211375,
+          "first_solve_ms": 0.097917
+        },
+        {
+          "import_init_ms": 126.379334,
+          "construction_ms": 0.226541,
+          "first_solve_ms": 0.10325
+        },
+        {
+          "import_init_ms": 123.819792,
+          "construction_ms": 0.2105,
+          "first_solve_ms": 0.098916
+        }
+      ]
+    },
+    {
+      "mode": "equilibrium",
+      "backend": "rust",
+      "samples_ms": [
+        {
+          "import_init_ms": 2.222708,
+          "construction_ms": 0.020917,
+          "first_solve_ms": 1.265833
+        },
+        {
+          "import_init_ms": 2.421833,
+          "construction_ms": 0.022083,
+          "first_solve_ms": 1.289042
+        },
+        {
+          "import_init_ms": 2.266208,
+          "construction_ms": 0.017667,
+          "first_solve_ms": 1.286958
+        },
+        {
+          "import_init_ms": 2.1385,
+          "construction_ms": 0.023875,
+          "first_solve_ms": 1.263417
+        },
+        {
+          "import_init_ms": 2.583333,
+          "construction_ms": 0.022417,
+          "first_solve_ms": 1.431208
+        }
+      ]
+    },
+    {
+      "mode": "frozen_at_throat",
+      "backend": "native",
+      "samples_ms": [
+        {
+          "import_init_ms": 126.190209,
+          "construction_ms": 0.208083,
+          "first_solve_ms": 0.082625
+        },
+        {
+          "import_init_ms": 127.886666,
+          "construction_ms": 0.217125,
+          "first_solve_ms": 0.085709
+        },
+        {
+          "import_init_ms": 129.054791,
+          "construction_ms": 0.202125,
+          "first_solve_ms": 0.080042
+        },
+        {
+          "import_init_ms": 126.783417,
+          "construction_ms": 0.2075,
+          "first_solve_ms": 0.076875
+        },
+        {
+          "import_init_ms": 125.251084,
+          "construction_ms": 0.211958,
+          "first_solve_ms": 0.076458
+        }
+      ]
+    },
+    {
+      "mode": "frozen_at_throat",
+      "backend": "rust",
+      "samples_ms": [
+        {
+          "import_init_ms": 2.234542,
+          "construction_ms": 0.021958,
+          "first_solve_ms": 0.654209
+        },
+        {
+          "import_init_ms": 2.338459,
+          "construction_ms": 0.017208,
+          "first_solve_ms": 0.646625
+        },
+        {
+          "import_init_ms": 2.150959,
+          "construction_ms": 0.01775,
+          "first_solve_ms": 0.648583
+        },
+        {
+          "import_init_ms": 2.115625,
+          "construction_ms": 0.016542,
+          "first_solve_ms": 0.653417
+        },
+        {
+          "import_init_ms": 2.098209,
+          "construction_ms": 0.016958,
+          "first_solve_ms": 0.648333
+        }
+      ]
+    }
+  ],
+  "process_cold_conditions": "Five fresh Python processes per backend/mode, H2/O2 1:6, 3 MPa, Ae/At=10; import/init, construction and first solve timed separately. OS filesystem caches remain warm/uncontrolled; no disk-cold claim.",
+  "cases": [
+    {
+      "reactants": [
+        "H2",
+        "O2"
+      ],
+      "mode": "TP",
+      "construction_ms": {
+        "native": 0.216791,
+        "rust": 0.139666
+      },
+      "first_call_ms": {
+        "native": 0.349375,
+        "rust": 0.114667
+      },
+      "warm": {
+        "native": {
+          "median_ms": 0.014917,
+          "min_ms": 0.0145,
+          "max_ms": 0.017458
+        },
+        "rust": {
+          "median_ms": 0.0508125,
+          "min_ms": 0.049875,
+          "max_ms": 0.072333
+        }
+      },
+      "rust_over_native_warm_median": 3.406348461486894
+    },
+    {
+      "reactants": [
+        "H2",
+        "O2"
+      ],
+      "mode": "equilibrium",
+      "construction_ms": {
+        "native": 0.216791,
+        "rust": 0.139666
+      },
+      "first_call_ms": {
+        "native": 0.098333,
+        "rust": 1.206708
+      },
+      "warm": {
+        "rust": {
+          "median_ms": 1.157229,
+          "min_ms": 1.131125,
+          "max_ms": 1.258417
+        },
+        "native": {
+          "median_ms": 0.055292,
+          "min_ms": 0.054958,
+          "max_ms": 0.066708
+        }
+      },
+      "rust_over_native_warm_median": 20.929411126383563
+    },
+    {
+      "reactants": [
+        "H2",
+        "O2"
+      ],
+      "mode": "frozen_at_chamber",
+      "construction_ms": {
+        "native": 0.216791,
+        "rust": 0.139666
+      },
+      "first_call_ms": {
+        "native": 0.034666,
+        "rust": 0.2205
+      },
+      "warm": {
+        "native": {
+          "median_ms": 0.02325,
+          "min_ms": 0.023041,
+          "max_ms": 0.023709
+        },
+        "rust": {
+          "median_ms": 0.19531199999999999,
+          "min_ms": 0.191625,
+          "max_ms": 0.234041
+        }
+      },
+      "rust_over_native_warm_median": 8.400516129032258
+    },
+    {
+      "reactants": [
+        "H2",
+        "O2"
+      ],
+      "mode": "frozen_at_throat",
+      "construction_ms": {
+        "native": 0.216791,
+        "rust": 0.139666
+      },
+      "first_call_ms": {
+        "native": 0.0485,
+        "rust": 0.566125
+      },
+      "warm": {
+        "rust": {
+          "median_ms": 0.561979,
+          "min_ms": 0.551792,
+          "max_ms": 0.672208
+        },
+        "native": {
+          "median_ms": 0.039208,
+          "min_ms": 0.038708,
+          "max_ms": 0.077
+        }
+      },
+      "rust_over_native_warm_median": 14.333273821669048
+    },
+    {
+      "reactants": [
+        "O2(L)",
+        "RP-1"
+      ],
+      "mode": "TP",
+      "construction_ms": {
+        "native": 0.550959,
+        "rust": 3.865
+      },
+      "first_call_ms": {
+        "native": 0.233042,
+        "rust": 0.3945
+      },
+      "warm": {
+        "native": {
+          "median_ms": 0.208313,
+          "min_ms": 0.20075,
+          "max_ms": 0.241291
+        },
+        "rust": {
+          "median_ms": 0.359479,
+          "min_ms": 0.347583,
+          "max_ms": 0.404459
+        }
+      },
+      "rust_over_native_warm_median": 1.7256676251602157
+    },
+    {
+      "reactants": [
+        "O2(L)",
+        "RP-1"
+      ],
+      "mode": "equilibrium",
+      "construction_ms": {
+        "native": 0.550959,
+        "rust": 3.865
+      },
+      "first_call_ms": {
+        "native": 0.936334,
+        "rust": 9.55625
+      },
+      "warm": {
+        "rust": {
+          "median_ms": 9.149687499999999,
+          "min_ms": 9.052625,
+          "max_ms": 9.520166
+        },
+        "native": {
+          "median_ms": 0.8439795,
+          "min_ms": 0.829042,
+          "max_ms": 0.87925
+        }
+      },
+      "rust_over_native_warm_median": 10.841125287995737
+    },
+    {
+      "reactants": [
+        "O2(L)",
+        "RP-1"
+      ],
+      "mode": "frozen_at_chamber",
+      "construction_ms": {
+        "native": 0.550959,
+        "rust": 3.865
+      },
+      "first_call_ms": {
+        "native": 0.316542,
+        "rust": 2.009667
+      },
+      "warm": {
+        "native": {
+          "median_ms": 0.2803335,
+          "min_ms": 0.279125,
+          "max_ms": 0.297833
+        },
+        "rust": {
+          "median_ms": 1.964938,
+          "min_ms": 1.940083,
+          "max_ms": 2.063834
+        }
+      },
+      "rust_over_native_warm_median": 7.009287152623571
+    },
+    {
+      "reactants": [
+        "O2(L)",
+        "RP-1"
+      ],
+      "mode": "frozen_at_throat",
+      "construction_ms": {
+        "native": 0.550959,
+        "rust": 3.865
+      },
+      "first_call_ms": {
+        "native": 0.671666,
+        "rust": 4.945417
+      },
+      "warm": {
+        "rust": {
+          "median_ms": 4.793082999999999,
+          "min_ms": 4.718958,
+          "max_ms": 5.353458
+        },
+        "native": {
+          "median_ms": 0.6025205,
+          "min_ms": 0.572958,
+          "max_ms": 0.692208
+        }
+      },
+      "rust_over_native_warm_median": 7.955053811447078
+    },
+    {
+      "reactants": [
+        "N2O4(L)",
+        "N2H4(L)",
+        "C2H8N2(L),UDMH"
+      ],
+      "mode": "TP",
+      "construction_ms": {
+        "native": 0.707042,
+        "rust": 0.016833
+      },
+      "first_call_ms": {
+        "native": 0.30875,
+        "rust": 0.504333
+      },
+      "warm": {
+        "native": {
+          "median_ms": 0.284916,
+          "min_ms": 0.280792,
+          "max_ms": 3.058166
+        },
+        "rust": {
+          "median_ms": 0.4626665,
+          "min_ms": 0.458584,
+          "max_ms": 0.51725
+        }
+      },
+      "rust_over_native_warm_median": 1.6238698423394964
+    },
+    {
+      "reactants": [
+        "N2O4(L)",
+        "N2H4(L)",
+        "C2H8N2(L),UDMH"
+      ],
+      "mode": "equilibrium",
+      "construction_ms": {
+        "native": 0.707042,
+        "rust": 0.016833
+      },
+      "first_call_ms": {
+        "native": 1.280958,
+        "rust": 12.15325
+      },
+      "warm": {
+        "rust": {
+          "median_ms": 11.603978999999999,
+          "min_ms": 11.482667,
+          "max_ms": 12.665625
+        },
+        "native": {
+          "median_ms": 1.1491255,
+          "min_ms": 1.142166,
+          "max_ms": 1.181125
+        }
+      },
+      "rust_over_native_warm_median": 10.098095464768642
+    },
+    {
+      "reactants": [
+        "N2O4(L)",
+        "N2H4(L)",
+        "C2H8N2(L),UDMH"
+      ],
+      "mode": "frozen_at_chamber",
+      "construction_ms": {
+        "native": 0.707042,
+        "rust": 0.016833
+      },
+      "first_call_ms": {
+        "native": 0.417958,
+        "rust": 2.76025
+      },
+      "warm": {
+        "native": {
+          "median_ms": 0.394229,
+          "min_ms": 0.383583,
+          "max_ms": 0.484834
+        },
+        "rust": {
+          "median_ms": 2.7684375,
+          "min_ms": 2.708917,
+          "max_ms": 3.023667
+        }
+      },
+      "rust_over_native_warm_median": 7.022409563984385
+    },
+    {
+      "reactants": [
+        "N2O4(L)",
+        "N2H4(L)",
+        "C2H8N2(L),UDMH"
+      ],
+      "mode": "frozen_at_throat",
+      "construction_ms": {
+        "native": 0.707042,
+        "rust": 0.016833
+      },
+      "first_call_ms": {
+        "native": 0.982792,
+        "rust": 6.875375
+      },
+      "warm": {
+        "rust": {
+          "median_ms": 6.663937499999999,
+          "min_ms": 6.609292,
+          "max_ms": 7.118542
+        },
+        "native": {
+          "median_ms": 0.835062,
+          "min_ms": 0.822125,
+          "max_ms": 0.848541
+        }
+      },
+      "rust_over_native_warm_median": 7.980170933415722
+    }
+  ]
+}

@@ -15,6 +15,9 @@ Licensed under the Apache License, Version 2.0.
 
 cea-rs modifications (2026): Rust/Python validation, reactant support, rocket
 expansion and packaging by Keplr contributors. This is not a NASA product.
+The text above is NASA's notice, kept unchanged. In this repository the NASA
+databases are at vendor/thermo-species/data/thermo.inp and
+vendor/nasa-transport/trans.inp; the .lib files and samples are not included.
 
 Copyright (c) 2026 Bit Mango.
 Rust equilibrium algorithm adapted from bit-mango/cea-rs commit

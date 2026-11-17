@@ -1,4 +1,5 @@
 //! Validated interface around the attributed Gibbs/Newton implementation.
+//! NASA domain and reporting rules derive from Apache-2.0 NASA CEA; see provenance.
 use crate::{
     Error, R, Result, equilibrium_core,
     thermo::{Feed, Reactant, check_species_temperature},
@@ -27,7 +28,7 @@ pub struct State {
     pub enthalpy_j_kg: f64,
     pub energy_j_kg: f64,
     pub entropy_j_kg_k: f64,
-    /// Valid only when equilibrium is true; frozen states use cp_frozen instead.
+    /// Valid only when equilibrium is true; zero denotes NASA's phase-coexistence convention.
     pub cp_equilibrium_j_kg_k: f64,
     pub cp_frozen_j_kg_k: f64,
     pub gamma_s: f64,
@@ -39,13 +40,91 @@ pub struct State {
     /// NASA reporting convention: denominator includes gas and condensed moles.
     pub mole_fractions: BTreeMap<String, f64>,
     pub trace_extrapolated_species: Vec<String>,
+    /// All nonzero products evaluated outside their declared NASA fit intervals.
+    pub extrapolated_species: Vec<String>,
     pub mass_fractions: BTreeMap<String, f64>,
     pub(crate) amounts: Vec<(f64, Species)>,
+    pub(crate) equilibrium_seed: Option<equilibrium_core::EquilibriumSeed>,
 }
 impl State {
     pub fn sound_speed(&self) -> f64 {
         (self.gamma_s * self.pressure_pa / self.density_kg_m3).sqrt()
     }
+
+    /// This composition frozen at `t` and `p`; its element balance carries over.
+    pub(crate) fn frozen(&self, t: f64, p: f64) -> Result<State> {
+        let mut st = frozen_state(&self.amounts, t, p)?;
+        st.element_residual = self.element_residual;
+        Ok(st)
+    }
+}
+
+/// Ideal-gas mixture with fixed species amounts (mol/kg) at `t` and `p`.
+/// Frozen Cp is reported as both Cp values. `element_residual` is zero, which
+/// suits amounts taken straight from a feed; use `State::frozen` otherwise.
+/// A non-physical `t` or `p` fails as a convergence error.
+pub(crate) fn frozen_state(amounts: &[(f64, Species)], t: f64, p: f64) -> Result<State> {
+    let total: f64 = amounts.iter().map(|(n, _)| n).sum();
+    let ng: f64 = amounts
+        .iter()
+        .filter(|(_, sp)| sp.data().phase() == 0)
+        .map(|(n, _)| n)
+        .sum();
+    let mass: f64 = amounts.iter().map(|(n, sp)| n * sp.data().mw()).sum();
+    let (mut h, mut s, mut cp) = (0.0, 0.0, 0.0);
+    let (mut trace, mut extrapolated) = (vec![], vec![]);
+    let mut x = BTreeMap::new();
+    let mut y = BTreeMap::new();
+    for &(n, sp) in amounts {
+        // Absent species keep a zero entry, as in the state they were frozen from.
+        x.insert(sp.data().symbol().into(), n / total);
+        y.insert(sp.data().symbol().into(), n * sp.data().mw() / mass);
+        if n <= 0.0 {
+            continue;
+        }
+        // Same rule as Solver::solve: NASA extrapolates gas fits; report it.
+        if check_species_temperature(sp, t).is_err() {
+            extrapolated.push(sp.data().symbol().into());
+            if n / total <= 1e-11 {
+                trace.push(sp.data().symbol().into());
+            }
+        }
+        let d = sp.data();
+        h += n * d.h_over_r(t) * R;
+        cp += n * d.cp_over_r(t) * R;
+        let mixing = if d.phase() == 0 {
+            (n / ng * p / 1e5).ln()
+        } else {
+            0.0
+        };
+        s += n * (d.s_over_r(t) - mixing) * R;
+    }
+    let cv = cp - ng * R;
+    if !h.is_finite() || !s.is_finite() || !cv.is_finite() || cv <= 0.0 || ng <= 0.0 {
+        return Err(Error::Convergence("Nonphysical frozen state".into()));
+    }
+    Ok(State {
+        temperature_k: t,
+        pressure_pa: p,
+        density_kg_m3: p / (ng * R * t),
+        enthalpy_j_kg: h,
+        energy_j_kg: h - ng * R * t,
+        entropy_j_kg_k: s,
+        cp_equilibrium_j_kg_k: cp,
+        cp_frozen_j_kg_k: cp,
+        gamma_s: cp / cv,
+        molecular_weight_kg_kmol: 1.0 / ng,
+        iterations: 0,
+        equilibrium: false,
+        element_residual: 0.0,
+        constraint_residual: 0.0,
+        mole_fractions: x,
+        trace_extrapolated_species: trace,
+        extrapolated_species: extrapolated,
+        mass_fractions: y,
+        amounts: amounts.to_vec(),
+        equilibrium_seed: None,
+    })
 }
 
 #[derive(Clone)]
@@ -55,6 +134,8 @@ pub struct Solver {
     pub ions: bool,
     pub(crate) only: Option<Vec<Species>>,
     pub(crate) insert: Vec<Species>,
+    pub(crate) omit: Vec<Species>,
+    pub(crate) trace: f64,
 }
 impl Solver {
     /// Construct a solver with an optional explicit product pool and phase seeds.
@@ -105,7 +186,33 @@ impl Solver {
             ions,
             only,
             insert,
+            omit: vec![],
+            trace: 0.0,
         })
+    }
+
+    /// Exclude named products from equilibrium.
+    pub fn with_omit(mut self, names: Vec<String>) -> Result<Self> {
+        // NASA filters product names exactly; names absent from the database are no-ops.
+        self.omit = names
+            .iter()
+            .filter_map(|name| Species::from_str(name).ok())
+            .collect();
+        if self.insert.iter().any(|sp| self.omit.contains(sp)) {
+            return Err(Error::Input(
+                "An inserted phase cannot also be omitted".into(),
+            ));
+        }
+        Ok(self)
+    }
+
+    /// Set NASA's trace convergence level; zero uses the default thresholds.
+    pub fn with_trace(mut self, trace: f64) -> Result<Self> {
+        if !trace.is_finite() || !(0.0..1.0).contains(&trace) {
+            return Err(Error::Input("Trace must be finite and in [0, 1)".into()));
+        }
+        self.trace = trace;
+        Ok(self)
     }
 
     pub(crate) fn feeds(&self, weights: &[f64]) -> Result<Vec<Feed>> {
@@ -164,7 +271,8 @@ impl Solver {
                 .unwrap_or_else(|| Species::all().to_vec())
                 .into_iter()
                 .filter(|sp| {
-                    (self.condensed || sp.data().phase() == 0)
+                    !self.omit.contains(sp)
+                        && (self.condensed || sp.data().phase() == 0)
                         && sp.data().constituents().iter().all(|(_, c)| {
                             elements.contains(c) || (*c == Constituent::E && self.ions)
                         })
@@ -176,7 +284,9 @@ impl Solver {
             ));
         }
         if let Some(requested) = &self.only
-            && requested.iter().any(|sp| !pool.contains(sp))
+            && requested
+                .iter()
+                .any(|sp| !self.omit.contains(sp) && !pool.contains(sp))
         {
             return Err(Error::Input(
                 "Product formula contains an absent reactant element".into(),
@@ -198,7 +308,7 @@ impl Solver {
         Ok(feeds)
     }
 
-    /// Compute reactant-stream enthalpy in J/kg with no temperature extrapolation.
+    /// Compute reactant-stream enthalpy in J/kg using NASA's fit/reference rule.
     pub fn reactant_enthalpy(&self, weights: &[f64], temperatures: &[f64]) -> Result<f64> {
         self.feeds(weights)?;
         if temperatures.len() != weights.len() {
@@ -208,14 +318,26 @@ impl Solver {
         let mut h = 0.0;
         for ((r, w), t) in self.reactants.iter().zip(weights).zip(temperatures) {
             if *w > 0.0 {
-                h += w / total / r.molecular_weight * r.properties(*t)?.1 * 1000.0;
+                h += w / total / r.molecular_weight * r.enthalpy(*t)? * 1000.0;
             }
+        }
+        if !h.is_finite() {
+            return Err(Error::Domain("Nonfinite reactant enthalpy".into()));
         }
         Ok(h)
     }
 
     /// Solve an equilibrium state, returning no result on failed verification.
     pub fn solve(&self, mode: Mode, weights: &[f64]) -> Result<State> {
+        self.solve_with_start(mode, weights, None)
+    }
+
+    pub(crate) fn solve_with_start(
+        &self,
+        mode: Mode,
+        weights: &[f64],
+        start: Option<&equilibrium_core::EquilibriumSeed>,
+    ) -> Result<State> {
         let feeds = self.feeds(weights)?;
         let (const_t, const_s, const_p, state1, state2) = match mode {
             Mode::TP(t, p) => (true, false, true, t, p / 1e5),
@@ -228,14 +350,21 @@ impl Solver {
         if !state1.is_finite()
             || !state2.is_finite()
             || state2 <= 0.0
-            || (const_t && !(300.0..=20000.0).contains(&state1))
+            || (const_t && !(160.0..=22000.0).contains(&state1))
         {
             return Err(Error::Domain(
-                "Finite state inputs, positive pressure/volume and 300..20000 K are required"
+                "Finite state inputs, positive pressure/volume and 160..22000 K are required"
                     .into(),
             ));
         }
-        let d = equilibrium_core::solve_for_products_debug_seeded(
+        let pool = self
+            .only
+            .clone()
+            .unwrap_or_else(|| Species::all().to_vec())
+            .into_iter()
+            .filter(|sp| !self.omit.contains(sp))
+            .collect::<Vec<_>>();
+        let d = equilibrium_core::solve_for_products_debug_with_start(
             &feeds,
             const_t,
             const_s,
@@ -244,8 +373,10 @@ impl Solver {
             state2,
             self.condensed,
             self.ions,
-            self.only.as_deref(),
+            Some(&pool),
             Some(&self.insert),
+            self.trace,
+            start,
         );
         if !d.converged {
             return Err(Error::Convergence(format!(
@@ -278,28 +409,31 @@ impl Solver {
             molecular_weight_kg_kmol: d.molar_mass_kg_per_kmol,
             iterations: d.iterations_used,
             trace_extrapolated_species: vec![],
+            extrapolated_species: vec![],
             equilibrium: true,
             element_residual: 0.0,
             constraint_residual: 0.0,
             mole_fractions: BTreeMap::new(),
             mass_fractions: BTreeMap::new(),
             amounts,
+            equilibrium_seed: Some(d.seed),
         };
-        if !(300.0..=20000.0).contains(&out.temperature_k) {
+        if !(160.0..=22000.0).contains(&out.temperature_k) {
             return Err(Error::Domain(
-                "Solved temperature outside 300..20000 K".into(),
+                "Solved temperature outside 160..22000 K".into(),
             ));
         }
         let positive = [
             out.temperature_k,
             out.pressure_pa,
             out.density_kg_m3,
-            out.cp_equilibrium_j_kg_k,
             out.cp_frozen_j_kg_k,
             out.gamma_s,
             out.molecular_weight_kg_kmol,
         ];
         if positive.iter().any(|v| !v.is_finite() || *v <= 0.0)
+            || !out.cp_equilibrium_j_kg_k.is_finite()
+            || out.cp_equilibrium_j_kg_k < 0.0
             || [out.enthalpy_j_kg, out.energy_j_kg, out.entropy_j_kg_k]
                 .iter()
                 .any(|v| !v.is_finite())
@@ -309,15 +443,16 @@ impl Solver {
                 "Nonphysical or nonfinite converged state".into(),
             ));
         }
-        // Reject any appreciable out-of-fit product instead of returning extrapolated properties.
+        // NASA extrapolates gas fits and checks condensed-phase validity in the active set.
         let n_total: f64 = out.amounts.iter().map(|(n, _)| n).sum();
         let mass: f64 = out.amounts.iter().map(|(n, s)| n * s.data().mw()).sum();
         for &(n, sp) in &out.amounts {
-            if n / n_total > 1e-11 {
-                check_species_temperature(sp, out.temperature_k)?;
-            } else if n > 0.0 && check_species_temperature(sp, out.temperature_k).is_err() {
-                out.trace_extrapolated_species
-                    .push(sp.data().symbol().into());
+            if n > 0.0 && check_species_temperature(sp, out.temperature_k).is_err() {
+                out.extrapolated_species.push(sp.data().symbol().into());
+                if n / n_total <= 1e-11 {
+                    out.trace_extrapolated_species
+                        .push(sp.data().symbol().into());
+                }
             }
             out.mole_fractions
                 .insert(sp.data().symbol().into(), n / n_total);

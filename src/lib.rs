@@ -1,12 +1,17 @@
 //! Experimental native Rust chemical equilibrium. No Fortran runtime is used.
 #![allow(clippy::needless_range_loop)]
+pub mod derivatives;
+pub mod detonation;
 #[allow(dead_code)]
 mod equilibrium_core;
+pub mod mixture;
 #[cfg(feature = "python")]
 mod python;
 pub mod rocket;
+pub mod shock;
 pub mod solver;
 pub mod thermo;
+pub mod transport;
 
 /// NASA CEA gas constant, J/(kmol K), kept for oracle comparisons.
 pub const R: f64 = 8314.51;

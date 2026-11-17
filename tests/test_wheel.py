@@ -26,8 +26,6 @@ class InstalledWheelTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 solver.solve("TP", 3000, 1e6, weights)
         with self.assertRaises(cea_rs.DomainError):
-            cea_rs.Reactant("N2O").thermo(298.15)
-        with self.assertRaises(cea_rs.DomainError):
             cea_rs.Reactant("RP-1").thermo(500)
         with self.assertRaises(ValueError):
             cea_rs.Solver(["H2"], only=[])

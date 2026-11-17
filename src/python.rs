@@ -1,7 +1,8 @@
 //! Python boundary: SI units, typed failures and a distinct import namespace.
 use crate::{
     Error,
-    rocket::{FlowMode, RocketResult, Station},
+    detonation::{DetonationResult, UnburnedState},
+    rocket::{RocketOptions, RocketResult, Station},
     solver::{Mode, Solver, State},
     thermo::Reactant,
 };
@@ -22,6 +23,10 @@ impl From<Error> for PyErr {
 }
 #[pymethods]
 impl Reactant {
+    #[pyo3(name = "get_valid_temperature_range")]
+    fn py_valid_temperature_range(&self) -> (f64, f64) {
+        self.get_valid_temperature_range()
+    }
     #[new]
     #[pyo3(signature=(name, *, formula=None, molecular_weight=None, enthalpy_j_mol=None, reference_temperature_k=298.15))]
     fn py_new(
@@ -75,8 +80,104 @@ struct PySolver {
 }
 #[pymethods]
 impl PySolver {
+    fn of_ratio_to_weights(
+        &self,
+        oxidant_weights: Vec<f64>,
+        fuel_weights: Vec<f64>,
+        of_ratio: f64,
+    ) -> PyResult<Vec<f64>> {
+        Ok(self
+            .inner
+            .of_ratio_to_weights(&oxidant_weights, &fuel_weights, of_ratio)?)
+    }
+    fn chem_eq_ratio_to_of_ratio(
+        &self,
+        oxidant_weights: Vec<f64>,
+        fuel_weights: Vec<f64>,
+        chem_eq_ratio: f64,
+    ) -> PyResult<f64> {
+        Ok(self
+            .inner
+            .chem_eq_ratio_to_of_ratio(&oxidant_weights, &fuel_weights, chem_eq_ratio)?)
+    }
+    fn of_ratio_to_chem_eq_ratio(
+        &self,
+        oxidant_weights: Vec<f64>,
+        fuel_weights: Vec<f64>,
+        of_ratio: f64,
+    ) -> PyResult<f64> {
+        Ok(self
+            .inner
+            .of_ratio_to_chem_eq_ratio(&oxidant_weights, &fuel_weights, of_ratio)?)
+    }
+    fn weight_eq_ratio_to_of_ratio(
+        &self,
+        oxidant_weights: Vec<f64>,
+        fuel_weights: Vec<f64>,
+        weight_eq_ratio: f64,
+    ) -> PyResult<f64> {
+        Ok(self.inner.weight_eq_ratio_to_of_ratio(
+            &oxidant_weights,
+            &fuel_weights,
+            weight_eq_ratio,
+        )?)
+    }
+    fn of_ratio_to_weight_eq_ratio(
+        &self,
+        oxidant_weights: Vec<f64>,
+        fuel_weights: Vec<f64>,
+        of_ratio: f64,
+    ) -> PyResult<f64> {
+        Ok(self
+            .inner
+            .of_ratio_to_weight_eq_ratio(&oxidant_weights, &fuel_weights, of_ratio)?)
+    }
+    fn weights_to_moles(&self, weights: Vec<f64>) -> PyResult<Vec<f64>> {
+        Ok(self.inner.weights_to_moles(&weights)?)
+    }
+    fn moles_to_weights(&self, moles: Vec<f64>) -> PyResult<Vec<f64>> {
+        Ok(self.inner.moles_to_weights(&moles)?)
+    }
+    fn get_valence(&self) -> PyResult<BTreeMap<String, (f64, f64)>> {
+        Ok(self.inner.get_valence()?)
+    }
+    #[pyo3(signature=(mode,state1,state2,weights, *, finite_difference=false,relative_step=1e-4))]
+    #[allow(clippy::too_many_arguments)]
+    fn derivatives(
+        &self,
+        py: Python<'_>,
+        mode: &str,
+        state1: f64,
+        state2: f64,
+        weights: Vec<f64>,
+        finite_difference: bool,
+        relative_step: f64,
+    ) -> PyResult<crate::derivatives::EqDerivatives> {
+        let mode = match mode {
+            "TP" => Mode::TP(state1, state2),
+            "HP" => Mode::HP(state1, state2),
+            "SP" => Mode::SP(state1, state2),
+            "TV" => Mode::TV(state1, state2),
+            "UV" => Mode::UV(state1, state2),
+            "SV" => Mode::SV(state1, state2),
+            _ => {
+                return Err(PyValueError::new_err(
+                    "Supported equilibrium modes: TP HP SP TV UV SV",
+                ));
+            }
+        };
+        Ok(py.detach(|| {
+            if finite_difference {
+                self.inner
+                    .finite_difference_derivatives(mode, &weights, relative_step)
+            } else {
+                self.inner.derivatives(mode, &weights)
+            }
+        })?)
+    }
     #[new]
-    #[pyo3(signature=(reactants, *, condensed=true, ions=false, only=None, insert=Vec::new()))]
+    #[pyo3(signature=(reactants, *, condensed=true, ions=false, only=None, insert=Vec::new(), omit=Vec::new(), trace=0.0))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
         reactants: Vec<Py<Reactant>>,
@@ -84,6 +185,8 @@ impl PySolver {
         ions: bool,
         only: Option<Vec<String>>,
         insert: Vec<String>,
+        omit: Vec<String>,
+        trace: f64,
     ) -> PyResult<Self> {
         Ok(Self {
             inner: Solver::new(
@@ -92,7 +195,9 @@ impl PySolver {
                 ions,
                 only,
                 insert,
-            )?,
+            )?
+            .with_omit(omit)?
+            .with_trace(trace)?,
         })
     }
     /// Solve TP/HP/SP/TV/UV/SV in SI (K, Pa, J/kg, J/kg/K, m³/kg).
@@ -123,7 +228,55 @@ impl PySolver {
     fn reactant_enthalpy(&self, weights: Vec<f64>, temperatures_k: Vec<f64>) -> PyResult<f64> {
         Ok(self.inner.reactant_enthalpy(&weights, &temperatures_k)?)
     }
-    #[pyo3(signature=(weights,temperatures_k,chamber_pressure_pa,expansion_ratio, *, flow="equilibrium",iac=true,transport=false))]
+    /// Solve a CJ detonation from mass weights, unburned K and Pa.
+    #[pyo3(signature=(weights, temperature_k, pressure_pa, *, frozen=false))]
+    fn detonation(
+        &self,
+        py: Python<'_>,
+        weights: Vec<f64>,
+        temperature_k: f64,
+        pressure_pa: f64,
+        frozen: bool,
+    ) -> PyResult<DetonationResult> {
+        Ok(py.detach(|| {
+            self.inner
+                .detonation(&weights, temperature_k, pressure_pa, frozen)
+        })?)
+    }
+    /// Incident/reflected shock: mass weights, K, Pa, and exactly one speed input.
+    #[pyo3(signature=(weights,temperature_k,pressure_pa, *, u1=None,mach1=None,reflected=false,incident_frozen=false,reflected_frozen=false))]
+    #[allow(clippy::too_many_arguments)]
+    fn shock(
+        &self,
+        py: Python<'_>,
+        weights: Vec<f64>,
+        temperature_k: f64,
+        pressure_pa: f64,
+        u1: Option<f64>,
+        mach1: Option<f64>,
+        reflected: bool,
+        incident_frozen: bool,
+        reflected_frozen: bool,
+    ) -> PyResult<crate::shock::ShockResult> {
+        use crate::shock::ShockSpeed;
+        let speed = match (u1, mach1) {
+            (Some(u), None) => ShockSpeed::Velocity(u),
+            (None, Some(m)) => ShockSpeed::Mach(m),
+            _ => return Err(PyValueError::new_err("Specify exactly one of u1 or mach1")),
+        };
+        Ok(py.detach(|| {
+            self.inner.shock(
+                &weights,
+                temperature_k,
+                pressure_pa,
+                speed,
+                reflected,
+                incident_frozen,
+                reflected_frozen,
+            )
+        })?)
+    }
+    #[pyo3(signature=(weights,temperatures_k,chamber_pressure_pa,expansion_ratio=None, *, flow="equilibrium",iac=true,transport=false,pi_p=Vec::new(),subar=Vec::new(),supar=Vec::new(),ac_at=None,mdot=None,n_frz=None,hc=None,tc=None,tc_est=None))]
     #[allow(clippy::too_many_arguments)]
     fn rocket(
         &self,
@@ -131,35 +284,128 @@ impl PySolver {
         weights: Vec<f64>,
         temperatures_k: Vec<f64>,
         chamber_pressure_pa: f64,
-        expansion_ratio: f64,
+        expansion_ratio: Option<f64>,
         flow: &str,
         iac: bool,
         transport: bool,
+        pi_p: Vec<f64>,
+        subar: Vec<f64>,
+        mut supar: Vec<f64>,
+        ac_at: Option<f64>,
+        mdot: Option<f64>,
+        n_frz: Option<isize>,
+        hc: Option<f64>,
+        tc: Option<f64>,
+        tc_est: Option<f64>,
     ) -> PyResult<RocketResult> {
-        if !iac || transport {
+        if !iac && ac_at.is_none() && mdot.is_none() && expansion_ratio.is_some() {
             return Err(PyNotImplementedError::new_err(
-                "Finite-area chambers and transport are not implemented",
+                "FAC calls require ac_at or mdot",
             ));
         }
-        let flow = match flow {
-            "equilibrium" => FlowMode::Equilibrium,
-            "frozen_at_chamber" => FlowMode::FrozenAtChamber,
-            "frozen_at_throat" => FlowMode::FrozenAtThroat,
+        if transport {
+            return Err(PyNotImplementedError::new_err(
+                "Rocket transport is not implemented",
+            ));
+        }
+        let n_frz = n_frz
+            .map(|n| {
+                usize::try_from(n).map_err(|_| {
+                    PyValueError::new_err("n_frz must be zero or a positive station index")
+                })
+            })
+            .transpose()?;
+        let freeze = match flow {
+            "equilibrium" => 0,
+            "frozen_at_chamber" => {
+                if iac {
+                    1
+                } else {
+                    3
+                }
+            }
+            "frozen_at_throat" => {
+                if iac {
+                    2
+                } else {
+                    4
+                }
+            }
             _ => return Err(PyValueError::new_err("Unknown flow mode")),
         };
-        Ok(py.detach(|| {
-            self.inner.rocket(
+        if n_frz.is_some_and(|n| freeze != 0 && n != freeze) {
+            return Err(PyValueError::new_err("flow conflicts with n_frz"));
+        }
+        if let Some(area) = expansion_ratio {
+            if !supar.is_empty() {
+                return Err(PyValueError::new_err(
+                    "Use expansion_ratio or supar, not both",
+                ));
+            }
+            supar.push(area);
+        }
+        let result = py.detach(|| {
+            self.inner.rocket_stations(
                 &weights,
                 &temperatures_k,
                 chamber_pressure_pa,
-                expansion_ratio,
-                flow,
+                &RocketOptions {
+                    pi_p: &pi_p,
+                    subar: &subar,
+                    supar: &supar,
+                    iac,
+                    ac_at,
+                    mdot,
+                    n_frz: n_frz.unwrap_or(freeze),
+                    hc,
+                    tc,
+                    tc_est,
+                },
             )
-        })?)
+        })?;
+        if expansion_ratio.is_some() && !result.complete {
+            return Err(DomainError::new_err(
+                result
+                    .stop_reason
+                    .unwrap_or_else(|| "Frozen exit was not completed".into()),
+            ));
+        }
+        Ok(result)
     }
 }
 #[pymethods]
 impl State {
+    #[getter(gibbs_energy_j_kg)]
+    fn gibbs_energy_py(&self) -> f64 {
+        crate::mixture::gibbs_energy(self)
+    }
+    #[getter(cv_frozen_j_kg_k)]
+    fn cv_frozen_py(&self) -> f64 {
+        crate::mixture::cv_frozen(self)
+    }
+    #[getter(cv_equilibrium_j_kg_k)]
+    fn cv_equilibrium_py(&self) -> PyResult<Option<f64>> {
+        self.equilibrium
+            .then(|| crate::mixture::cv_equilibrium(self))
+            .transpose()
+            .map_err(Into::into)
+    }
+    #[getter(specific_volume_m3_kg)]
+    fn specific_volume_py(&self) -> f64 {
+        crate::mixture::specific_volume(self)
+    }
+    #[getter(M)]
+    fn nasa_m_py(&self) -> f64 {
+        crate::mixture::molecular_weight_m(self)
+    }
+    #[getter(MW)]
+    fn nasa_mw_py(&self) -> f64 {
+        crate::mixture::molecular_weight_mw(self)
+    }
+    #[pyo3(name = "transport")]
+    fn transport_py(&self, py: Python<'_>) -> PyResult<crate::transport::Transport> {
+        Ok(py.detach(|| self.transport())?)
+    }
     #[getter(temperature_k)]
     fn t(&self) -> f64 {
         self.temperature_k
@@ -204,6 +450,10 @@ impl State {
     fn equilibrium_py(&self) -> bool {
         self.equilibrium
     }
+    #[getter(extrapolated_species)]
+    fn get_extrapolated_species(&self) -> Vec<String> {
+        self.extrapolated_species.clone()
+    }
     #[getter(trace_extrapolated_species)]
     fn trace_extrapolated(&self) -> Vec<String> {
         self.trace_extrapolated_species.clone()
@@ -235,6 +485,30 @@ impl State {
 }
 #[pymethods]
 impl Station {
+    #[getter(name)]
+    fn name_py(&self) -> &str {
+        self.name
+    }
+    #[getter(sound_speed_m_s)]
+    fn sonic(&self) -> f64 {
+        self.sound_speed_m_s
+    }
+    #[getter(cstar_m_s)]
+    fn cstar_py(&self) -> f64 {
+        self.cstar_m_s
+    }
+    #[getter(thrust_coefficient)]
+    fn cf(&self) -> f64 {
+        self.thrust_coefficient
+    }
+    #[getter(isp_m_s)]
+    fn isp(&self) -> f64 {
+        self.isp_m_s
+    }
+    #[getter(isp_vacuum_m_s)]
+    fn ivac(&self) -> f64 {
+        self.isp_vacuum_m_s
+    }
     #[getter(state)]
     fn state_py(&self) -> State {
         self.state.clone()
@@ -254,6 +528,22 @@ impl Station {
 }
 #[pymethods]
 impl RocketResult {
+    #[getter(stations)]
+    fn stations_py(&self) -> Vec<Station> {
+        self.stations.clone()
+    }
+    #[getter(throat_index)]
+    fn throat_index_py(&self) -> usize {
+        self.throat_index
+    }
+    #[getter(complete)]
+    fn complete_py(&self) -> bool {
+        self.complete
+    }
+    #[getter(stop_reason)]
+    fn stop_reason_py(&self) -> Option<String> {
+        self.stop_reason.clone()
+    }
     #[getter(chamber)]
     fn chamber_py(&self) -> Station {
         self.chamber.clone()
@@ -277,14 +567,56 @@ impl RocketResult {
 }
 #[pymodule]
 fn _cea_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<crate::derivatives::EqDerivatives>()?;
     m.add_class::<Reactant>()?;
     m.add_class::<PySolver>()?;
     m.add_class::<State>()?;
     m.add_class::<RocketResult>()?;
     m.add_class::<Station>()?;
+    m.add_class::<crate::transport::Transport>()?;
+    m.add_class::<DetonationResult>()?;
+    m.add_class::<UnburnedState>()?;
+    m.add_class::<crate::shock::ShockStation>()?;
+    m.add_class::<crate::shock::ShockResult>()?;
     m.add("ConvergenceError", m.py().get_type::<ConvergenceError>())?;
     m.add("DomainError", m.py().get_type::<DomainError>())?;
     m.add("__version__", "0.1.0a3")?;
     m.add("R", crate::R)?;
     Ok(())
+}
+
+#[pymethods]
+impl crate::derivatives::EqDerivatives {
+    #[getter(temperature)]
+    fn temperature_py(&self) -> Vec<f64> {
+        self.temperature.clone()
+    }
+    #[getter(total_moles)]
+    fn total_moles_py(&self) -> Vec<f64> {
+        self.total_moles.clone()
+    }
+    #[getter(species_amounts)]
+    fn species_amounts_py(&self) -> BTreeMap<String, Vec<f64>> {
+        self.species_amounts.clone()
+    }
+    #[getter(enthalpy)]
+    fn enthalpy_py(&self) -> Vec<f64> {
+        self.enthalpy.clone()
+    }
+    #[getter(energy)]
+    fn energy_py(&self) -> Vec<f64> {
+        self.energy.clone()
+    }
+    #[getter(gibbs_energy)]
+    fn gibbs_energy_py(&self) -> Vec<f64> {
+        self.gibbs_energy.clone()
+    }
+    #[getter(entropy)]
+    fn entropy_py(&self) -> Vec<f64> {
+        self.entropy.clone()
+    }
+    #[getter(closure_defect)]
+    fn closure_defect_py(&self) -> Option<f64> {
+        self.closure_defect
+    }
 }

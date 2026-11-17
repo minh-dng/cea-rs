@@ -1,3 +1,4 @@
+//! NASA database compilation rules derived from Apache-2.0 NASA CEA database_compile.f90.
 // Modified: accept CRLF NASA input; fixed bundled data only. See NOTICE.
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Write;
@@ -42,6 +43,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut species: HashMap<String, (String, parsing::Metadata, parsing::TemperatureData)> =
         HashMap::new();
     let mut constituents_set: BTreeSet<String> = BTreeSet::new();
+    let mut extended_gases = BTreeSet::new();
+    let mut previous_phase = 0;
+    let mut compiled_phase = 0;
     while iter
         .peek()
         .ok_or("reached end of input before \"END PRODUCTS\"")?
@@ -50,28 +54,86 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (
             (cleaned_species_identifier, dirty_species_identifier),
             (t_intervals, constituents, phase, mw, h_formation),
-            cleaned_temperature_data,
+            mut cleaned_temperature_data,
         ) = parsing::process_entry(&mut iter);
+
+        // NASA extends two-interval product gases to 20000 K with Cp linear toward its limit at 1e6 K.
+        if phase == 0 && cleaned_temperature_data.len() == 2 {
+            extended_gases.insert(dirty_species_identifier.clone());
+            let (_, t, a) = &cleaned_temperature_data[1];
+            let t = *t;
+            let atoms: f64 = constituents
+                .iter()
+                .filter(|(_, e)| e != "E")
+                .map(|(n, _)| n)
+                .sum();
+            let limit = if atoms > 2.1 {
+                3.0 * atoms - 1.75
+            } else if atoms > 1.9 {
+                4.5
+            } else {
+                2.5
+            };
+            let cp = a[0] / t.powi(2)
+                + a[1] / t
+                + a[2]
+                + a[3] * t
+                + a[4] * t.powi(2)
+                + a[5] * t.powi(3)
+                + a[6] * t.powi(4);
+            let h = -a[0] / t
+                + a[1] * t.ln()
+                + a[2] * t
+                + a[3] * t.powi(2) / 2.0
+                + a[4] * t.powi(3) / 3.0
+                + a[5] * t.powi(4) / 4.0
+                + a[6] * t.powi(5) / 5.0
+                + a[7];
+            let s = -a[0] / (2.0 * t.powi(2)) - a[1] / t
+                + a[2] * t.ln()
+                + a[3] * t
+                + a[4] * t.powi(2) / 2.0
+                + a[5] * t.powi(3) / 3.0
+                + a[6] * t.powi(4) / 4.0
+                + a[8];
+            let slope = (cp - limit) / (t - 1e6);
+            let intercept = cp - t * slope;
+            cleaned_temperature_data.push((
+                6000.0,
+                20000.0,
+                vec![
+                    0.0,
+                    0.0,
+                    intercept,
+                    slope,
+                    0.0,
+                    0.0,
+                    0.0,
+                    h - intercept * t - slope * t * t / 2.0,
+                    s - intercept * t.ln() - slope * t,
+                ],
+            ));
+        }
 
         // Save constituents.
         for (_, constituent) in constituents.iter() {
             constituents_set.insert(constituent.clone());
         }
 
-        let mut invalid_temperature_range = false;
-        for (t_low, t_high, _) in cleaned_temperature_data.iter() {
-            if t_low >= t_high {
-                println!(
-                    "cargo::warning=Skipping {} — invalid temperature range: low={:.3} high={:.3}",
-                    dirty_species_identifier, t_low, t_high
-                );
-                invalid_temperature_range = true;
-                break;
+        // NASA numbers each condensed interval, retaining the last number for a named phase.
+        // Keep even reversed/zero-width intervals: later intervals can make the species usable.
+        if phase == 0 {
+            compiled_phase = 0;
+        } else {
+            for i in 0..cleaned_temperature_data.len() {
+                compiled_phase = if phase > previous_phase {
+                    compiled_phase + 1
+                } else {
+                    i as u8 + 1
+                };
             }
         }
-        if invalid_temperature_range {
-            continue; // skip this species entirely, move to the next entry in the outer while loop
-        }
+        previous_phase = phase;
 
         // Consolidate species.
         if let Some(entry) = species.get_mut(&dirty_species_identifier) {
@@ -79,49 +141,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if entry.1.3 != mw || entry.1.4 != h_formation || entry.1.1 != constituents {
                 panic!("Species have the exact same name, but different data!");
             }
-            let current_temperature_data = entry.2.clone();
-            let new_temperature_data = cleaned_temperature_data;
-            let mut c_iter = current_temperature_data.iter().peekable();
-            let mut n_iter = new_temperature_data.iter().peekable();
-            let mut combined_temperature_data = vec![];
-            while let (Some(c_peek), Some(n_peek)) = (c_iter.peek(), n_iter.peek()) {
-                // Compare them, and order them.
-                if c_peek.0 < n_peek.0 {
-                    let c_high = c_peek.1;
-                    // Add current temperature data.
-                    combined_temperature_data.push(c_iter.next().unwrap().clone());
-                    if c_high == n_peek.0 {
-                        // Add new temperature data.
-                        combined_temperature_data.push(n_iter.next().unwrap().clone());
-                    }
-                } else if n_peek.0 < c_peek.0 {
-                    let n_high = n_peek.1;
-                    // Add new temperature data.
-                    combined_temperature_data.push(n_iter.next().unwrap().clone());
-                    if n_high == c_peek.0 {
-                        // Add current temperature data.
-                        combined_temperature_data.push(c_iter.next().unwrap().clone());
-                    }
-                } else {
-                    // We have conflicting temperature ranges, ie two different
-                    // entries start with the same lower temperature.
-                    panic!(
-                        "Conflicting temperature ranges for {}",
-                        dirty_species_identifier
-                    );
-                }
-            }
-            // Append remaining data into combined.
-            c_iter.for_each(|c| combined_temperature_data.push(c.clone()));
-            n_iter.for_each(|n| combined_temperature_data.push(n.clone()));
-
-            entry.2 = combined_temperature_data;
+            // Preserve source order, including overlapping intervals, as NASA's reader does.
+            entry.2.extend(cleaned_temperature_data);
+            entry.1.2 = compiled_phase;
         } else {
             species.insert(
                 dirty_species_identifier,
                 (
                     cleaned_species_identifier,
-                    (t_intervals, constituents, phase, mw, h_formation),
+                    (t_intervals, constituents, compiled_phase, mw, h_formation),
                     cleaned_temperature_data,
                 ),
             );
@@ -237,6 +265,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         write!(&mut buffer, "h_formation: {:?},", h_formation)?;
         // Add phase.
         write!(&mut buffer, "phase: {:?},", phase)?;
+        let extrapolated_above = if extended_gases.contains(dirty_species_identifier) {
+            Some(6000.0)
+        } else {
+            None
+        };
+        write!(&mut buffer, "extrapolated_above: {:?},", extrapolated_above)?;
         // Close out struct definition.
         writeln!(&mut buffer, "}};")?;
     }
