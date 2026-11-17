@@ -1634,8 +1634,12 @@ fn solve_equilibrium(
     // Section I: post-processing & thermodynamic derivatives. Runs once, at
     // the final state, independent of the main loop's per-iteration scoping.
     let active_condensed = active_ranked.clone();
+    // Restoring reduced elements does not reactivate NASA's disabled electron equation.
     let active_elements: Vec<usize> = (0..ne)
-        .filter(|&k| !element_excluded[k] || (finalize_failure && !converged))
+        .filter(|&k| {
+            (!element_excluded[k] || (finalize_failure && !converged))
+                && !(has_electron && !active_ions && k == ne - 1)
+        })
         .collect();
     let ne_active = active_elements.len();
 
@@ -1773,8 +1777,10 @@ fn solve_equilibrium(
         lhs[(row_idx, lnn_col2)] = tmp.iter().sum::<f64>();
         lhs[(lnn_col2, row_idx)] = lhs[(row_idx, lnn_col2)];
     }
-    let n_delta_raw = n - nj_raw.iter().sum::<f64>();
-    lhs[(lnn_col2, lnn_col2)] = -n_delta_raw;
+    // Failed shocks rebuild NASA's partials matrix instead of retaining the Newton residual.
+    if !finalize_failure {
+        lhs[(lnn_col2, lnn_col2)] = -(n - nj_raw.iter().sum::<f64>());
+    }
 
     let mut rhs_t = vec![0.0; neq2];
     for (row_idx, &k) in active_elements.iter().enumerate() {

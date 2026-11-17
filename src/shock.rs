@@ -168,7 +168,7 @@ fn solve_jump(
         } else {
             rho12 * mu
         };
-        let a = -tmp * vp - p_ratio;
+        let a = (-tmp).mul_add(vp, -p_ratio);
         let b = -tmp * vt;
         let f = if reflected {
             p_ratio - 1.0 + tmp * (rho52 - 1.0)
@@ -179,19 +179,22 @@ fn solve_jump(
         if !reflected {
             tmp *= rho12;
         }
-        let c = -tmp * vp + t * (vt - 1.0) / wmk;
-        let d = -tmp * vt - t * cp;
+        let c = (-tmp).mul_add(vp, t * (vt - 1.0) / wmk);
+        let d = (-tmp).mul_add(vt, -t * cp);
         let g = st.iteration_enthalpy() / R
             - h_init
-            - speed * speed / (2.0 * R)
+            - speed
+                * speed
                 * if reflected {
                     (rho52 + 1.0) / (rho52 - 1.0)
                 } else {
-                    1.0 - rho12 * rho12
-                };
-        let det = a * d - b * c;
-        let mut dp = (f * d - g * b) / det;
-        let mut dt = (a * g - c * f) / det;
+                    (-rho12).mul_add(rho12, 1.0)
+                }
+                / (2.0 * R);
+        // NASA's fused products retain the determinant on singular ion-shock paths.
+        let det = a.mul_add(d, -b * c);
+        let mut dp = f.mul_add(d, -g * b) / det;
+        let mut dt = a.mul_add(g, -c * f) / det;
         let correction = dp.abs().max(dt.abs());
         if correction < 5e-5 {
             return Ok((st, 0, p_ratio, t_ratio, rho12));
@@ -397,5 +400,92 @@ impl Solver {
             result.station5 = Some(station(down, u5));
         }
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::thermo::Reactant;
+
+    #[test]
+    fn failed_ion_shock_partials_match_native() {
+        // NASA's first TP iterate after the failed N2/CH4 shock HP initialization.
+        let mut solver = Solver::new(
+            ["N2", "CH4"]
+                .map(|name| Reactant::named(name).unwrap())
+                .to_vec(),
+            true,
+            true,
+            None,
+            vec![],
+        )
+        .unwrap()
+        .with_trace(1e-10)
+        .unwrap();
+        solver.transport = true;
+        let weights = solver.moles_to_weights(&[0.985, 0.015]).unwrap();
+        let total: f64 = weights.iter().sum();
+        let amounts: Vec<_> = solver
+            .reactants
+            .iter()
+            .zip(&weights)
+            .map(|(r, w)| {
+                (
+                    w / total / r.molecular_weight,
+                    Species::from_str(&r.name).unwrap(),
+                )
+            })
+            .collect();
+        let seed = solver
+            .initial_seed(&weights, 291.0, Some(&amounts))
+            .unwrap();
+        let state = solver
+            .solve_state(
+                Mode::TP(298.14999999999895, 407.689_193_099_219),
+                &weights,
+                Some(&seed),
+                true,
+            )
+            .unwrap();
+        assert!(!state.converged);
+        for (actual, expected) in [
+            (state.gas_moles, 19742862968.172836),
+            (state.dlnv_dlnp, -530396717550.6311),
+            (state.dlnv_dlnt, 0.9953529048453027),
+            (state.cp_equilibrium_j_kg_k, 410380578944840.75),
+        ] {
+            assert!(
+                (actual - expected).abs() / expected.abs() < 1e-4,
+                "{actual} != {expected}"
+            );
+        }
+
+        // Reproduce the first five TP solves; the unfused path produces a nonfinite sixth input.
+        let initial = frozen_state(&amounts, 291.0, 29.864211683161557, None).unwrap();
+        let gamma = initial.gamma_s;
+        let mach = 1200.0 / initial.sound_speed();
+        let p21 = (2.0 * gamma * mach * mach - gamma + 1.0) / (gamma + 1.0);
+        let mut calls = 0;
+        let (_, status, _, _, _) = solve_jump(
+            &initial,
+            1200.0,
+            false,
+            false,
+            p21,
+            298.14999999999895 / 291.0,
+            |t, p| {
+                calls += 1;
+                assert!(t.is_finite() && t > 0.0 && p.is_finite() && p > 0.0);
+                if calls <= 5 {
+                    solver.solve_state(Mode::TP(t, p), &weights, Some(&seed), true)
+                } else {
+                    Ok(fail_state(initial.clone()))
+                }
+            },
+        )
+        .unwrap();
+        assert_eq!(calls, 6);
+        assert_eq!(status, 9);
     }
 }
