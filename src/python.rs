@@ -487,6 +487,10 @@ impl State {
         self.post_processed
     }
     #[getter]
+    fn _nasa_abort_message(&self) -> Option<&str> {
+        self.abort_message.as_deref()
+    }
+    #[getter]
     fn _nasa_nj(&self) -> BTreeMap<String, f64> {
         self.amounts
             .iter()

@@ -215,11 +215,7 @@ pub fn cv_equilibrium(state: &State) -> Result<f64> {
 }
 
 pub fn specific_volume(state: &State) -> f64 {
-    if state.density_kg_m3 == 0.0 {
-        0.0
-    } else {
-        1.0 / state.density_kg_m3
-    }
+    state.volume_m3_per_kg
 }
 
 /// NASA M = 1/n_gas; includes condensed mass in the one-kg mixture basis.

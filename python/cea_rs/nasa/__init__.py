@@ -444,9 +444,11 @@ class EqSolver(_Solver):
                 soln._extra.update(previous_transport)
         if state.converged:
             soln._start = state
-        if not state.converged:
-            _warnings.warn("EqSolver.solve: CEA_NOT_CONVERGED" if state.last_error == NOT_CONVERGED else "EqSolver.solve: CEA_FORTRAN_ABORT", RuntimeWarning, stacklevel=2)
         soln._inputs = (eq_type, float(state1), float(state2), w.copy())
+        if state.last_error == FORTRAN_ABORT:
+            raise RuntimeError("EqSolver.solve failed with CEA_FORTRAN_ABORT: " + state._nasa_abort_message)
+        if not state.converged:
+            _warnings.warn("EqSolver.solve: CEA_NOT_CONVERGED", RuntimeWarning, stacklevel=2)
 
 
 class RocketSolver(_Solver):
@@ -789,6 +791,10 @@ class _Solution:
 
 
 class EqSolution(_Solution):
+    @property
+    def converged(self):
+        return bool(self._states) and self._states[0].converged
+
     def __init__(self, solver, T_init=None, nj_init=None):
         super().__init__(solver)
         self._t_init = 3800.0 if T_init is None else float(T_init)

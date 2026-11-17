@@ -64,6 +64,13 @@ def main():
         "detonation-nonfinite": ("nonfinite_detonation", [], {}),
         "detonation-hot-nonfinite": ("nonfinite_detonation", [], {"hot": True}),
         "initial-guess-failure": ("initial_guess_failure", [], {}),
+        "cold-ion-polish": ("equilibrium", [], {"first": 300.0, "second": 1.0, "names": ["N2"], "weights": [1.0], "ions": True}),
+        "zero-weight-reactant": ("equilibrium", [], {"first": 3000.0, "second": 1.0, "weights": [1.0, 0.0]}),
+        "fortran-abort": ("reused_abort", [], {"stop": 1.0}),
+        "fortran-abort-reuse": ("reused_abort", [], {}),
+        "br2-transport-reuse": ("br2_transport_reuse", [], {}),
+        "shock-weight-scale": ("shock_edge", ["weight-scale"], {}),
+        "shock-singular-transport": ("shock_edge", ["singular-transport"], {}),
     }
     cases = {}
     with warnings.catch_warnings():
@@ -73,7 +80,7 @@ def main():
             fields = helpers["THERMO"] + helpers["TRANSPORT"]
             if name in ("rp_rocket", "air_jet_a"):
                 fields += helpers["PERFORMANCE"] + ("n", "nj")
-            elif name in ("condensed", "ap_al", "reused_failure", "argon_below_range", "initial_guess_failure"):
+            elif name in ("condensed", "ap_al", "reused_failure", "argon_below_range", "initial_guess_failure", "equilibrium", "reused_abort", "br2_transport_reuse"):
                 fields += ("volume", "n", "nj", "ln_nj")
             elif name == "nonfinite_detonation":
                 fields += ("Mach", "velocity", "sonic_velocity", "P_P1", "T_T1", "M_M1", "rho_rho1", "n", "nj", "ln_nj")

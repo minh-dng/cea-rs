@@ -26,6 +26,7 @@ pub struct State {
     pub converged: bool,
     /// NASA SUCCESS=0, NOT_CONVERGED=8, FORTRAN_ABORT=10.
     pub last_error: i32,
+    pub(crate) abort_message: Option<String>,
     pub cv_equilibrium_j_kg_k: f64,
     pub cv_frozen_j_kg_k: f64,
     pub(crate) gas_moles: f64,
@@ -36,6 +37,8 @@ pub struct State {
     pub temperature_k: f64,
     pub pressure_pa: f64,
     pub density_kg_m3: f64,
+    /// NASA can retain volume after clearing a failed shock's density.
+    pub(crate) volume_m3_per_kg: f64,
     pub enthalpy_j_kg: f64,
     pub energy_j_kg: f64,
     pub gibbs_energy_j_kg: f64,
@@ -104,6 +107,11 @@ pub(crate) fn frozen_state(
             .sum()
     });
     let mass: f64 = amounts.iter().map(|(n, sp)| n * sp.data().mw()).sum();
+    let condensed: f64 = amounts
+        .iter()
+        .filter(|(_, sp)| sp.data().phase() != 0)
+        .map(|(n, _)| n)
+        .sum();
     let (mut h, mut s, mut cp) = (0.0, 0.0, 0.0);
     let (mut trace, mut extrapolated) = (vec![], vec![]);
     let mut x = BTreeMap::new();
@@ -139,6 +147,7 @@ pub(crate) fn frozen_state(
     Ok(State {
         converged: true,
         last_error: 0,
+        abort_message: None,
         cv_equilibrium_j_kg_k: cv,
         cv_frozen_j_kg_k: cv,
         gas_moles: ng,
@@ -149,6 +158,7 @@ pub(crate) fn frozen_state(
         temperature_k: t,
         pressure_pa: p,
         density_kg_m3: p / (ng * R * t),
+        volume_m3_per_kg: ng * R * t / p,
         enthalpy_j_kg: h,
         energy_j_kg: h - ng * R * t,
         gibbs_energy_j_kg: h - t * s,
@@ -157,7 +167,7 @@ pub(crate) fn frozen_state(
         cp_frozen_j_kg_k: cp,
         gamma_s: cp / cv,
         molecular_weight_kg_kmol: 1.0 / ng,
-        mean_molecular_weight: (1.0 - (total - ng) / total) / ng,
+        mean_molecular_weight: (1.0 - condensed / total) / ng,
         iterations: 0,
         equilibrium: false,
         element_residual: 0.0,
@@ -279,7 +289,6 @@ impl Solver {
             .reactants
             .iter()
             .zip(weights)
-            .filter(|(_, w)| **w > 0.0)
             .map(|(r, w)| Feed {
                 amount: w / sum / r.molecular_weight,
                 molecular_weight: r.molecular_weight,
@@ -516,6 +525,7 @@ impl Solver {
         let mut out = State {
             converged: d.converged,
             last_error: d.last_error,
+            abort_message: d.abort_message.clone(),
             cv_equilibrium_j_kg_k: d.cv_eq_kj_per_kg_k * 1000.0,
             cv_frozen_j_kg_k: d.cv_frozen_kj_per_kg_k * 1000.0,
             gas_moles: d.n,
@@ -526,6 +536,7 @@ impl Solver {
             temperature_k: d.temperature_k,
             pressure_pa: d.pressure_bar * 1e5,
             density_kg_m3: 1.0 / d.volume_m3_per_kg,
+            volume_m3_per_kg: d.volume_m3_per_kg,
             enthalpy_j_kg: d.enthalpy_kj_per_kg * 1000.0,
             energy_j_kg: d.energy_kj_per_kg * 1000.0,
             gibbs_energy_j_kg: d.gibbs_kj_per_kg * 1000.0,
@@ -635,6 +646,7 @@ impl Solver {
                     temperature_k: t,
                     pressure_pa: 0.0,
                     density_kg_m3: 0.0,
+                    volume_m3_per_kg: 0.0,
                     enthalpy_j_kg: 0.0,
                     energy_j_kg: 0.0,
                     gibbs_energy_j_kg: 0.0,
@@ -667,15 +679,19 @@ impl Solver {
             out.equilibrium_seed = seed;
             out.iterations = iterations;
             out.post_processed = false;
-            out.converged = false;
+            out.converged = d.converged;
             out.last_error = d.last_error;
+            out.abort_message = d.abort_message;
+            out.equilibrium_seed.as_mut().unwrap().reported =
+                start.and_then(|s| s.reported.clone());
         }
-        if out.converged {
+        if out.converged && out.post_processed {
             if self.transport {
                 let tr = out.transport()?;
                 out.cp_frozen_j_kg_k = tr.cp_frozen_j_kg_k;
                 out.cv_frozen_j_kg_k = tr.cp_frozen_j_kg_k - out.gas_moles * R;
-                out.equilibrium_seed.as_mut().unwrap().has_transport_seed = tr.viscosity_pa_s > 0.0;
+                out.equilibrium_seed.as_mut().unwrap().has_transport_seed |=
+                    tr.viscosity_pa_s > 0.0;
             }
             let mut reported = out.clone();
             reported.equilibrium_seed = None;

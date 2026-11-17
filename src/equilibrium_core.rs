@@ -168,6 +168,7 @@ pub(crate) struct EquilibriumDebug {
     pub(crate) converged: bool,
     pub(crate) post_processed: bool,
     pub(crate) last_error: i32,
+    pub(crate) abort_message: Option<String>,
     pub(crate) dlnv_dlnt: f64,
     pub(crate) dlnv_dlnp: f64,
     pub(crate) iterations_used: usize,
@@ -708,6 +709,7 @@ fn solve_equilibrium(
     // iteration's species recovery (E.3-style, but for charge).
     let mut active_ions = include_ions && has_electron;
     let mut pi_e: f64 = 0.0;
+    let mut dpi_e: f64 = 0.0;
 
     // D.6: T = state1 for TP; otherwise starts at the fixed 3800K guess and
     // becomes an unknown (ΔlnT) that the Newton iteration solves for.
@@ -837,6 +839,7 @@ fn solve_equilibrium(
     let mut iterations_used = 0;
     let mut iteration = 0i32;
     let mut last_error = 8;
+    let mut abort_message = None;
     let mut times_singular = 0usize;
     let mut max_iter_fallback_used = false;
     let mut post_processed_on_limit = false;
@@ -1438,7 +1441,6 @@ fn solve_equilibrium(
                     sum1 += a_e * raw; // RAW amount in the sums, not truncated
                     sum2 += a_e * a_e * raw;
                 }
-                let mut dpi_e = 0.0;
                 if sum2 != 0.0 {
                     dpi_e = -sum1 / sum2;
                     for j in 0..ng {
@@ -1564,7 +1566,13 @@ fn solve_equilibrium(
                 }
                 _ if min_delta_g.abs() >= 1e-12 || singular_delta_g.abs() >= 1e-12 => {
                     // NASA aborts when only a singular phase remains, including the tolerance boundary.
+                    converged = true;
                     last_error = 10;
+                    let singular = singular_blocklist.map_or(ng - 1, |c| ng + c);
+                    abort_message = Some(format!(
+                        "EqSolver_test_condensed: Re-insertion of {:15} likely to cause singular matrix.",
+                        species[singular].data().symbol()
+                    ));
                     break;
                 }
                 _ => {}
@@ -1619,14 +1627,14 @@ fn solve_equilibrium(
 
     // G.1: final sanity bounds — a "converged" T outside CEA's physical
     // range means the iterate ran away, not that the problem was solved.
-    let computed_partials = converged || finalize_failure;
-    let post_processed = converged
+    let computed_partials = (converged && last_error != 10) || finalize_failure;
+    let post_processed = (converged && last_error != 10)
         || post_processed_on_limit
         || (times_singular > MAX_SINGULAR_RETRIES
             && element_excluded.iter().any(|x| *x)
             && temperature_k > 0.0
             && n > 0.0);
-    if converged && (temperature_k < 160.0 || temperature_k > 22000.0) {
+    if converged && last_error != 10 && (temperature_k < 160.0 || temperature_k > 22000.0) {
         converged = false;
         last_error = 8;
     }
@@ -1937,6 +1945,7 @@ fn solve_equilibrium(
         converged,
         post_processed,
         last_error,
+        abort_message,
         dlnv_dlnt,
         dlnv_dlnp,
         iterations_used,

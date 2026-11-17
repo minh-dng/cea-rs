@@ -71,7 +71,7 @@ PERFORMANCE = (
     "Isp",
     "Isp_vacuum",
 )
-SHOCK_FIELDS = ("Mach", "velocity", "sonic_velocity", "rho12", "rho52", "P21", "P52", "T21", "T52", "M21", "M52", "v2", "u5_p_v2")
+SHOCK_FIELDS = ("volume", "Mach", "velocity", "sonic_velocity", "rho12", "rho52", "P21", "P52", "T21", "T52", "M21", "M52", "v2", "u5_p_v2")
 RP1_PRODUCTS = (
     "Ar C CO CO2 H H2 H2O HNO HO2 HNO2 HNO3 N NH NO N2 N2O3 O O2 OH O3".split()
 )
@@ -90,11 +90,11 @@ def mixtures(api, names, only=None, omit=None, ions=False):
     return reac, prod
 
 
-def equilibrium(api, mode="TP", first=2500.0, second=10.0, *, transport=False):
-    reac, prod = mixtures(api, ["H2", "O2"])
-    solver = api.EqSolver(prod, reactants=reac, transport=transport)
+def equilibrium(api, mode="TP", first=2500.0, second=10.0, *, transport=False, names=("H2", "O2"), weights=(1.0, 8.0), ions=False):
+    reac, prod = mixtures(api, list(names), ions=ions)
+    solver = api.EqSolver(prod, reactants=reac, transport=transport, ions=ions)
     soln = api.EqSolution(solver)
-    result = solver.solve(soln, getattr(api, mode), first, second, np.array([1.0, 8.0]))
+    result = solver.solve(soln, getattr(api, mode), first, second, np.array(weights))
     assert result is None
     return soln, prod, solver
 
@@ -236,6 +236,37 @@ def reused_failure(api):
     return soln, prod, solver
 
 
+def reused_abort(api, stop=200.0):
+    reac, prod = mixtures(api, ["Ar", "H2O(L)"])
+    solver = api.EqSolver(prod, reactants=reac)
+    soln = api.EqSolution(solver)
+    for pressure in (0.01, 1.0, 200.0):
+        if pressure == 1.0:
+            try:
+                solver.solve(soln, api.TP, 200.0, pressure, np.ones(2))
+            except RuntimeError as exc:
+                assert str(exc) == (
+                    "EqSolver.solve failed with CEA_FORTRAN_ABORT: "
+                    "EqSolver_test_condensed: Re-insertion of H2O(cr)         likely to cause singular matrix."
+                ), str(exc)
+            else:
+                raise AssertionError("NASA abort must raise after updating the solution")
+        else:
+            solver.solve(soln, api.TP, 200.0, pressure, np.ones(2))
+        if pressure == stop:
+            break
+    return soln, prod, solver
+
+
+def br2_transport_reuse(api):
+    reac, prod = mixtures(api, ["Br2"])
+    solver = api.EqSolver(prod, reactants=reac, transport=True)
+    soln = api.EqSolution(solver)
+    for temperature, pressure in ((270.0, 0.01), (270.0, 1.0), (270.0, 200.0), (8000.0, 1.0)):
+        solver.solve(soln, api.TP, temperature, pressure, np.ones(1))
+    return soln, prod, solver
+
+
 def argon_below_range(api):
     reac, prod = mixtures(api, ["Ar"])
     solver = api.EqSolver(prod, reactants=reac)
@@ -253,12 +284,15 @@ def shock_edge(api, case):
         "reflected-cap": (["Ar"], [1.0], 300.0, 1.0, {"Mach1": 12.0, "reflected": True, "incident_frozen": True, "reflected_frozen": True}),
         "last-valid": (["Hg"], [1.0], 500.0, 1.0, {"Mach1": 1.01, "reflected": False}),
         "ion-last-valid": (["N2", "CH4"], [0.985, 0.015], 291.0, api.units.mmhg_to_bar(0.224), {"u1": 1200.0, "reflected": False}),
+        "weight-scale": (["H2", "O2"], [1.0, 8.0], 300.0, 1.0, {"u1": 2000.0, "reflected": False, "incident_frozen": True}),
+        "singular-transport": (["N2", "O2"], [0.79, 0.21], 300.0, 1.0, {"Mach1": 1.01, "reflected": True, "reflected_frozen": True}),
     }[case]
     ions = case == "ion-last-valid"
     reac, prod = mixtures(api, names, ions=ions)
-    solver = api.ShockSolver(prod, reactants=reac, ions=ions, transport=case in ("ion-last-valid", "atomic-transport"), trace=1e-10 if ions else -1.0)
+    solver = api.ShockSolver(prod, reactants=reac, ions=ions, transport=case in ("ion-last-valid", "atomic-transport", "singular-transport"), trace=1e-10 if ions else -1.0)
     soln = api.ShockSolution(solver, reflected=options["reflected"])
-    solver.solve(soln, reac.moles_to_weights(np.array(moles)), temperature, pressure, **options)
+    weights = np.array(moles) if case == "weight-scale" else reac.moles_to_weights(np.array(moles))
+    solver.solve(soln, weights, temperature, pressure, **options)
     return soln, prod, solver
 
 
@@ -617,6 +651,20 @@ class NasaApiTests(unittest.TestCase):
                     for field in THERMO + TRANSPORT + ("volume", "n", "nj", "ln_nj"):
                         self.close(key, field, getattr(actual, field), getattr(expected, field), atol=1e-25 if field == "nj" else 0)
 
+        for key, run in (
+            ("cold-ion-polish", lambda api: equilibrium(api, first=300.0, second=1.0, names=["N2"], weights=[1.0], ions=True)),
+            ("zero-weight-reactant", lambda api: equilibrium(api, first=3000.0, second=1.0, weights=[1.0, 0.0])),
+            ("fortran-abort", lambda api: reused_abort(api, stop=1.0)),
+            ("fortran-abort-reuse", reused_abort),
+            ("br2-transport-reuse", br2_transport_reuse),
+        ):
+            with self.subTest(case=key), warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                actual = run(rust)[0]
+                self.retained(key, actual)
+                if native:
+                    self.retained(key, run(native)[0])
+
     def retained(self, key, solution):
         expected = RETAINED_VALUES[key]
         self.assertEqual(solution.converged, expected["converged"])
@@ -710,21 +758,7 @@ class NasaApiTests(unittest.TestCase):
                         shock(native, **kw),
                         THERMO
                         + TRANSPORT
-                        + (
-                            "velocity",
-                            "Mach",
-                            "sonic_velocity",
-                            "rho12",
-                            "rho52",
-                            "P21",
-                            "P52",
-                            "T21",
-                            "T52",
-                            "M21",
-                            "M52",
-                            "v2",
-                            "u5_p_v2",
-                        ),
+                        + SHOCK_FIELDS,
                         reflected_frozen=reflected and reflection,
                     )
         for t, p in ((298.15, 1.0), (298.15, 20.0), (500.0, 1.0), (500.0, 20.0)):
@@ -755,7 +789,7 @@ class NasaApiTests(unittest.TestCase):
                 )
 
     def test_flow_recovery_and_atomic_transport(self):
-        for case in ("reflected-failure", "incident-failure", "atomic-transport", "last-valid", "incident-cap", "reflected-cap"):
+        for case in ("reflected-failure", "incident-failure", "atomic-transport", "last-valid", "incident-cap", "reflected-cap", "weight-scale", "singular-transport"):
             with self.subTest(case=case), warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 actual = shock_edge(rust, case)[0]
@@ -777,6 +811,17 @@ class NasaApiTests(unittest.TestCase):
                     self.close(
                         case, "reflected header cp", actual.cp_eq[2],
                         RETAINED_VALUES["shock-atomic-transport"]["values"]["cp_eq"][2],
+                        tolerance=1e-9,
+                    )
+                if case == "singular-transport":
+                    self.close(
+                        case, "singular conductivity", actual.conductivity_eq,
+                        RETAINED_VALUES["shock-singular-transport"]["values"]["conductivity_eq"],
+                        tolerance=1e-9,
+                    )
+                    self.close(
+                        case, "singular Prandtl", actual.Pr_eq,
+                        RETAINED_VALUES["shock-singular-transport"]["values"]["Pr_eq"],
                         tolerance=1e-9,
                     )
         with warnings.catch_warnings():

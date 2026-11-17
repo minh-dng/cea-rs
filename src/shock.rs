@@ -105,6 +105,7 @@ fn fail_state(mut state: State) -> State {
         state.molecular_weight_kg_kmol = 0.0;
         state.mean_molecular_weight = 0.0;
         state.cv_frozen_j_kg_k = 0.0;
+        state.volume_m3_per_kg = 0.0;
         state.mole_fractions.values_mut().for_each(|v| *v = 0.0);
         state.mass_fractions.values_mut().for_each(|v| *v = 0.0);
     }
@@ -263,9 +264,9 @@ impl Solver {
                 ));
             }
             if let Some((n, _)) = amounts.iter_mut().find(|(_, s)| *s == sp) {
-                *n += w / total / r.molecular_weight;
+                *n += (w / r.molecular_weight) / total;
             } else {
-                amounts.push((w / total / r.molecular_weight, sp));
+                amounts.push(((w / r.molecular_weight) / total, sp));
             }
         }
         if !temperature_k.is_finite()
@@ -277,7 +278,8 @@ impl Solver {
                 "Shock temperature/pressure outside the thermodynamic domain".into(),
             ));
         }
-        let initial = frozen_state(&amounts, temperature_k, pressure_pa, None)?;
+        // NASA stores 1/sum(weights), even when the weights are not one mole of mixture.
+        let initial = frozen_state(&amounts, temperature_k, pressure_pa, Some(1.0 / total))?;
         let u1 = match speed {
             ShockSpeed::Velocity(u) => u,
             ShockSpeed::Mach(m) => m * initial.sound_speed(),
